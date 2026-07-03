@@ -71,24 +71,24 @@ const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABA
 // ── Theme Palettes — refined, premium ─────────────────────────
 const PALETTES = {
   sweet: { label:"Sweet Pink", emoji:"🩷",
-    dark:  { bg:"#0a0a0d",surface:"#141418",card:"#1a1a1f",cardHover:"#212126",border:"#3a3a42",borderGlow:"#7a3a5e",pink:"#e8447a",pinkDim:"#b6285c",pinkGlow:"rgba(232,68,122,0.10)",pinkDeep:"rgba(232,68,122,0.05)",text:"#f3f1f4",textMuted:"#9b96a1",textDim:"#5a5760",green:"#5ec9a0",red:"#e8616f",protein:"#c2447a",carbs:"#e8a4bd",fat:"#d98a9c",gold:"#cf6a86",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#a83a5e",workoutDeep:"#7a2a48",sugar:"#e0a8b8",sodium:"#c98aa8",fiber:"#e0879e",drinkOther:"#b87a8a",chartBurned:"#a83a5e" },
-    light: { bg:"#faf9fa",surface:"#ffffff",card:"#ffffff",cardHover:"#f7f4f6",border:"#cfc9cf",borderGlow:"#d1296b",pink:"#c4205f",pinkDim:"#9e1a4d",pinkGlow:"rgba(196,32,95,0.14)",pinkDeep:"rgba(196,32,95,0.09)",text:"#1d1b1f",textMuted:"#6f6a73",textDim:"#928d93",green:"#1f8a63",red:"#c5414d",protein:"#9e3a5e",carbs:"#b8366b",fat:"#b9536f",gold:"#a8446a",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#8a2f52",workoutDeep:"#6b2440",sugar:"#c9748a",sodium:"#a8567a",fiber:"#c26a8a",drinkOther:"#a8697a",chartBurned:"#8a2f52" }
+    dark:  { bg:"#0a0a0d",surface:"#141418",card:"#1a1a1f",cardHover:"#212126",border:"#3a3a42",borderGlow:"#7a3a5e",pink:"#e8447a",pinkDim:"#b6285c",pinkGlow:"rgba(232,68,122,0.10)",pinkDeep:"rgba(232,68,122,0.05)",text:"#f3f1f4",textMuted:"#9b96a1",textDim:"#5a5760",green:"#5ec9a0",red:"#e8616f",caution:"#dbb868",protein:"#c2447a",carbs:"#e8a4bd",fat:"#d98a9c",gold:"#cf6a86",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#a83a5e",workoutDeep:"#7a2a48",sugar:"#e0a8b8",sodium:"#c98aa8",fiber:"#e0879e",drinkOther:"#b87a8a",chartBurned:"#a83a5e" },
+    light: { bg:"#faf9fa",surface:"#ffffff",card:"#ffffff",cardHover:"#f7f4f6",border:"#cfc9cf",borderGlow:"#d1296b",pink:"#c4205f",pinkDim:"#9e1a4d",pinkGlow:"rgba(196,32,95,0.14)",pinkDeep:"rgba(196,32,95,0.09)",text:"#1d1b1f",textMuted:"#6f6a73",textDim:"#928d93",green:"#1f8a63",red:"#c5414d",caution:"#a3790f",protein:"#9e3a5e",carbs:"#b8366b",fat:"#b9536f",gold:"#a8446a",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#8a2f52",workoutDeep:"#6b2440",sugar:"#c9748a",sodium:"#a8567a",fiber:"#c26a8a",drinkOther:"#a8697a",chartBurned:"#8a2f52" }
   },
   pika: { label:"Electric Yellow", emoji:"⚡",
-    dark:  { bg:"#0d0c07",surface:"#181507",card:"#1f1b0d",cardHover:"#282211",border:"#453c1f",borderGlow:"#a8862a",pink:"#f5c518",pinkDim:"#c49a10",pinkGlow:"rgba(245,197,24,0.10)",pinkDeep:"rgba(245,197,24,0.05)",text:"#f6f2e6",textMuted:"#a89f88",textDim:"#5e5844",green:"#5ec9a0",red:"#e8616f",protein:"#f0d868",carbs:"#e8b93e",fat:"#d9a02a",gold:"#e0c050",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#e89a2a",workoutDeep:"#b06f14",sugar:"#e8d08a",sodium:"#d0b060",fiber:"#dcc257",drinkOther:"#b89a50",chartBurned:"#e89a2a",onAccent:"#241a05" },
-    light: { bg:"#fbfcf0",surface:"#ffffff",card:"#ffffff",cardHover:"#f4f6de",border:"#d6d89e",borderGlow:"#a0a00a",pink:"#948e00",pinkDim:"#6e6a00",pinkGlow:"rgba(148,142,0,0.13)",pinkDeep:"rgba(148,142,0,0.08)",text:"#20200e",textMuted:"#73755c",textDim:"#a2a37e",green:"#1f8a63",red:"#c5414d",protein:"#7a7600",carbs:"#948e00",fat:"#a08a10",gold:"#86800a",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#b89000",workoutDeep:"#8a6c00",sugar:"#a89a3a",sodium:"#96903a",fiber:"#8f9a20",drinkOther:"#9a904a",chartBurned:"#b89000" }
+    dark:  { bg:"#0d0c07",surface:"#181507",card:"#1f1b0d",cardHover:"#282211",border:"#453c1f",borderGlow:"#a8862a",pink:"#f5c518",pinkDim:"#c49a10",pinkGlow:"rgba(245,197,24,0.10)",pinkDeep:"rgba(245,197,24,0.05)",text:"#f6f2e6",textMuted:"#a89f88",textDim:"#5e5844",green:"#5ec9a0",red:"#e8616f",caution:"#dbb868",protein:"#f0d868",carbs:"#e8b93e",fat:"#d9a02a",gold:"#e0c050",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#e89a2a",workoutDeep:"#b06f14",sugar:"#e8d08a",sodium:"#d0b060",fiber:"#dcc257",drinkOther:"#b89a50",chartBurned:"#e89a2a",onAccent:"#241a05" },
+    light: { bg:"#fbfcf0",surface:"#ffffff",card:"#ffffff",cardHover:"#f4f6de",border:"#d6d89e",borderGlow:"#a0a00a",pink:"#948e00",pinkDim:"#6e6a00",pinkGlow:"rgba(148,142,0,0.13)",pinkDeep:"rgba(148,142,0,0.08)",text:"#20200e",textMuted:"#73755c",textDim:"#a2a37e",green:"#1f8a63",red:"#c5414d",caution:"#a3790f",protein:"#7a7600",carbs:"#948e00",fat:"#a08a10",gold:"#86800a",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#b89000",workoutDeep:"#8a6c00",sugar:"#a89a3a",sodium:"#96903a",fiber:"#8f9a20",drinkOther:"#9a904a",chartBurned:"#b89000" }
   },
   emo: { label:"Midnight Purple", emoji:"🪻",
-    dark:  { bg:"#0a0712",surface:"#130e20",card:"#181230",cardHover:"#201941",border:"#342a58",borderGlow:"#6a4ab8",pink:"#a678f5",pinkDim:"#7e4fd6",pinkGlow:"rgba(166,120,245,0.12)",pinkDeep:"rgba(166,120,245,0.06)",text:"#f2eefa",textMuted:"#a094bd",textDim:"#564c78",green:"#5ec9a0",red:"#e8616f",protein:"#c49af8",carbs:"#9a86f0",fat:"#b478d8",gold:"#ab90f0",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#c860e8",workoutDeep:"#9138b8",sugar:"#d0b0f0",sodium:"#a890e8",fiber:"#b8a0f5",drinkOther:"#9a86b8",chartBurned:"#c860e8" },
-    light: { bg:"#f8f5fc",surface:"#ffffff",card:"#ffffff",cardHover:"#f0eafa",border:"#d4c8ea",borderGlow:"#7a4ac4",pink:"#7a3ac9",pinkDim:"#5e2ba0",pinkGlow:"rgba(122,58,201,0.12)",pinkDeep:"rgba(122,58,201,0.07)",text:"#1e1830",textMuted:"#6a5f88",textDim:"#9a90b5",green:"#1f8a63",red:"#c5414d",protein:"#5c34a8",carbs:"#8a3ac0",fat:"#9a4a9a",gold:"#7a50b8",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#a02aa8",workoutDeep:"#781f80",sugar:"#a878d0",sodium:"#8a68c0",fiber:"#9a6ad0",drinkOther:"#8f7aa8",chartBurned:"#a02aa8" }
+    dark:  { bg:"#0a0712",surface:"#130e20",card:"#181230",cardHover:"#201941",border:"#342a58",borderGlow:"#6a4ab8",pink:"#a678f5",pinkDim:"#7e4fd6",pinkGlow:"rgba(166,120,245,0.12)",pinkDeep:"rgba(166,120,245,0.06)",text:"#f2eefa",textMuted:"#a094bd",textDim:"#564c78",green:"#5ec9a0",red:"#e8616f",caution:"#dbb868",protein:"#c49af8",carbs:"#9a86f0",fat:"#b478d8",gold:"#ab90f0",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#c860e8",workoutDeep:"#9138b8",sugar:"#d0b0f0",sodium:"#a890e8",fiber:"#b8a0f5",drinkOther:"#9a86b8",chartBurned:"#c860e8" },
+    light: { bg:"#f8f5fc",surface:"#ffffff",card:"#ffffff",cardHover:"#f0eafa",border:"#d4c8ea",borderGlow:"#7a4ac4",pink:"#7a3ac9",pinkDim:"#5e2ba0",pinkGlow:"rgba(122,58,201,0.12)",pinkDeep:"rgba(122,58,201,0.07)",text:"#1e1830",textMuted:"#6a5f88",textDim:"#9a90b5",green:"#1f8a63",red:"#c5414d",caution:"#a3790f",protein:"#5c34a8",carbs:"#8a3ac0",fat:"#9a4a9a",gold:"#7a50b8",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#a02aa8",workoutDeep:"#781f80",sugar:"#a878d0",sodium:"#8a68c0",fiber:"#9a6ad0",drinkOther:"#8f7aa8",chartBurned:"#a02aa8" }
   },
   coral: { label:"Sunset Coral", emoji:"🌅",
-    dark:  { bg:"#0f0908",surface:"#1c110e",card:"#241512",cardHover:"#2e1b17",border:"#4a2f28",borderGlow:"#b05a3a",pink:"#ff7a5c",pinkDim:"#d05438",pinkGlow:"rgba(255,122,92,0.11)",pinkDeep:"rgba(255,122,92,0.06)",text:"#f8f0ec",textMuted:"#b09a90",textDim:"#664f46",green:"#5ec9a0",red:"#e8616f",protein:"#ff9a80",carbs:"#f0805e",fat:"#e89a70",gold:"#f0b088",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#d06a2a",workoutDeep:"#9a4a18",sugar:"#f0b8a0",sodium:"#d89a80",fiber:"#e08a5e",drinkOther:"#b8806a",chartBurned:"#d06a2a" },
-    light: { bg:"#fdf6f3",surface:"#ffffff",card:"#ffffff",cardHover:"#fae8e0",border:"#e8c8ba",borderGlow:"#c44a24",pink:"#c44a24",pinkDim:"#9c3818",pinkGlow:"rgba(196,74,36,0.12)",pinkDeep:"rgba(196,74,36,0.07)",text:"#241512",textMuted:"#7a6058",textDim:"#a8908a",green:"#1f8a63",red:"#c5414d",protein:"#8f2c1a",carbs:"#c2521e",fat:"#a06038",gold:"#b8542a",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#963c0c",workoutDeep:"#6e2c08",sugar:"#c8846a",sodium:"#b06a50",fiber:"#ba7444",drinkOther:"#a87a60",chartBurned:"#963c0c" }
+    dark:  { bg:"#0f0908",surface:"#1c110e",card:"#241512",cardHover:"#2e1b17",border:"#4a2f28",borderGlow:"#b05a3a",pink:"#ff7a5c",pinkDim:"#d05438",pinkGlow:"rgba(255,122,92,0.11)",pinkDeep:"rgba(255,122,92,0.06)",text:"#f8f0ec",textMuted:"#b09a90",textDim:"#664f46",green:"#5ec9a0",red:"#e8616f",caution:"#dbb868",protein:"#ff9a80",carbs:"#f0805e",fat:"#e89a70",gold:"#f0b088",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#d06a2a",workoutDeep:"#9a4a18",sugar:"#f0b8a0",sodium:"#d89a80",fiber:"#e08a5e",drinkOther:"#b8806a",chartBurned:"#d06a2a" },
+    light: { bg:"#fdf6f3",surface:"#ffffff",card:"#ffffff",cardHover:"#fae8e0",border:"#e8c8ba",borderGlow:"#c44a24",pink:"#c44a24",pinkDim:"#9c3818",pinkGlow:"rgba(196,74,36,0.12)",pinkDeep:"rgba(196,74,36,0.07)",text:"#241512",textMuted:"#7a6058",textDim:"#a8908a",green:"#1f8a63",red:"#c5414d",caution:"#a3790f",protein:"#8f2c1a",carbs:"#c2521e",fat:"#a06038",gold:"#b8542a",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#963c0c",workoutDeep:"#6e2c08",sugar:"#c8846a",sodium:"#b06a50",fiber:"#ba7444",drinkOther:"#a87a60",chartBurned:"#963c0c" }
   },
   mint: { label:"Nature Green", emoji:"🌿",
-    dark:  { bg:"#080f0a",surface:"#0e1a12",card:"#132217",cardHover:"#1a2c1e",border:"#2b452f",borderGlow:"#4a8a52",pink:"#58b968",pinkDim:"#3d9a4d",pinkGlow:"rgba(88,185,104,0.11)",pinkDeep:"rgba(88,185,104,0.06)",text:"#eef6ef",textMuted:"#8fa892",textDim:"#4d6350",green:"#5ec9a0",red:"#e8616f",protein:"#8fd49a",carbs:"#6ec978",fat:"#a8c96a",gold:"#b8c95e",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#8fbf4a",workoutDeep:"#5c8a2a",sugar:"#a8d0a0",sodium:"#7ab88a",fiber:"#88c878",drinkOther:"#8aa878",chartBurned:"#8fbf4a" },
-    light: { bg:"#f3f9f3",surface:"#ffffff",card:"#ffffff",cardHover:"#e8f4e8",border:"#bcdcc0",borderGlow:"#2a7a3a",pink:"#237a34",pinkDim:"#1a5c27",pinkGlow:"rgba(35,122,52,0.12)",pinkDeep:"rgba(35,122,52,0.07)",text:"#142016",textMuted:"#5a7260",textDim:"#8aa890",green:"#1f8a63",red:"#c5414d",protein:"#1f6b45",carbs:"#2a8a30",fat:"#5c7a1f",gold:"#6b7a14",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#4a7a10",workoutDeep:"#365c0a",sugar:"#5a9a5a",sodium:"#3a8a6a",fiber:"#4a9a40",drinkOther:"#6a8a5a",chartBurned:"#4a7a10" }
+    dark:  { bg:"#080f0a",surface:"#0e1a12",card:"#132217",cardHover:"#1a2c1e",border:"#2b452f",borderGlow:"#4a8a52",pink:"#58b968",pinkDim:"#3d9a4d",pinkGlow:"rgba(88,185,104,0.11)",pinkDeep:"rgba(88,185,104,0.06)",text:"#eef6ef",textMuted:"#8fa892",textDim:"#4d6350",green:"#5ec9a0",red:"#e8616f",caution:"#dbb868",protein:"#8fd49a",carbs:"#6ec978",fat:"#a8c96a",gold:"#b8c95e",water:"#38bdf8",waterDeep:"#0369a1",workoutAccent:"#8fbf4a",workoutDeep:"#5c8a2a",sugar:"#a8d0a0",sodium:"#7ab88a",fiber:"#88c878",drinkOther:"#8aa878",chartBurned:"#8fbf4a" },
+    light: { bg:"#f3f9f3",surface:"#ffffff",card:"#ffffff",cardHover:"#e8f4e8",border:"#bcdcc0",borderGlow:"#2a7a3a",pink:"#237a34",pinkDim:"#1a5c27",pinkGlow:"rgba(35,122,52,0.12)",pinkDeep:"rgba(35,122,52,0.07)",text:"#142016",textMuted:"#5a7260",textDim:"#8aa890",green:"#1f8a63",red:"#c5414d",caution:"#a3790f",protein:"#1f6b45",carbs:"#2a8a30",fat:"#5c7a1f",gold:"#6b7a14",water:"#0284c7",waterDeep:"#0369a1",workoutAccent:"#4a7a10",workoutDeep:"#365c0a",sugar:"#5a9a5a",sodium:"#3a8a6a",fiber:"#4a9a40",drinkOther:"#6a8a5a",chartBurned:"#4a7a10" }
   }
 };
 const THEMES = PALETTES.sweet; // legacy alias kept for any direct references
@@ -330,17 +330,21 @@ function calcBMRTargets({ gender, heightCm, birthYear, weightKg, activityLevel, 
   return { calories, protein, carbs, fat, bmr: Math.round(bmr), tdee: Math.round(tdee) };
 }
 
+// Returns a `key` instead of a hardcoded color so the caller can look up the right
+// color from the current palette (see BMI_CATEGORY_COLOR_KEY below).
 function calcBMI(weightKg, heightCm) {
   if (!weightKg || !heightCm) return null;
   const heightM = heightCm / 100;
   const bmi = weightKg / (heightM*heightM);
-  let category, color;
-  if (bmi < 18.5) { category = "Underweight"; color = "#3b9ee0"; }
-  else if (bmi < 25) { category = "Healthy range"; color = "#1f8a63"; }
-  else if (bmi < 30) { category = "Overweight"; color = "#c98a1f"; }
-  else { category = "Obese range"; color = "#c5414d"; }
-  return { value: Math.round(bmi*10)/10, category, color };
+  let category, key;
+  if (bmi < 18.5) { category = "Underweight"; key = "under"; }
+  else if (bmi < 25) { category = "Healthy range"; key = "healthy"; }
+  else if (bmi < 30) { category = "Overweight"; key = "over"; }
+  else { category = "Obese range"; key = "obese"; }
+  return { value: Math.round(bmi*10)/10, category, key };
 }
+// Maps a BMI category key to the palette color key that should represent it.
+const BMI_CATEGORY_COLOR_KEY = { under:"water", healthy:"green", over:"caution", obese:"red" };
 // ── Recommended daily water intake, personalized by body weight (~33ml/kg, standard guidance) ──
 function calcWaterTarget(weightKg, activityLevel, workoutBurnedKcal) {
   const base = weightKg ? weightKg * 33 : 2000; // fallback to 2000ml if no weight logged yet
@@ -547,6 +551,10 @@ const DataAPI = {
     const { error } = await supabase.from('drink_logs').delete().eq('id', id);
     if (error) throw error;
   },
+  async updateDrink(id, patch) {
+    const { error } = await supabase.from('drink_logs').update(patch).eq('id', id);
+    if (error) throw error;
+  },
 
   async getTargets(userId) {
     const { data, error } = await supabase.from('user_targets').select('*').eq('user_id', userId).maybeSingle();
@@ -601,8 +609,13 @@ const DataAPI = {
     const { error } = await supabase.from('favorites').delete().eq('id', id);
     if (error) throw error;
   },
-  async touchFavorite(id, currentUseCount) {
-    const { error } = await supabase.from('favorites').update({ use_count: (currentUseCount||0)+1, last_used_at: new Date().toISOString() }).eq('id', id);
+  async touchFavorite(id) {
+    // Read the current count fresh rather than trusting a value the caller captured earlier —
+    // two rapid taps on the same favorite would otherwise both read the same stale count and
+    // one increment would be lost.
+    const { data: cur, error: selErr } = await supabase.from('favorites').select('use_count').eq('id', id).single();
+    if (selErr) throw selErr;
+    const { error } = await supabase.from('favorites').update({ use_count: (cur?.use_count||0)+1, last_used_at: new Date().toISOString() }).eq('id', id);
     if (error) throw error;
   }
 };
@@ -610,16 +623,17 @@ const DataAPI = {
 // ════════════════════════════════════════════════════════════
 // SHARED SUB-COMPONENTS
 // ════════════════════════════════════════════════════════════
-const StatusBanner = React.memo(function StatusBanner({ net, target, deficit, burned, large, theme }) {
-  const isDark = theme !== "light";
-  const successBg = isDark ? "rgba(94,201,160,.08)" : "rgba(31,138,99,.07)";
-  const successBorder = isDark ? "rgba(94,201,160,.25)" : "rgba(31,138,99,.22)";
-  const successText = isDark ? "#5ec9a0" : "#1f8a63";
-  const successSub = isDark ? "#5ec9a0bb" : "#1f8a63cc";
-  const failBg = isDark ? "rgba(232,97,111,.08)" : "rgba(197,65,77,.07)";
-  const failBorder = isDark ? "rgba(232,97,111,.25)" : "rgba(197,65,77,.22)";
-  const failText = isDark ? "#e8616f" : "#c5414d";
-  const failSub = isDark ? "#e8616fbb" : "#c5414dcc";
+const StatusBanner = React.memo(function StatusBanner({ net, target, deficit, burned, large, theme, C }) {
+  // green/red are constant across every mood palette (semantic, not thematic — see PALETTES),
+  // so reading them from C keeps this in sync with the palette table with no visual change.
+  const successBg = `${C.green}14`;
+  const successBorder = `${C.green}40`;
+  const successText = C.green;
+  const successSub = `${C.green}bb`;
+  const failBg = `${C.red}14`;
+  const failBorder = `${C.red}40`;
+  const failText = C.red;
+  const failSub = `${C.red}bb`;
   return (
     <div style={{ background:deficit?successBg:failBg, border:`1px solid ${deficit?successBorder:failBorder}`, borderRadius:18, padding:large?"16px 20px":"12px 16px", marginBottom:14, textAlign:"center", backdropFilter:"blur(6px)" }}>
       <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:large?24:18, fontWeight:"800", color:deficit?successText:failText, marginBottom:2, letterSpacing:"-0.02em" }}>
@@ -632,24 +646,24 @@ const StatusBanner = React.memo(function StatusBanner({ net, target, deficit, bu
   );
 });
 
-const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme, mode, unit, accentLabel }) {
+const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme, mode, unit, accentLabel, C }) {
   const p = Math.min(100, Math.round((val/target)*100));
   const actualPct = target ? (val/target)*100 : 0;
-  const bg = theme==="light" ? "#ece8ea" : "#212126";
-  const textMuted = theme==="light" ? "#6f6a73" : "#8b8794";
+  const bg = C.cardHover;
+  const textMuted = C.textMuted;
   const u = unit || "kcal";
   let overColor, statusLabel;
   if (mode === "gain-band") {
     // For gain-weight plans — under-eating is the concern; hitting/exceeding target is the win
-    overColor = actualPct >= 100 ? (theme==="light"?"#1f8a63":"#5ec9a0") : actualPct >= 80 ? (theme==="light"?"#a3790f":"#dbb868") : (theme==="light"?"#c5414d":"#e8616f");
+    overColor = actualPct >= 100 ? C.green : actualPct >= 80 ? C.caution : C.red;
     statusLabel = actualPct >= 100 ? `${Math.round(val-target)} over goal 🎉` : `${Math.round(target-val)} more to go`;
   } else if (mode === "caution-band") {
     // For things with a real ceiling (calories) — going over is something to watch, escalating past 120%
-    overColor = actualPct <= 100 ? (theme==="light"?"#1f8a63":"#5ec9a0") : actualPct <= 120 ? (theme==="light"?"#a3790f":"#dbb868") : (theme==="light"?"#c5414d":"#e8616f");
+    overColor = actualPct <= 100 ? C.green : actualPct <= 120 ? C.caution : C.red;
     statusLabel = actualPct <= 100 ? `${Math.round(target-val)} left` : actualPct <= 120 ? `${Math.round(val-target)} over (fine)` : `${Math.round(val-target)} over (caution)`;
   } else {
     // For things where more is simply better (water) — exceeding target is good news, not a warning
-    overColor = accentLabel ? color : (theme==="light"?"#1f8a63":"#5ec9a0");
+    overColor = accentLabel ? color : C.green;
     statusLabel = target-val>0 ? `${Math.round(target-val)} left` : `${Math.round(val-target)} over goal 🎉`;
   }
   // Bar fill width is always capped at 100% so the bar never overflows visually.
@@ -665,7 +679,7 @@ const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme,
           left: labelInside ? "auto" : `calc(${p}% + 6px)`,
           right: labelInside ? `calc(${100-p}% + 6px)` : "auto",
           fontSize:10, fontWeight:"800",
-          color: labelInside ? "#fff" : (theme==="light"?"#1d1b1f":"#f3f1f4"),
+          color: labelInside ? "#fff" : C.text,
           textShadow: labelInside ? "0 1px 2px rgba(0,0,0,0.5)" : "none",
           letterSpacing:"0.01em", whiteSpace:"nowrap"
         }}>
@@ -681,20 +695,18 @@ const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme,
 });
 
 const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly, theme, C, onSlotChange, onSaveFavorite, isFavorited }) {
-  const isDark = theme !== "light";
-  const isPink = C && C._pink;
-  const cardBg = isDark ? "#1a1a1f" : "#ffffff";
-  const cardBgDragging = isDark ? "#212126" : "#f7f4f6";
-  const textColor = isDark ? "#f3f1f4" : "#1d1b1f";
-  const textMuted = isDark ? "#8b8794" : "#6f6a73";
-  const btnColor = isDark ? "#454249" : "#aaa5ab";
-  const pinkColor = isPink ? C.pink : (isDark ? "#e8447a" : "#c4205f");
-  const proteinColor = isPink ? C.protein : (isDark ? "#a98fe0" : "#7752c9");
-  const carbsColor = isPink ? C.carbs : (isDark ? "#e8a4bd" : "#b8366b");
-  const fatColor = isPink ? C.fat : (isDark ? "#e0a868" : "#b9740f");
-  const sugarColor = isPink ? C.sugar : "#d4a373";
-  const sodiumColor = isPink ? C.sodium : "#7eb8d9";
-  const fiberColor = isPink ? C.fiber : "#7cb872";
+  const cardBg = C.card;
+  const cardBgDragging = C.cardHover;
+  const textColor = C.text;
+  const textMuted = C.textMuted;
+  const btnColor = C.textDim;
+  const pinkColor = C.pink;
+  const proteinColor = C.protein;
+  const carbsColor = C.carbs;
+  const fatColor = C.fat;
+  const sugarColor = C.sugar;
+  const sodiumColor = C.sodium;
+  const fiberColor = C.fiber;
   const hasItems = Array.isArray(meal.items) && meal.items.length > 0;
   const [expanded, setExpanded] = useState(false);
   const [dragY, setDragY] = useState(0);
@@ -746,7 +758,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
       style={{
         padding:"12px 14px", marginBottom:8, borderRadius:18,
         background: isDragging ? cardBgDragging : cardBg,
-        border:`1px solid ${isDragging ? (isDark?"#454249":"#aaa5ab") : (isDark?"#26262d":"#e8e4e8")}`,
+        border:`1px solid ${isDragging ? C.textDim : `${C.border}66`}`,
         cursor: onSlotChange && !readonly ? (isDragging?"grabbing":"grab") : "default",
         touchAction: onSlotChange && !readonly ? "none" : "auto",
         transform: `translateY(${dragY}px) scale(${isDragging?1.02:1})`,
@@ -775,7 +787,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
               {menuOpen && (
                 <React.Fragment>
                   <div onClick={() => setMenuOpen(false)} style={{ position:"fixed", inset:0, zIndex:19 }} />
-                  <div className="fade" style={{ position:"absolute", top:"100%", right:0, zIndex:20, background:cardBg, border:`1px solid ${isDark?"#454249":"#ddd6da"}`, borderRadius:12, boxShadow:"0 6px 20px rgba(0,0,0,0.18)", overflow:"hidden", minWidth:130 }}>
+                  <div className="fade" style={{ position:"absolute", top:"100%", right:0, zIndex:20, background:cardBg, border:`1px solid ${C.border}`, borderRadius:12, boxShadow:"0 6px 20px rgba(0,0,0,0.18)", overflow:"hidden", minWidth:130 }}>
                     {onSaveFavorite && (
                       <button onClick={() => { onSaveFavorite(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color: isFavorited?pinkColor:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
                         <span style={{ fontSize:14 }}>{isFavorited?"★":"☆"}</span> {isFavorited?"Saved":"Save favorite"}
@@ -784,7 +796,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
                     <button onClick={() => { onEdit(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
                       <span style={{ fontSize:13 }}>✏️</span> Edit
                     </button>
-                    <button onClick={() => { onRemove(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:"#e8616f", cursor:"pointer", whiteSpace:"nowrap" }}>
+                    <button onClick={() => { onRemove(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:C.red, cursor:"pointer", whiteSpace:"nowrap" }}>
                       <span style={{ fontSize:13 }}>×</span> Remove
                     </button>
                   </div>
@@ -796,7 +808,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
       </div>
       {/* Macros always shown in their own clean row, regardless of whether the meal has an expandable ingredient breakdown */}
       {hasMacros && (
-        <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:`1px dashed ${isDark?"#26262d":"#e8e4e8"}` }}>
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
           {(meal.protein!==undefined&&meal.protein!==null) && <span style={{ fontSize:11, color:proteinColor, fontWeight:"600" }}>P 🥩 {Math.round(meal.protein)}g</span>}
           {(meal.carbs!==undefined&&meal.carbs!==null) && <span style={{ fontSize:11, color:carbsColor, fontWeight:"600" }}>C 🍞 {Math.round(meal.carbs)}g</span>}
           {(meal.fat!==undefined&&meal.fat!==null) && <span style={{ fontSize:11, color:fatColor, fontWeight:"600" }}>F 🥑 {Math.round(meal.fat)}g</span>}
@@ -806,7 +818,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
         </div>
       )}
       {hasItems && expanded && (
-        <div className="fade" style={{ marginTop:10, paddingTop:10, borderTop:`1px dashed ${isDark?"#26262d":"#e8e4e8"}` }}>
+        <div className="fade" style={{ marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
           <div style={{ fontSize:10, color:textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:6 }}>WHAT'S IN THIS MEAL</div>
           {meal.items.slice().sort((a,b)=>(b.calories||0)-(a.calories||0)).map((it,idx) => (
             <div key={idx} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0" }}>
@@ -829,20 +841,19 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
 const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel, slot, theme, C, saving, lang }) {
   const isWorkout = entry.type === "workout";
   const isDark = theme !== "light";
-  const isPink = C && C._pink;
-  const bg = isDark ? "#141418" : "#ffffff";
-  const workoutAccent = isPink ? C.workoutAccent : (isDark ? "#5ec9a0" : "#1f8a63");
-  const workoutDeep = isPink ? C.workoutDeep : "#15634a";
-  const mealAccent = isPink ? C.pink : (isDark ? "#e8447a" : "#c4205f");
-  const border = isWorkout ? `${workoutAccent}4d` : (isPink ? C.pinkDim : (isDark ? "#b6285c" : "#e8e4e8"));
+  const bg = C.surface;
+  const workoutAccent = C.workoutAccent;
+  const workoutDeep = C.workoutDeep;
+  const mealAccent = C.pink;
+  const border = isWorkout ? `${workoutAccent}4d` : C.pinkDim;
   const titleColor = isWorkout ? workoutAccent : mealAccent;
-  const textColor = isDark ? "#f3f1f4" : "#1d1b1f";
-  const textMuted = isDark ? "#8b8794" : "#6f6a73";
-  const textDim = isDark ? "#454249" : "#aaa5ab";
-  const subCardBg = isDark ? "#0a0a0d" : "#f0ecee";
-  const proteinColor = isPink ? C.protein : (isDark ? "#a98fe0" : "#7752c9");
-  const carbsColor = isPink ? C.carbs : (isDark ? "#e8a4bd" : "#b8366b");
-  const fatColor = isPink ? C.fat : (isDark ? "#e0a868" : "#b9740f");
+  const textColor = C.text;
+  const textMuted = C.textMuted;
+  const textDim = C.textDim;
+  const subCardBg = `${C.border}22`;
+  const proteinColor = C.protein;
+  const carbsColor = C.carbs;
+  const fatColor = C.fat;
   const hasItems = !isWorkout && Array.isArray(entry.items) && entry.items.length > 0;
   const [itemsExpanded, setItemsExpanded] = useState(true);
   return (
@@ -864,13 +875,13 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
         </div>
       </div>
       {hasItems && (
-        <div style={{ marginBottom:14, background:subCardBg, borderRadius:12, padding:"10px 12px", border:isDark?"none":"1px solid #ddd6da" }}>
+        <div style={{ marginBottom:14, background:subCardBg, borderRadius:12, padding:"10px 12px", border:isDark?"none":`1px solid ${C.border}` }}>
           <div onClick={() => setItemsExpanded(!itemsExpanded)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", marginBottom: itemsExpanded ? 8 : 0 }}>
             <span style={{ fontSize:10, color:textMuted, fontWeight:"700", letterSpacing:"0.05em" }}>BREAKDOWN BY COMPONENT</span>
             <span style={{ fontSize:10, color:textMuted }}>{itemsExpanded ? "▲ minimize" : "▼ expand"}</span>
           </div>
           {itemsExpanded && entry.items.slice().sort((a,b)=>(b.calories||0)-(a.calories||0)).map((it,idx) => (
-            <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom: idx < entry.items.length-1 ? `1px dashed ${isDark?"#26262d":"#e8e4e8"}` : "none" }}>
+            <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom: idx < entry.items.length-1 ? `1px dashed ${C.border}66` : "none" }}>
               <span style={{ fontSize:12, color:textColor, textTransform:"capitalize" }}>{it.item}{it.grams_estimate ? ` (~${Math.round(it.grams_estimate)}g)` : ""}</span>
               <span style={{ fontSize:12, color:mealAccent, fontWeight:"700" }}>{Math.round(it.calories||0)} kcal</span>
             </div>
@@ -880,7 +891,7 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
       {!isWorkout && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
           {[["Protein",entry.protein,proteinColor],["Carbs",entry.carbs,carbsColor],["Fat",entry.fat,fatColor]].map(([l,v,c]) => (
-            <div key={l} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":"1px solid #ddd6da" }}>
+            <div key={l} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
               <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
               <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:17, color:c, fontWeight:"700" }}>{Math.round(v)}g</div>
             </div>
@@ -897,7 +908,7 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
   );
 });
 
-const MacroDonutChart = React.memo(function MacroDonutChart({ consumed, theme }) {
+const MacroDonutChart = React.memo(function MacroDonutChart({ consumed, theme, C }) {
   const totalGrams = consumed.protein + consumed.carbs + consumed.fat;
   const pPct = totalGrams ? (consumed.protein/totalGrams)*100 : 0;
   const cPct = totalGrams ? (consumed.carbs/totalGrams)*100 : 0;
@@ -907,14 +918,13 @@ const MacroDonutChart = React.memo(function MacroDonutChart({ consumed, theme })
   const pLen = (pPct/100)*circ;
   const cLen = (cPct/100)*circ;
   const fLen = (fPct/100)*circ;
-  const isDark = theme !== "light";
-  const innerBg = isDark ? "#212126" : "#f7f4f6";
-  const strokeBg = isDark ? "#26262d" : "#e8e4e8";
-  const textMain = isDark ? "#f3f1f4" : "#1d1b1f";
-  const textSub = isDark ? "#8b8794" : "#6f6a73";
-  const proteinC = isDark ? "#a98fe0" : "#7752c9";
-  const carbsC = isDark ? "#e8a4bd" : "#b8366b";
-  const fatC = isDark ? "#e0a868" : "#b9740f";
+  const innerBg = C.cardHover;
+  const strokeBg = `${C.border}66`;
+  const textMain = C.text;
+  const textSub = C.textMuted;
+  const proteinC = C.protein;
+  const carbsC = C.carbs;
+  const fatC = C.fat;
   return (
     <div style={{ position:"relative", width:"120px", height:"120px" }}>
       <svg width="100%" height="100%" viewBox="0 0 100 100">
@@ -939,12 +949,9 @@ const MacroDonutChart = React.memo(function MacroDonutChart({ consumed, theme })
 
 // ── Simple SVG bar chart: consumed vs burned per day, with target line ──
 const TrendChart = React.memo(function TrendChart({ days, target, theme, C }) {
-  const isDark = theme !== "light";
-  const isPink = C && C._pink;
-  const gridColor = isDark ? "#26262d" : "#e8e4e8";
-  const textColor = isDark ? "#8b8794" : "#6f6a73";
-  const consumedColor = isPink ? C.pink : (isDark ? "#e8447a" : "#c4205f");
-  const burnedColor = C ? C.chartBurned : (isDark ? "#5ec9a0" : "#1f8a63");
+  const textColor = C.textMuted;
+  const consumedColor = C.pink;
+  const burnedColor = C.chartBurned;
   if (!days.length) return <div style={{ fontSize:12, color:textColor, textAlign:"center", padding:"20px 0" }}>{(localStorage.getItem("nutrilog_lang")||"en")==="zh" ? "数据还不够" : "Not enough data yet"}</div>;
 
   const maxVal = Math.max(target, ...days.map(d=>d.consumed), ...days.map(d=>d.burned), 100) * 1.15;
@@ -974,10 +981,9 @@ const TrendChart = React.memo(function TrendChart({ days, target, theme, C }) {
 });
 
 // ── Simple SVG line chart: weekly burned calories trend, going up = motivating ──
-const LineChart = React.memo(function LineChart({ points, color, theme, minScaleFloor }) {
-  const isDark = theme !== "light";
-  const textColor = isDark ? "#8b8794" : "#6f6a73";
-  const gridColor = isDark ? "#26262d" : "#e8e4e8";
+const LineChart = React.memo(function LineChart({ points, color, theme, minScaleFloor, C }) {
+  const textColor = C.textMuted;
+  const gridColor = `${C.border}66`;
   if (!points.length) return <div style={{ fontSize:12, color:textColor, textAlign:"center", padding:"20px 0" }}>{(localStorage.getItem("nutrilog_lang")||"en")==="zh" ? "数据还不够" : "Not enough data yet"}</div>;
 
   const w = 320, h = 120, padBottom = 20, padTop = 10, padX = 8;
@@ -1089,7 +1095,7 @@ function useFavorites({ userId, today, activeSlot, setDayData, setError, L }) {
         confidence: "favorite", logged_at: new Date().toISOString()
       });
       setDayData(d => ({ ...d, meals: [...d.meals, meal] }));
-      DataAPI.touchFavorite(fav.id, fav.use_count);
+      DataAPI.touchFavorite(fav.id).catch(() => { /* non-critical, ignore */ });
       setFavMeals(f => f.map(x => x.id===fav.id ? { ...x, use_count:(x.use_count||0)+1 } : x));
     } catch (err) { setError(L("Failed to log favorite: ","记录收藏项失败：") + err.message); }
   };
@@ -1101,7 +1107,7 @@ function useFavorites({ userId, today, activeSlot, setDayData, setError, L }) {
         sugar_g: fav.sugar_g||0, sodium_mg: fav.sodium_mg||0, fiber_g: fav.fiber_g||0, logged_at: new Date().toISOString()
       });
       setDayData(prev => ({ ...prev, drinks: [...(prev.drinks||[]), d] }));
-      DataAPI.touchFavorite(fav.id, fav.use_count);
+      DataAPI.touchFavorite(fav.id).catch(() => { /* non-critical, ignore */ });
       setFavDrinks(f => f.map(x => x.id===fav.id ? { ...x, use_count:(x.use_count||0)+1 } : x));
     } catch (err) { setError(L("Failed to log favorite: ","记录收藏项失败：") + err.message); }
   };
@@ -1112,7 +1118,7 @@ function useFavorites({ userId, today, activeSlot, setDayData, setError, L }) {
         duration: fav.duration || "—", description: fav.description || null, logged_at: new Date().toISOString()
       });
       setDayData(d => ({ ...d, workouts: [...(d.workouts||[]), w] }));
-      DataAPI.touchFavorite(fav.id, fav.use_count);
+      DataAPI.touchFavorite(fav.id).catch(() => { /* non-critical, ignore */ });
       setFavWorkouts(f => f.map(x => x.id===fav.id ? { ...x, use_count:(x.use_count||0)+1 } : x));
     } catch (err) { setError(L("Failed to log favorite: ","记录收藏项失败：") + err.message); }
   };
@@ -1469,18 +1475,24 @@ function NutriLogPro({ session, onLogout }) {
   useEffect(() => { localStorage.setItem("nutrilog_palette", palette); }, [palette]);
   useEffect(() => { localStorage.setItem("nutrilog_gemini_key", geminiKey); }, [geminiKey]);
 
-  // Load today's data + targets + weight on mount
+  // Load today's data + targets + weight on mount.
+  // Targets (which hold day_cutoff_hour) are fetched FIRST, then used to compute the
+  // correct "today" date key before loading day data — otherwise a user with a custom
+  // cutoff hour could have their day data fetched against the wrong calendar date on
+  // first load (since `today` above is computed with the default cutoff of 0 until
+  // baseTargets finishes loading, and this effect never re-ran to correct it).
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const [day, targets, weight] = await Promise.all([
-          DataAPI.getDayData(userId, today),
-          DataAPI.getTargets(userId),
-          DataAPI.getWeightLog(userId, today)
+        const targets = await DataAPI.getTargets(userId);
+        const correctToday = todayKey(targets.day_cutoff_hour || 0);
+        const [day, weight] = await Promise.all([
+          DataAPI.getDayData(userId, correctToday),
+          DataAPI.getWeightLog(userId, correctToday)
         ]);
-        setDayData(day);
         setBaseTargets(targets);
+        setDayData(day);
         setTodayWeight(weight ? weight.weight_kg : null);
         if (!weight) setShowWeightReminder(true);
       } catch (err) {
@@ -1544,12 +1556,37 @@ function NutriLogPro({ session, onLogout }) {
     setDayData(d => ({ ...d, drinks: (d.drinks||[]).filter(x=>x.id!==id) }));
     try { await DataAPI.deleteDrink(id); } catch (err) { setError(L("Failed to delete: ","删除失败：") + err.message); refreshToday(); }
   };
-  const adjustWater = (delta) => {
-    if (delta > 0) addDrink({ drink_type:"Water", amount_ml:delta, calories:0, sugar_g:0 });
-    // negative adjust: remove the most recent water entry if it roughly matches, else ignore
-    else {
-      const lastWater = (dayData.drinks||[]).slice().reverse().find(d => d.drink_type === "Water");
-      if (lastWater) removeDrink(lastWater.id);
+  const adjustWater = async (delta) => {
+    if (delta > 0) { addDrink({ drink_type:"Water", amount_ml:delta, calories:0, sugar_g:0 }); return; }
+    // Negative adjust: reduce the most recent water entries by the exact amount, walking
+    // backward through them. A whole entry is only deleted once it's fully consumed by the
+    // remaining amount — otherwise it's proportionally shrunk (macros scaled down with it)
+    // rather than deleting an entire entry that's bigger than what the user asked to remove.
+    let remaining = Math.abs(delta);
+    const waterEntries = (dayData.drinks||[]).filter(d => d.drink_type === "Water")
+      .slice().sort((a,b) => new Date(b.logged_at||0) - new Date(a.logged_at||0));
+    for (const entry of waterEntries) {
+      if (remaining <= 0) break;
+      const entryMl = Number(entry.amount_ml||0);
+      if (entryMl <= remaining) {
+        remaining -= entryMl;
+        await removeDrink(entry.id);
+      } else {
+        const newMl = entryMl - remaining;
+        const ratio = newMl / entryMl;
+        const patch = {
+          amount_ml: newMl,
+          calories: Math.round((entry.calories||0)*ratio),
+          protein: Math.round((entry.protein||0)*ratio*10)/10,
+          carbs: Math.round((entry.carbs||0)*ratio*10)/10,
+          fat: Math.round((entry.fat||0)*ratio*10)/10,
+          sugar_g: Math.round((entry.sugar_g||0)*ratio*10)/10,
+          sodium_mg: Math.round((entry.sodium_mg||0)*ratio)
+        };
+        setDayData(d => ({ ...d, drinks: (d.drinks||[]).map(x => x.id===entry.id ? {...x, ...patch} : x) }));
+        try { await DataAPI.updateDrink(entry.id, patch); } catch (err) { setError(L("Failed to update: ","更新失败：") + err.message); refreshToday(); }
+        remaining = 0;
+      }
     }
   };
 
@@ -2085,11 +2122,15 @@ function NutriLogPro({ session, onLogout }) {
     histRangeData.workouts.forEach(w => { byDate[w.log_date] = (byDate[w.log_date]||0) - Number(w.calories||0); });
     (histRangeData.drinks||[]).forEach(d => { byDate[d.log_date] = (byDate[d.log_date]||0) + Number(d.calories||0); });
     let streak = 0;
+    const target = baseTargets.calories || 1;
+    // Goal-aware, matching streakWeek's "hit" logic above: for a gain goal, staying AT or
+    // ABOVE target is the win; for lose/maintain, staying AT or BELOW target is the win.
     for (let i=1; i<=180; i++) {
       const d = new Date(); d.setDate(d.getDate()-i);
       const key = localDateKey(d);
       if (byDate[key] === undefined) break; // no data logged that day — streak ends
-      if (byDate[key] <= baseTargets.calories) streak++;
+      const hit = baseTargets.goal === "gain" ? byDate[key] >= target : byDate[key] <= target;
+      if (hit) streak++;
       else break;
     }
     return streak;
@@ -2191,7 +2232,7 @@ function NutriLogPro({ session, onLogout }) {
         .card:hover{border-color:${C.borderGlow};box-shadow:0 4px 16px ${theme==='dark'?'rgba(232,68,122,0.08)':'rgba(196,32,95,0.06)'}}
         .card-primary{background:${theme==='dark'?`linear-gradient(165deg, ${C.card}, #16161b)`:`linear-gradient(165deg, ${C.card}, #fdfcfd)`};border:1px solid ${C.border};border-radius:20px;box-shadow:0 2px 14px ${theme==='dark'?'rgba(0,0,0,0.25)':'rgba(40,30,40,0.06)'};transition:all .25s ease-out}
         .card-primary:hover{border-color:${C.borderGlow};box-shadow:0 6px 22px ${theme==='dark'?'rgba(232,68,122,0.1)':'rgba(196,32,95,0.08)'}}
-        .card-nested{background:${theme==='dark'?'#0a0a0d':'#f0ecee'};border:1px solid ${theme==='dark'?'transparent':'#ddd6da'};border-radius:14px;transition:all .2s ease-out}
+        .card-nested{background:${theme==='dark'?C.bg:`${C.border}22`};border:1px solid ${theme==='dark'?'transparent':C.border};border-radius:14px;transition:all .2s ease-out}
         .pink-btn{background:linear-gradient(135deg,${C.pink},${C.pinkDim});color:${C.onAccent||"#fff"};border:none;border-radius:12px;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.02em;transition:opacity .2s,transform .15s;box-shadow:0 4px 16px ${C.pinkDim}47}
         .pink-btn:hover{opacity:.88;transform:translateY(-1px)}
         .pink-btn:disabled{opacity:.5;cursor:not-allowed}
@@ -2370,13 +2411,13 @@ function NutriLogPro({ session, onLogout }) {
                 {/* Bar sits at the exact vertical center of the 32px circles (16px from top of this row), and each
                     segment spans from one circle's center to the next circle's center so it visually "flows"
                     from day to day rather than floating as separate chips under each dot. */}
-                <div style={{ position:"absolute", left:16, right:16, top:16, height:6, borderRadius:3, background:theme==="light"?"#e3dee2":"#2a2a30", transform:"translateY(-50%)", zIndex:0, display:"flex", overflow:"hidden" }}>
+                <div style={{ position:"absolute", left:16, right:16, top:16, height:6, borderRadius:3, background:C.cardHover, transform:"translateY(-50%)", zIndex:0, display:"flex", overflow:"hidden" }}>
                   {streakWeek.days.slice(0,6).map((day,i) => {
                     // Colour the segment by the earlier (left) day's result, since that's the day "flowing into" the next.
                     const segColor = !day.hasData ? "transparent"
-                      : day.hit ? (theme==="light"?"#1f8a63":"#5ec9a0")
-                      : day.deviation <= 0.20 ? (theme==="light"?"#c98a12":"#e0b84a")
-                      : (theme==="light"?"#c5414d":"#e8616f");
+                      : day.hit ? C.green
+                      : day.deviation <= 0.20 ? C.caution
+                      : C.red;
                     return <div key={day.key} style={{ flex:1, background:segColor }} />;
                   })}
                 </div>
@@ -2384,17 +2425,17 @@ function NutriLogPro({ session, onLogout }) {
                   {streakWeek.days.map(day => {
                   // Tiered result colour: green = hit target, yellow = within 20% tolerance band, red = beyond that.
                   const resultColor = !day.hasData ? null
-                    : day.hit ? (theme==="light"?"#1f8a63":"#5ec9a0")
-                    : day.deviation <= 0.20 ? (theme==="light"?"#c98a12":"#e0b84a")
-                    : (theme==="light"?"#c5414d":"#e8616f");
-                  const neutral = theme==="light" ? "#d8d3d8" : "#3a3a42";
+                    : day.hit ? C.green
+                    : day.deviation <= 0.20 ? C.caution
+                    : C.red;
+                  const neutral = C.border;
                   const isPending = !day.hasData; // today (not yet evaluated) or future day
                   return (
                     <div key={day.key} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, flex:1, position:"relative", zIndex:1 }}>
                       <div style={{
                         width:32, height:32, borderRadius:"50%",
                         display:"flex", alignItems:"center", justifyContent:"center",
-                        background: isPending ? (theme==="light"?"#fff":C.surface) : resultColor,
+                        background: isPending ? C.surface : resultColor,
                         border: isPending ? `2px solid ${day.isToday?C.pink:neutral}` : "none",
                         boxShadow: day.isToday
                           ? `0 0 0 5px ${C.pink}26`
@@ -2508,7 +2549,7 @@ function NutriLogPro({ session, onLogout }) {
                     <button className="pink-btn" style={{ flexShrink:0 }} onClick={() => { applyCustomDelta(tdee.tdee); setShowTierPicker(false); }}>{T("common_set")}</button>
                   </div>
                   {customDeltaWarning && (
-                    <div style={{ fontSize:11, color: theme==="light"?"#a3790f":"#dbb868", marginTop:8, lineHeight:1.5 }}>⚠️ {customDeltaWarning}</div>
+                    <div style={{ fontSize:11, color: C.caution, marginTop:8, lineHeight:1.5 }}>⚠️ {customDeltaWarning}</div>
                   )}
                   <div style={{ fontSize:11, color:C.textMuted, fontStyle:"italic", marginTop:10 }}>
                     {T("main_workout_bonus_note")}
@@ -2588,9 +2629,9 @@ function NutriLogPro({ session, onLogout }) {
               ];
               const colorsFor = (status) => {
                 const statusText = {
-                  good: theme==="light"?"#1f8a63":"#5ec9a0",
-                  caution: theme==="light"?"#a3790f":"#dbb868",
-                  bad: theme==="light"?"#c5414d":"#e8616f",
+                  good: C.green,
+                  caution: C.caution,
+                  bad: C.red,
                   neutral: C.textMuted
                 }[status];
                 if (C._pink && status !== "neutral") {
@@ -2639,12 +2680,12 @@ function NutriLogPro({ session, onLogout }) {
                     ? <React.Fragment>{L("Great — you've hit your","太棒了 —— 今天已达成")} <strong style={{color:C.text}}>{Math.round(targets.calories)} kcal</strong> {L("gain goal today.","的增重目标。")}</React.Fragment>
                     : net >= targets.calories*0.8
                     ? <React.Fragment>{L("You can still eat about","还可以再吃约")} <strong style={{color:C.text}}>{Math.round(targets.calories-net)} kcal</strong> {L("to hit your gain target.","来达成增重目标。")}</React.Fragment>
-                    : <React.Fragment>{L("You're","还差")} <strong style={{color:theme==="light"?"#a3790f":"#dbb868"}}>{Math.round(targets.calories-net)} kcal</strong> {L("short — you still need to eat some more today.","—— 今天还需要多吃一些。")}</React.Fragment>
+                    : <React.Fragment>{L("You're","还差")} <strong style={{color:C.caution}}>{Math.round(targets.calories-net)} kcal</strong> {L("short — you still need to eat some more today.","—— 今天还需要多吃一些。")}</React.Fragment>
                 ) : (
                   net <= targets.calories
                     ? <React.Fragment>{L("You can still eat about","今天还可以再吃约")} <strong style={{color:C.text}}>{Math.round(targets.calories-net)} kcal</strong> {L("today.","。")}</React.Fragment>
                     : net <= targets.calories*1.2
-                    ? <React.Fragment>{L("You're","已超出")} <strong style={{color:theme==="light"?"#a3790f":"#dbb868"}}>{Math.round(net-targets.calories)} kcal</strong> {L("over — still a fine range.","—— 仍在可接受范围内。")}</React.Fragment>
+                    ? <React.Fragment>{L("You're","已超出")} <strong style={{color:C.caution}}>{Math.round(net-targets.calories)} kcal</strong> {L("over — still a fine range.","—— 仍在可接受范围内。")}</React.Fragment>
                     : <React.Fragment>{L("You're","已超出")} <strong style={{color:C.red}}>{Math.round(net-targets.calories)} kcal</strong> {L("over — that's over-consumption today.","—— 今天已属于过量摄入。")}</React.Fragment>
                 )}
               </div>
@@ -2652,7 +2693,7 @@ function NutriLogPro({ session, onLogout }) {
                 <span>0%</span>
                 <span>{Math.round(targets.calories)} kcal {L("target","目标")}</span>
               </div>
-              <ProgressBar val={net} target={targets.calories} color={C.pink} theme={theme} mode={isGainPlan?"gain-band":"caution-band"} unit="kcal" />
+              <ProgressBar val={net} target={targets.calories} color={C.pink} theme={theme} mode={isGainPlan?"gain-band":"caution-band"} unit="kcal" C={C} />
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:12, fontSize:11, color:C.textMuted }}>
                 <span>{L("Consumed","已摄入")}: <strong style={{color:C.text}}>{Math.round(consumed.calories)}</strong> kcal</span>
                 <span>{L("Burned","已消耗")}: <strong style={{color:C.text}}>{Math.round(burned)}</strong> kcal</span>
@@ -2713,7 +2754,7 @@ function NutriLogPro({ session, onLogout }) {
                 const over = isCap && val > target;
                 // Sweet Pink: bar fill stays in the pink family — the over-limit warning lives in the
                 // red text label instead. Other palettes keep their original green/red fill for now.
-                const barColor = C._pink ? (over ? C.pinkDim : C.pink) : (over ? C.red : (theme==="light"?"#1f8a63":"#5ec9a0"));
+                const barColor = over ? C.pinkDim : C.pink;
                 return (
                   <div key={label} style={{ marginBottom:12 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:12 }}>
@@ -2757,7 +2798,7 @@ function NutriLogPro({ session, onLogout }) {
                   </div>
                 ))}
               </div>
-              <ProgressBar val={totalDrinkMl} target={waterTarget} color={C.water} theme={theme} mode="positive" unit="ml" accentLabel={C._pink} />
+              <ProgressBar val={totalDrinkMl} target={waterTarget} color={C.water} theme={theme} mode="positive" unit="ml" accentLabel={C._pink} C={C} />
               <div style={{ display:"flex", gap:6, marginTop:12 }}>
                 {waterMilestones.map(m => (
                   <div key={m.pct} style={{ flex:1, textAlign:"center", padding:"6px 4px", borderRadius:10, background: totalDrinkMl>=m.ml ? `${C.water}1f` : C.surface, border:`1px solid ${totalDrinkMl>=m.ml?C.water:C.border}` }}>
@@ -2775,7 +2816,7 @@ function NutriLogPro({ session, onLogout }) {
                 <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent }}>🏃 {L("Weekly Workout Trend","每周运动趋势")}</span>
                 <span style={{ fontSize:11, fontStyle:"italic", color:C.textMuted }}>{L("Calories burned per week","每周消耗热量")}</span>
               </div>
-              <LineChart points={workoutWeeklyTrend} color={C.workoutAccent} theme={theme} />
+              <LineChart points={workoutWeeklyTrend} color={C.workoutAccent} theme={theme} C={C} />
               <div style={{ marginTop:14, borderTop:`1px solid ${C.border}`, paddingTop:10 }}>
                 {workoutWeeklyTrend.slice().reverse().map((w,i) => (
                   <div key={i} className="hist-sub-row">
@@ -2809,14 +2850,14 @@ function NutriLogPro({ session, onLogout }) {
                     {bmiInfo && (
                       <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
                         <div style={{ fontSize:10, letterSpacing:".1em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>BMI</div>
-                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:bmiInfo.color, lineHeight:1 }}>{bmiInfo.value}</div>
-                        <div style={{ fontSize:10, color:bmiInfo.color, fontWeight:"600" }}>{bmiInfo.category}</div>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C[BMI_CATEGORY_COLOR_KEY[bmiInfo.key]], lineHeight:1 }}>{bmiInfo.value}</div>
+                        <div style={{ fontSize:10, color:C[BMI_CATEGORY_COLOR_KEY[bmiInfo.key]], fontWeight:"600" }}>{bmiInfo.category}</div>
                       </div>
                     )}
                   </div>
                   {!bmiInfo && <div style={{ fontSize:11, color:C.textMuted, fontStyle:"italic", marginBottom:10 }}>{L("Add your height in your Profile (👤 on Main) to see your BMI.","在主页的个人资料 (👤) 中填写身高，即可查看 BMI。")}</div>}
                   {weightHistory.length > 1 && (
-                    <LineChart points={weightHistory.slice(-30).map(w => ({ label: new Date(w.log_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}), burned: w.weight_kg }))} color={C.pink} theme={theme} minScaleFloor={0} />
+                    <LineChart points={weightHistory.slice(-30).map(w => ({ label: new Date(w.log_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}), burned: w.weight_kg }))} color={C.pink} theme={theme} minScaleFloor={0} C={C} />
                   )}
                   {weightTrendMessage && (
                     <div style={{ fontSize:12, color:C.textMuted, fontStyle:"italic", textAlign:"center", marginTop:10 }}>{weightTrendMessage}</div>
@@ -3074,11 +3115,11 @@ function NutriLogPro({ session, onLogout }) {
                         {drinkMenuOpen===d.id && (
                           <React.Fragment>
                             <div onClick={() => setDrinkMenuOpen(null)} style={{ position:"fixed", inset:0, zIndex:19 }} />
-                            <div className="fade" style={{ position:"absolute", top:"100%", right:0, zIndex:20, background:C.card, border:`1px solid ${theme==="light"?"#ddd6da":"#454249"}`, borderRadius:12, boxShadow:"0 6px 20px rgba(0,0,0,0.18)", overflow:"hidden", minWidth:130 }}>
+                            <div className="fade" style={{ position:"absolute", top:"100%", right:0, zIndex:20, background:C.card, border:`1px solid ${C.border}`, borderRadius:12, boxShadow:"0 6px 20px rgba(0,0,0,0.18)", overflow:"hidden", minWidth:130 }}>
                               <button onClick={() => { saveFavorite("drink", { name:d.drink_type, drink_type:d.drink_type, amount_ml:d.amount_ml, calories:d.calories, protein:d.protein, carbs:d.carbs, fat:d.fat, sugar_g:d.sugar_g, sodium_mg:d.sodium_mg, fiber_g:d.fiber_g }); setDrinkMenuOpen(null); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color: isFav?dColor:C.text, cursor:"pointer", whiteSpace:"nowrap" }}>
                                 <span style={{ fontSize:14 }}>{isFav?"★":"☆"}</span> {isFav?L("Saved","已收藏"):L("Save favorite","收藏")}
                               </button>
-                              <button onClick={() => { removeDrink(d.id); setDrinkMenuOpen(null); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:"#e8616f", cursor:"pointer", whiteSpace:"nowrap" }}>
+                              <button onClick={() => { removeDrink(d.id); setDrinkMenuOpen(null); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:C.red, cursor:"pointer", whiteSpace:"nowrap" }}>
                                 <span style={{ fontSize:13 }}>×</span> {T("common_delete")}
                               </button>
                             </div>
@@ -3088,7 +3129,7 @@ function NutriLogPro({ session, onLogout }) {
                     </div>
                     {/* Macros always shown together in their own clean row */}
                     {hasMacros && (
-                      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:`1px dashed ${theme==="light"?"#e8e4e8":"#26262d"}` }}>
+                      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
                         <span style={{ fontSize:11, color:C.protein, fontWeight:"600" }}>P 🥩 {Math.round(d.protein||0)}g</span>
                         <span style={{ fontSize:11, color:C.carbs, fontWeight:"600" }}>C 🍞 {Math.round(d.carbs||0)}g</span>
                         <span style={{ fontSize:11, color:C.fat, fontWeight:"600" }}>F 🥑 {Math.round(d.fat||0)}g</span>
@@ -3250,7 +3291,7 @@ function NutriLogPro({ session, onLogout }) {
                       </div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:10 }}>
                         {[{l:L("Consumed","摄入"),v:histConsumed,c:C.pink,u:"kcal"},{l:L("Burned","消耗"),v:histBurned,c:C.workoutAccent,u:"kcal"},{l:L("Net","净值"),v:histConsumed-histBurned,c:C.text,u:"kcal"},{l:L("Water","饮水"),v:(histDayData.drinks||[]).reduce((s,d)=>s+Number(d.amount_ml||0),0),c:C.water,u:"ml"}].map(({l,v,c,u}) => (
-                          <div key={l} style={{ background: theme==="light" ? "#f0ecee" : C.surface, borderRadius:12, padding:"8px 4px", textAlign:"center", border:theme==='light'?"1px solid #ddd6da":"none" }}>
+                          <div key={l} style={{ background: theme==="light" ? `${C.border}22` : C.surface, borderRadius:12, padding:"8px 4px", textAlign:"center", border:theme==='light'?`1px solid ${C.border}`:"none" }}>
                             <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
                             <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:c, fontWeight:"800", marginTop:2 }}>{Math.round(v)}</div>
                             <div style={{ fontSize:9, color:C.textDim, fontWeight:"500" }}>{u}</div>
@@ -3265,7 +3306,7 @@ function NutriLogPro({ session, onLogout }) {
                           {l:L("Sugar","糖"),v:histMacros.sugar,c:C.gold,u:"g"},
                           {l:L("Sodium","钠"),v:histMacros.sodium,c:C.sodium,u:"mg"},
                         ].map(({l,v,c,u}) => (
-                          <div key={l} style={{ background: theme==="light" ? "#f0ecee" : C.surface, borderRadius:12, padding:"8px 4px", textAlign:"center", border:theme==='light'?"1px solid #ddd6da":"none" }}>
+                          <div key={l} style={{ background: theme==="light" ? `${C.border}22` : C.surface, borderRadius:12, padding:"8px 4px", textAlign:"center", border:theme==='light'?`1px solid ${C.border}`:"none" }}>
                             <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
                             <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:c, fontWeight:"800", marginTop:2 }}>{Math.round(v)}</div>
                             <div style={{ fontSize:9, color:C.textDim, fontWeight:"500" }}>{u}</div>
@@ -3314,7 +3355,7 @@ function NutriLogPro({ session, onLogout }) {
                                 <button onClick={() => removeDrinkFromHistory(d.id)} style={{ background:"none", border:"none", color:C.textDim, fontSize:18, cursor:"pointer", lineHeight:1 }}>×</button>
                               </div>
                             </div>
-                            <div style={{ display:"flex", gap:10, marginTop:10, paddingTop:10, borderTop:`1px dashed ${theme==="light"?"#e8e4e8":"#26262d"}`, flexWrap:"wrap" }}>
+                            <div style={{ display:"flex", gap:10, marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66`, flexWrap:"wrap" }}>
                               {[["P 🥩",d.protein,"g",C.protein],["C 🍞",d.carbs,"g",C.carbs],["F 🥑",d.fat,"g",C.fat]].map(([l,v,u,c]) => (
                                 <span key={l} style={{ fontSize:11, color:c, fontWeight:"600" }}>{l} {Math.round(v||0)}{u}</span>
                               ))}
@@ -3351,7 +3392,7 @@ function NutriLogPro({ session, onLogout }) {
                       </div>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:12 }}>
                         {[[L("DAILY AVG KCAL","日均热量"),avgCons+" kcal",C.pink],[L("DAILY AVG BURNED","日均消耗"),avgBurn+" kcal",C.workoutAccent],[L("DAILY AVG WATER","日均饮水"),avgWater+" ml",C.water]].map(([l,v,c]) => (
-                          <div key={l} style={{ background: theme==="light" ? "#f0ecee" : C.surface, padding:"8px 10px", borderRadius:12, textAlign:"center", border:theme==='light'?"1px solid #ddd6da":"none" }}>
+                          <div key={l} style={{ background: theme==="light" ? `${C.border}22` : C.surface, padding:"8px 10px", borderRadius:12, textAlign:"center", border:theme==='light'?`1px solid ${C.border}`:"none" }}>
                             <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700", fontFamily:"'DM Sans',sans-serif" }}>{l}</div>
                             <div style={{ fontSize:16, fontFamily:"'DM Sans',sans-serif", color:c, fontWeight:"800", marginTop:2 }}>{v}</div>
                           </div>
@@ -3397,11 +3438,11 @@ function NutriLogPro({ session, onLogout }) {
                         <div style={{ fontSize:15, color:C.pink }}>{isExpanded?"▲":"▼"}</div>
                       </div>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:12 }}>
-                        <div style={{ background: theme==="light" ? "#f0ecee" : C.surface, padding:"8px 10px", borderRadius:12, border:theme==='light'?"1px solid #ddd6da":"none" }}>
+                        <div style={{ background: theme==="light" ? `${C.border}22` : C.surface, padding:"8px 10px", borderRadius:12, border:theme==='light'?`1px solid ${C.border}`:"none" }}>
                           <div style={{ fontSize:9, color:C.textMuted, textAlign:"center", fontWeight:"700", fontFamily:"'DM Sans',sans-serif" }}>{L("MONTHLY DAILY AVG","月度日均")}</div>
                           <div style={{ fontSize:16, fontFamily:"'DM Sans',sans-serif", color:C.pink, fontWeight:"800", textAlign:"center", marginTop:4 }}>{avgCons} kcal</div>
                         </div>
-                        <div style={{ background: theme==="light" ? "#f0ecee" : C.surface, padding:"8px 10px", borderRadius:12, border:theme==='light'?"1px solid #ddd6da":"none" }}>
+                        <div style={{ background: theme==="light" ? `${C.border}22` : C.surface, padding:"8px 10px", borderRadius:12, border:theme==='light'?`1px solid ${C.border}`:"none" }}>
                           <div style={{ fontSize:9, color:C.textMuted, textAlign:"center", fontWeight:"700", fontFamily:"'DM Sans',sans-serif" }}>{L("TOTAL WORKOUTS","运动总次数")}</div>
                           <div style={{ fontSize:16, fontFamily:"'DM Sans',sans-serif", color:C.workoutAccent, fontWeight:"800", textAlign:"center", marginTop:4 }}>{L(`${m.totalWorkouts} sessions`, `${m.totalWorkouts} 次`)}</div>
                         </div>
@@ -3723,21 +3764,23 @@ function Root() {
   }, []);
 
   if (authError) {
+    const C = THEMES.dark;
     return (
-      <div style={{ minHeight:"100vh", background:"#0a0a0d", color:"#f3f1f4", display:"flex", alignItems:"center", justifyContent:"center", padding:20, textAlign:"center", fontFamily:"-apple-system,sans-serif" }}>
+      <div style={{ minHeight:"100vh", background:C.bg, color:C.text, display:"flex", alignItems:"center", justifyContent:"center", padding:20, textAlign:"center", fontFamily:"-apple-system,sans-serif" }}>
         <div>
-          <div style={{ fontSize:15, fontWeight:700, marginBottom:10, color:"#e8616f" }}>⚠️ {(localStorage.getItem("nutrilog_lang")||"en")==="zh" ? "连接失败" : "Couldn't connect"}</div>
-          <div style={{ fontSize:13, color:"#9b96a1", marginBottom:16, maxWidth:320 }}>{authError}</div>
-          <button onClick={() => window.location.reload()} style={{ background:"#e8447a", color:"#fff", border:"none", borderRadius:10, padding:"10px 20px", fontSize:14, cursor:"pointer" }}>{(localStorage.getItem("nutrilog_lang")||"en")==="zh" ? "重试" : "Retry"}</button>
+          <div style={{ fontSize:15, fontWeight:700, marginBottom:10, color:C.red }}>⚠️ {(localStorage.getItem("nutrilog_lang")||"en")==="zh" ? "连接失败" : "Couldn't connect"}</div>
+          <div style={{ fontSize:13, color:C.textMuted, marginBottom:16, maxWidth:320 }}>{authError}</div>
+          <button onClick={() => window.location.reload()} style={{ background:C.pink, color:"#fff", border:"none", borderRadius:10, padding:"10px 20px", fontSize:14, cursor:"pointer" }}>{(localStorage.getItem("nutrilog_lang")||"en")==="zh" ? "重试" : "Retry"}</button>
         </div>
       </div>
     );
   }
 
   if (session === undefined) {
+    const C = THEMES.dark;
     return (
-      <div style={{ minHeight:"100vh", background:"#0a0a0d", display:"flex", alignItems:"center", justifyContent:"center" }}>
-        <div className="auth-spin" style={{ width:32, height:32, border:"3px solid #26262d", borderTopColor:"#e8447a", borderRadius:"50%" }} />
+      <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div className="auth-spin" style={{ width:32, height:32, border:`3px solid ${C.border}66`, borderTopColor:C.pink, borderRadius:"50%" }} />
       </div>
     );
   }
