@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NutriLog">
+    <meta name="theme-color" content="#0a0a0d">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
     <title>NutriLog Pro</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -34,6 +39,14 @@
       });
       window.SUPABASE_URL = "https://rerfcfxttclttmvxssfs.supabase.co";
       window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlcmZjZnh0dGNsdHRtdnhzc2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5NjI1OTQsImV4cCI6MjA5NzUzODU5NH0.q1W8kUkvc0E9S14PYol3qt_i-DCB8NM7NsrhIzhpWPU";
+      // PWA: register service worker (no-op on unsupported browsers / local file usage)
+      if ("serviceWorker" in navigator && location.protocol === "https:") {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js").catch(function (err) {
+            console.warn("Service worker registration failed:", err);
+          });
+        });
+      }
     </script>
 </head>
 <body>
