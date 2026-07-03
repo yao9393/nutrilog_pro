@@ -17,7 +17,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..800&display=swap" rel="stylesheet">
     <style>
-      body { margin:0; }
+      body { margin:0; overflow-x:hidden; }
+      html { overflow-x:hidden; }
       .auth-spin { animation: authspin .8s linear infinite; }
       @keyframes authspin { to { transform: rotate(360deg); } }
     </style>
@@ -96,18 +97,53 @@ const THEMES = PALETTES.sweet; // legacy alias kept for any direct references
 const MOTIVATIONAL_QUOTES = [
   { quote:"Success isn't always about greatness. It's about consistency.", quote_zh:"成功不总是关乎伟大，而在于坚持。", author:"Dwayne Johnson" },
   { quote:"Discipline is choosing between what you want now and what you want most.", quote_zh:"自律，就是在眼前所欲与内心所求之间做出选择。", author:"Abraham Lincoln" },
-  { quote:"The only bad workout is the one that didn't happen.", quote_zh:"唯一糟糕的锻炼，就是没有开始的那一次。", author:"Unknown" },
-  { quote:"Your body can stand almost anything. It's your mind that you have to convince.", quote_zh:"你的身体几乎能承受一切，需要说服的是你的心。", author:"Unknown" },
-  { quote:"Consistency is what transforms average into excellence.", quote_zh:"坚持，能把平凡变为卓越。", author:"Unknown" },
+  { quote:"The only bad workout is the one that didn't happen.", quote_zh:"唯一糟糕的锻炼，就是没有开始的那一次。", author:null },
+  { quote:"Your body can stand almost anything. It's your mind that you have to convince.", quote_zh:"你的身体几乎能承受一切，需要说服的是你的心。", author:null },
+  { quote:"Consistency is what transforms average into excellence.", quote_zh:"坚持，能把平凡变为卓越。", author:null },
   { quote:"Do today what others won't, so tomorrow you can do what others can't.", quote_zh:"今天做别人不愿做的事，明天就能做别人做不到的事。", author:"Jerry Rice" },
   { quote:"Water is the driving force of all nature.", quote_zh:"水是自然界一切的驱动力。", author:"Leonardo da Vinci" },
   { quote:"Take care of your body. It's the only place you have to live.", quote_zh:"照顾好你的身体，那是你唯一的栖身之所。", author:"Jim Rohn" },
-  { quote:"Small steps every day lead to big changes.", quote_zh:"每天一小步，终将带来大改变。", author:"Unknown" },
-  { quote:"You don't have to be extreme, just consistent.", quote_zh:"无需极端，只需坚持。", author:"Unknown" },
-  { quote:"Every healthy choice today is a gift to your future self.", quote_zh:"今天的每一个健康选择，都是送给未来自己的礼物。", author:"Unknown" },
-  { quote:"Progress, not perfection.", quote_zh:"追求进步，而非完美。", author:"Unknown" },
+  { quote:"Small steps every day lead to big changes.", quote_zh:"每天一小步，终将带来大改变。", author:null },
+  { quote:"You don't have to be extreme, just consistent.", quote_zh:"无需极端，只需坚持。", author:null },
+  { quote:"Every healthy choice today is a gift to your future self.", quote_zh:"今天的每一个健康选择，都是送给未来自己的礼物。", author:null },
+  { quote:"Progress, not perfection.", quote_zh:"追求进步，而非完美。", author:null },
   { quote:"The groundwork for all happiness is good health.", quote_zh:"良好的健康，是一切幸福的基石。", author:"Leigh Hunt" },
-  { quote:"Strive for progress, not perfection — one meal, one glass, one rep at a time.", quote_zh:"追求进步而非完美 —— 一餐、一杯水、一个动作，慢慢积累。", author:"Unknown" }
+  { quote:"Strive for progress, not perfection — one meal, one glass, one rep at a time.", quote_zh:"追求进步而非完美 —— 一餐、一杯水、一个动作，慢慢积累。", author:null },
+  { quote:"The best time to plant a tree was 20 years ago. The second best time is now.", quote_zh:"种一棵树最好的时间是二十年前，其次是现在。", author:"Chinese Proverb" },
+  { quote:"It does not matter how slowly you go as long as you do not stop.", quote_zh:"只要你不停下脚步，走得再慢也没关系。", author:"Confucius" },
+  { quote:"Believe you can and you're halfway there.", quote_zh:"相信自己能做到，你就已经成功了一半。", author:"Theodore Roosevelt" },
+  { quote:"The only way to do great work is to love what you do.", quote_zh:"成就伟大事业的唯一方法，就是热爱你所做的事。", author:"Steve Jobs" },
+  { quote:"Whether you think you can, or you think you can't — you're right.", quote_zh:"无论你认为自己行还是不行，你都是对的。", author:"Henry Ford" },
+  { quote:"The future belongs to those who believe in the beauty of their dreams.", quote_zh:"未来属于那些相信梦想之美的人。", author:"Eleanor Roosevelt" },
+  { quote:"It always seems impossible until it's done.", quote_zh:"在完成之前，一切总看似不可能。", author:"Nelson Mandela" },
+  { quote:"Act as if what you do makes a difference. It does.", quote_zh:"表现得就像你所做的一切都有意义 —— 因为它确实如此。", author:"William James" },
+  { quote:"Your limitation is only your imagination.", quote_zh:"限制你的，只有你的想象力。", author:null },
+  { quote:"Push yourself, because no one else is going to do it for you.", quote_zh:"逼自己一把，因为没有人会替你去做。", author:null },
+  { quote:"Great things never come from comfort zones.", quote_zh:"伟大从不诞生于舒适圈。", author:null },
+  { quote:"Dream it. Wish it. Do it.", quote_zh:"梦想它，渴望它，行动起来。", author:null },
+  { quote:"The harder you work for something, the greater you'll feel when you achieve it.", quote_zh:"你为一件事付出越多，达成时的成就感就越大。", author:null },
+  { quote:"Don't stop when you're tired. Stop when you're done.", quote_zh:"累了不要停，做完才停下。", author:null },
+  { quote:"Wake up with determination. Go to bed with satisfaction.", quote_zh:"带着决心醒来，带着满足入睡。", author:null },
+  { quote:"Do something today that your future self will thank you for.", quote_zh:"今天做一件事，让未来的自己感谢现在的你。", author:null },
+  { quote:"It's going to be hard, but hard does not mean impossible.", quote_zh:"这会很难，但难不代表不可能。", author:null },
+  { quote:"Don't wait for opportunity. Create it.", quote_zh:"不要等待机会，去创造机会。", author:null },
+  { quote:"The key to success is to focus on goals, not obstacles.", quote_zh:"成功的关键在于专注目标，而非纠结障碍。", author:null },
+  { quote:"You miss 100% of the shots you don't take.", quote_zh:"你从不出手的球，永远不会进。", author:"Wayne Gretzky" },
+  { quote:"In the middle of difficulty lies opportunity.", quote_zh:"困境之中，往往藏着机遇。", author:"Albert Einstein" },
+  { quote:"The journey of a thousand miles begins with a single step.", quote_zh:"千里之行，始于足下。", author:"Lao Tzu" },
+  { quote:"Fall seven times, stand up eight.", quote_zh:"七次跌倒，八次站起。", author:"Japanese Proverb" },
+  { quote:"The only limit to our realization of tomorrow is our doubts of today.", quote_zh:"阻碍我们实现明天的，只有今天的怀疑。", author:"Franklin D. Roosevelt" },
+  { quote:"You are never too old to set another goal or to dream a new dream.", quote_zh:"任何时候，你都不算太老，都可以设立新目标、追逐新梦想。", author:"C.S. Lewis" },
+  { quote:"Energy and persistence conquer all things.", quote_zh:"精力与坚持，能征服一切。", author:"Benjamin Franklin" },
+  { quote:"What lies behind us and before us are tiny matters compared to what lies within us.", quote_zh:"与内心的力量相比，我们的过去和未来都微不足道。", author:"Ralph Waldo Emerson" },
+  { quote:"The best way to predict the future is to create it.", quote_zh:"预测未来最好的方式，就是去创造它。", author:"Peter Drucker" },
+  { quote:"Perseverance is not a long race; it is many short races one after another.", quote_zh:"坚持不是一场长跑，而是一场接一场的短跑。", author:"Walter Elliot" },
+  { quote:"Courage is resistance to fear, mastery of fear — not absence of fear.", quote_zh:"勇气不是没有恐惧，而是抵抗并驾驭恐惧。", author:"Mark Twain" },
+  { quote:"Life is 10% what happens to us and 90% how we react to it.", quote_zh:"生活是10%发生在我们身上的事，90%是我们如何应对。", author:"Charles R. Swindoll" },
+  { quote:"A river cuts through rock not because of its power, but its persistence.", quote_zh:"河流能穿透岩石，靠的不是力量，而是坚持。", author:null },
+  { quote:"Champions keep playing until they get it right.", quote_zh:"冠军会一直努力，直到做对为止。", author:"Billie Jean King" },
+  { quote:"You are stronger than you think.", quote_zh:"你比自己想象的更坚强。", author:null },
+  { quote:"Every accomplishment starts with the decision to try.", quote_zh:"每一份成就，都始于愿意尝试的决定。", author:null }
 ];
 
 const DEFAULT_TARGETS = { calories:1200, protein:90, carbs:110, fat:44 };
@@ -165,8 +201,8 @@ const STRINGS = {
     main_kcal_day: "kcal/day", main_ml_day: "ml/day",
     main_tdee_desc: "Your maintenance level (TDEE) is about",
     main_tdee_desc2: "— this is roughly what keeps your weight steady. Pick how you'd like to adjust it:",
-    main_tier_maintain: "Maintain", main_tier_lose_starter: "Lose: Starter", main_tier_lose_steady: "Lose: Steady",
-    main_tier_lose_committed: "Lose: Committed", main_tier_gain_starter: "Gain: Starter", main_tier_gain_steady: "Gain: Steady",
+    main_tier_maintain: "Maintain", main_tier_lose_starter: "Deficit: Starter", main_tier_lose_steady: "Deficit: Steady",
+    main_tier_lose_committed: "Deficit: Committed", main_tier_gain_starter: "Surplus: Starter", main_tier_gain_steady: "Surplus: Steady",
     main_own_adjustment: "OR ENTER YOUR OWN ADJUSTMENT (kcal)",
     main_own_adjustment_placeholder: "e.g. -300 or +250",
     main_workout_bonus_note: "Logging a workout adds bonus eating room on top of this — your call on how to use it.",
@@ -222,8 +258,8 @@ const STRINGS = {
     main_kcal_day: "千卡/天", main_ml_day: "毫升/天",
     main_tdee_desc: "您的维持热量 (TDEE) 约为",
     main_tdee_desc2: "—— 这大致是维持体重稳定所需的热量。选择您希望的调整方式：",
-    main_tier_maintain: "维持", main_tier_lose_starter: "减脂：入门", main_tier_lose_steady: "减脂：稳健",
-    main_tier_lose_committed: "减脂：加强", main_tier_gain_starter: "增重：入门", main_tier_gain_steady: "增重：稳健",
+    main_tier_maintain: "维持", main_tier_lose_starter: "缺口：入门", main_tier_lose_steady: "缺口：稳健",
+    main_tier_lose_committed: "缺口：加强", main_tier_gain_starter: "盈余：入门", main_tier_gain_steady: "盈余：稳健",
     main_own_adjustment: "或输入自定义调整值 (kcal)",
     main_own_adjustment_placeholder: "例如 -300 或 +250",
     main_workout_bonus_note: "记录运动会在此基础上增加额外的饮食空间 —— 如何使用由您决定。",
@@ -672,8 +708,8 @@ const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme,
   const labelInside = p >= 14; // enough room to fit text inside the fill
   return (
     <div>
-      <div style={{ position:"relative", height:18, background:bg, borderRadius:9, overflow:"hidden" }}>
-        <div style={{ height:"100%", width:`${p}%`, background:`linear-gradient(90deg,${color}88,${color})`, borderRadius:9, transition:"width .6s ease", boxShadow:`0 0 6px ${color}40` }} />
+      <div style={{ position:"relative", height:12, background:bg, borderRadius:6, overflow:"hidden" }}>
+        <div style={{ height:"100%", width:`${p}%`, background:`linear-gradient(90deg, color-mix(in srgb, ${color} 100%, white 35%), color-mix(in srgb, ${color} 100%, black 15%))`, borderRadius:6, transition:"width .6s ease", boxShadow:`0 0 6px ${color}40` }} />
         <div style={{
           position:"absolute", top:0, bottom:0, display:"flex", alignItems:"center",
           left: labelInside ? "auto" : `calc(${p}% + 6px)`,
@@ -1441,6 +1477,8 @@ function NutriLogPro({ session, onLogout }) {
 
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem("nutrilog_gemini_key") || "");
   const [showSettings, setShowSettings] = useState(false);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [cutoffSettingsOpen, setCutoffSettingsOpen] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [drinkMenuOpen, setDrinkMenuOpen] = useState(null);
   const [aboutTab, setAboutTab] = useState("about");
@@ -2179,7 +2217,11 @@ function NutriLogPro({ session, onLogout }) {
         if (day > now) continue;
         total += byDate[localDateKey(day)] || 0;
       }
-      weeks.push({ label: monday.toLocaleDateString("en-US",{month:"short",day:"numeric"}), burned: Math.round(total) });
+      const weekNum = (() => {
+        const onejan = new Date(monday.getFullYear(),0,1);
+        return Math.ceil((((monday - onejan) / 86400000) + onejan.getDay()+1) / 7);
+      })();
+      weeks.push({ label: lang==="zh" ? `第${weekNum}周` : `Week ${weekNum}`, burned: Math.round(total) });
     }
     return weeks;
   })();
@@ -2303,33 +2345,46 @@ function NutriLogPro({ session, onLogout }) {
                       <button onClick={() => setLang("zh")} className={lang==="zh"?"":"ghost-btn"} style={lang==="zh"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>中文</button>
                     </div>
 
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                    <div onClick={() => setAiSettingsOpen(!aiSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:11, fontWeight:"700", color:C.pink, fontFamily:"'DM Sans',sans-serif", letterSpacing:"0.05em" }}>⚙️ {T("settings_ai_settings").toUpperCase()}</span>
+                      <span style={{ fontSize:10, color:C.textMuted }}>{aiSettingsOpen ? "▲" : "▼"}</span>
                     </div>
-                    <input type="password" className="inp" placeholder={T("settings_api_key_placeholder")} value={geminiKey} onChange={e => setGeminiKey(e.target.value)} style={{ marginBottom:10 }} />
-                    <div style={{ background:C.surface, borderRadius:12, padding:"10px 12px", border:`1px solid ${C.border}`, marginBottom:14 }}>
-                      <div style={{ fontSize:11, fontWeight:"700", color:C.pink, marginBottom:6, fontFamily:"'DM Sans',sans-serif" }}>📋 {T("settings_get_key_title").toUpperCase()}</div>
-                      <div style={{ fontSize:11, color:C.textMuted, lineHeight:"1.7" }}>
-                        1️⃣ {T("settings_get_key_step1")}<br/>
-                        2️⃣ {T("settings_get_key_step2")}<br/>
-                        3️⃣ {T("settings_get_key_step3")}
+                    {aiSettingsOpen && (
+                      <div className="fade" style={{ marginBottom:10 }}>
+                        <input type="password" className="inp" placeholder={T("settings_api_key_placeholder")} value={geminiKey} onChange={e => setGeminiKey(e.target.value)} style={{ marginBottom:10, marginTop:8 }} />
+                        <div style={{ background:C.surface, borderRadius:12, padding:"10px 12px", border:`1px solid ${C.border}` }}>
+                          <div style={{ fontSize:11, fontWeight:"700", color:C.pink, marginBottom:6, fontFamily:"'DM Sans',sans-serif" }}>📋 {T("settings_get_key_title").toUpperCase()}</div>
+                          <div style={{ fontSize:11, color:C.textMuted, lineHeight:"1.7" }}>
+                            1️⃣ {T("settings_get_key_step1")}<br/>
+                            2️⃣ {T("settings_get_key_step2")}<br/>
+                            3️⃣ {T("settings_get_key_step3")}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div style={{ background:C.surface, borderRadius:12, padding:"10px 12px", border:`1px solid ${C.border}`, marginBottom:14 }}>
-                      <div style={{ fontSize:11, fontWeight:"700", color:C.pink, marginBottom:6, fontFamily:"'DM Sans',sans-serif" }}>🌙 {T("settings_cutoff_title").toUpperCase()}</div>
-                      <div style={{ fontSize:11, color:C.textMuted, lineHeight:"1.6", marginBottom:8 }}>
-                        {T("settings_cutoff_desc")} <strong style={{color:C.text}}>{dayCutoffHour===0 ? "12:00 AM" : `${dayCutoffHour}:00 AM`}</strong>. {T("settings_cutoff_note")}
-                      </div>
-                      <select className="inp" value={dayCutoffHour} onChange={e=>updateDayCutoff(parseInt(e.target.value))}>
-                        <option value={0}>{T("settings_cutoff_midnight")}</option>
-                        <option value={1}>1:00 AM</option>
-                        <option value={2}>2:00 AM</option>
-                        <option value={3}>3:00 AM</option>
-                        <option value={4}>4:00 AM</option>
-                      </select>
-                      <div style={{ fontSize:10, color:C.textDim, marginTop:6, fontStyle:"italic" }}>{T("settings_cutoff_hint")}</div>
+                    <div onClick={() => setCutoffSettingsOpen(!cutoffSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}`, marginBottom: cutoffSettingsOpen ? 0 : 14 }}>
+                      <span style={{ fontSize:11, fontWeight:"700", color:C.pink, fontFamily:"'DM Sans',sans-serif", letterSpacing:"0.05em" }}>🌙 {T("settings_cutoff_title").toUpperCase()}</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:10, color:C.textMuted }}>{dayCutoffHour===0 ? "12:00 AM" : `${dayCutoffHour}:00 AM`}</span>
+                        <span style={{ fontSize:10, color:C.textMuted }}>{cutoffSettingsOpen ? "▲" : "▼"}</span>
+                      </span>
                     </div>
+                    {cutoffSettingsOpen && (
+                      <div className="fade" style={{ background:C.surface, borderRadius:12, padding:"10px 12px", border:`1px solid ${C.border}`, marginBottom:14, marginTop:8 }}>
+                        <div style={{ fontSize:11, color:C.textMuted, lineHeight:"1.6", marginBottom:8 }}>
+                          {T("settings_cutoff_desc")} <strong style={{color:C.text}}>{dayCutoffHour===0 ? "12:00 AM" : `${dayCutoffHour}:00 AM`}</strong>. {T("settings_cutoff_note")}
+                        </div>
+                        <select className="inp" value={dayCutoffHour} onChange={e=>updateDayCutoff(parseInt(e.target.value))}>
+                          <option value={0}>{T("settings_cutoff_midnight")}</option>
+                          <option value={1}>1:00 AM</option>
+                          <option value={2}>2:00 AM</option>
+                          <option value={3}>3:00 AM</option>
+                          <option value={4}>4:00 AM</option>
+                        </select>
+                        <div style={{ fontSize:10, color:C.textDim, marginTop:6, fontStyle:"italic" }}>{T("settings_cutoff_hint")}</div>
+                      </div>
+                    )}
 
                     <button className="ghost-btn" style={{ width:"100%", marginBottom:8 }} onClick={() => { setShowSettings(false); setShowAboutModal(true); }}>ℹ️ {T("settings_about")}</button>
                     <button className="ghost-btn" style={{ width:"100%" }} onClick={onLogout}>{T("settings_logout")}</button>
@@ -2339,7 +2394,7 @@ function NutriLogPro({ session, onLogout }) {
             </div>
           </div>
 
-          <div style={{ display:"flex", gap:2, overflowX:"auto" }}>
+          <div style={{ display:"flex", gap:2, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
             {TABS.map(tb => (
               <button key={tb} className={`tab ${activeTab===tb?"on":""}`} onClick={() => setActiveTab(tb)}>{T(`tab_${tb}`)}</button>
             ))}
@@ -2378,10 +2433,10 @@ function NutriLogPro({ session, onLogout }) {
                     {baseTargets.display_name || T("main_welcome")}
                   </div>
                 </div>
-                <button onClick={openTargetModal} title="Edit profile" style={{ background:"none", border:"none", color:C.textMuted, fontSize:18, cursor:"pointer", padding:6, flexShrink:0 }}>👤</button>
+                <button onClick={openTargetModal} title="Edit profile" style={{ background:C.pinkDeep, border:`1px solid ${C.border}`, borderRadius:12, color:C.pink, fontSize:16, cursor:"pointer", padding:"7px 11px", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>👤</button>
               </div>
               <div style={{ borderTop:`1px solid ${C.border}`, marginTop:12, paddingTop:10, fontStyle:"italic", textAlign:"center", fontSize:12, color:C.textMuted }}>
-                "{lang==="zh" ? (todayQuote.quote_zh||todayQuote.quote) : todayQuote.quote}" — <strong style={{ color:C.pink }}>{todayQuote.author}</strong>
+                "{lang==="zh" ? (todayQuote.quote_zh||todayQuote.quote) : todayQuote.quote}"{todayQuote.author ? <React.Fragment> — <strong style={{ color:C.pink }}>{todayQuote.author}</strong></React.Fragment> : null}
               </div>
             </div>
 
@@ -2493,20 +2548,20 @@ function NutriLogPro({ session, onLogout }) {
                     </div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
                       <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
-                        <div style={{ fontSize:10, letterSpacing:".08em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>{T("main_calories_label")}</div>
+                        <div style={{ fontSize:10, letterSpacing:".08em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>🔥 {T("main_calories_label")}</div>
                         <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C.pink, lineHeight:1 }}>{Math.round(baseTargets.calories)}</div>
                         <div style={{ fontSize:10, color:C.textDim }}>{T("main_kcal_day")}</div>
                       </div>
                       <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
-                        <div style={{ fontSize:10, letterSpacing:".08em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>{T("main_water_label")}</div>
+                        <div style={{ fontSize:10, letterSpacing:".08em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>💧 {T("main_water_label")}</div>
                         <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C.water, lineHeight:1 }}>{waterTarget}</div>
                         <div style={{ fontSize:10, color:C.textDim }}>{T("main_ml_day")}</div>
                       </div>
                     </div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                      {[[T("common_protein"),baseTargets.protein,C.protein],[T("common_carbs"),baseTargets.carbs,C.carbs],[T("common_fat"),baseTargets.fat,C.fat]].map(([l,v,c]) => (
+                      {[[T("common_protein"),baseTargets.protein,C.protein,"🥩"],[T("common_carbs"),baseTargets.carbs,C.carbs,"🍞"],[T("common_fat"),baseTargets.fat,C.fat,"🥑"]].map(([l,v,c,ic]) => (
                         <div key={l} style={{ background:C.surface, borderRadius:12, padding:"8px", textAlign:"center" }}>
-                          <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
+                          <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{ic} {l.toUpperCase()}</div>
                           <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", color:c }}>{Math.round(v)}g</div>
                         </div>
                       ))}
@@ -2627,42 +2682,38 @@ function NutriLogPro({ session, onLogout }) {
                   advice: (dayData.workouts||[]).length > 0 ? L("Awesome work today!", "今天表现很棒！") : L("Let's workout a bit — even a short walk counts.", "动一动吧 —— 哪怕只是短暂散步也算数。")
                 },
               ];
-              const colorsFor = (status) => {
-                const statusText = {
+              const colorsFor = (status, key) => {
+                const dotColor = {
                   good: C.green,
                   caution: C.caution,
                   bad: C.red,
-                  neutral: C.textMuted
+                  neutral: C.textDim
                 }[status];
-                if (C._pink && status !== "neutral") {
-                  // Sweet Pink: box background stays in the pink family; the ✅/🟡/⚠️ symbol and
-                  // its small text label keep their green/yellow/red status meaning.
-                  return { bg: C.pinkDeep, border: C.pinkDim + "66", text: statusText };
-                }
-                return {
-                  good: { bg: theme==="light"?"rgba(31,138,99,.08)":"rgba(94,201,160,.1)", border: theme==="light"?"rgba(31,138,99,.3)":"rgba(94,201,160,.35)", text: statusText },
-                  caution: { bg: theme==="light"?"rgba(163,121,15,.08)":"rgba(219,184,104,.1)", border: theme==="light"?"rgba(163,121,15,.3)":"rgba(219,184,104,.35)", text: statusText },
-                  bad: { bg: theme==="light"?"rgba(197,65,77,.08)":"rgba(232,97,111,.1)", border: theme==="light"?"rgba(197,65,77,.3)":"rgba(232,97,111,.35)", text: statusText },
-                  neutral: { bg: C.card, border: C.border, text: C.textMuted }
-                }[status];
+                return { bg: C.card, border: C.border, dot: dotColor, text: dotColor };
               };
               const activeBox = winBoxes.find(b => b.key === expandedWinBox);
               return (
                 <React.Fragment>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
                     {winBoxes.map((box) => {
-                      const colors = colorsFor(box.status);
+                      const colors = colorsFor(box.status, box.key);
                       return (
-                        <div key={box.key} onClick={() => setExpandedWinBox(expandedWinBox===box.key ? null : box.key)} style={{ background:colors.bg, border:`1px solid ${colors.border}`, borderRadius:14, padding:"10px 6px", textAlign:"center", cursor:"pointer", transition:"all .15s" }}>
-                          <div style={{ fontSize:18, marginBottom:2 }}>{box.status==="good"?"✅":box.status==="caution"?"🟡":box.status==="bad"?"⚠️":box.icon}</div>
-                          <div style={{ fontSize:10, fontWeight:"700", color:colors.text }}>{box.label}</div>
+                        <div key={box.key} onClick={() => setExpandedWinBox(expandedWinBox===box.key ? null : box.key)} style={{
+                          background:colors.bg,
+                          border:`1px solid ${expandedWinBox===box.key?colors.dot:colors.border}`,
+                          borderRadius:14, padding:"10px 6px", textAlign:"center", cursor:"pointer",
+                          boxShadow: box.status !== "neutral" ? `0 0 14px 2px ${colors.dot}55` : "none",
+                          transition:"all .15s"
+                        }}>
+                          <div style={{ fontSize:18, lineHeight:1, marginBottom:4 }}>{box.icon}</div>
+                          <div style={{ fontSize:10, fontWeight:"700", color:C.text }}>{box.label}</div>
                         </div>
                       );
                     })}
                   </div>
                   {activeBox && (
-                    <div className="card fade" style={{ padding:"12px 14px", marginBottom:14, background:C.pinkDeep, borderColor:C.border }}>
-                      <div style={{ fontSize:13, fontWeight:"700", color:colorsFor(activeBox.status).text, marginBottom:4 }}>{activeBox.detail}</div>
+                    <div className="card fade" style={{ padding:"12px 14px", marginBottom:14, background:C.card, borderColor:C.border }}>
+                      <div style={{ fontSize:13, fontWeight:"700", color:colorsFor(activeBox.status, activeBox.key).text, marginBottom:4 }}>{activeBox.detail}</div>
                       <div style={{ fontSize:12, color:C.textMuted, fontStyle:"italic" }}>{activeBox.advice}</div>
                     </div>
                   )}
@@ -2674,30 +2725,68 @@ function NutriLogPro({ session, onLogout }) {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
                 <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink }}>🔥 {L("Today's Calorie Balance","今日热量平衡")}</span>
               </div>
-              <div style={{ fontSize:12, color:C.textMuted, marginBottom:16 }}>
-                {isGainPlan ? (
-                  net >= targets.calories
-                    ? <React.Fragment>{L("Great — you've hit your","太棒了 —— 今天已达成")} <strong style={{color:C.text}}>{Math.round(targets.calories)} kcal</strong> {L("gain goal today.","的增重目标。")}</React.Fragment>
-                    : net >= targets.calories*0.8
-                    ? <React.Fragment>{L("You can still eat about","还可以再吃约")} <strong style={{color:C.text}}>{Math.round(targets.calories-net)} kcal</strong> {L("to hit your gain target.","来达成增重目标。")}</React.Fragment>
-                    : <React.Fragment>{L("You're","还差")} <strong style={{color:C.caution}}>{Math.round(targets.calories-net)} kcal</strong> {L("short — you still need to eat some more today.","—— 今天还需要多吃一些。")}</React.Fragment>
-                ) : (
-                  net <= targets.calories
-                    ? <React.Fragment>{L("You can still eat about","今天还可以再吃约")} <strong style={{color:C.text}}>{Math.round(targets.calories-net)} kcal</strong> {L("today.","。")}</React.Fragment>
-                    : net <= targets.calories*1.2
-                    ? <React.Fragment>{L("You're","已超出")} <strong style={{color:C.caution}}>{Math.round(net-targets.calories)} kcal</strong> {L("over — still a fine range.","—— 仍在可接受范围内。")}</React.Fragment>
-                    : <React.Fragment>{L("You're","已超出")} <strong style={{color:C.red}}>{Math.round(net-targets.calories)} kcal</strong> {L("over — that's over-consumption today.","—— 今天已属于过量摄入。")}</React.Fragment>
-                )}
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:C.textMuted, marginBottom:4 }}>
-                <span>0%</span>
-                <span>{Math.round(targets.calories)} kcal {L("target","目标")}</span>
-              </div>
-              <ProgressBar val={net} target={targets.calories} color={C.pink} theme={theme} mode={isGainPlan?"gain-band":"caution-band"} unit="kcal" C={C} />
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:12, fontSize:11, color:C.textMuted }}>
-                <span>{L("Consumed","已摄入")}: <strong style={{color:C.text}}>{Math.round(consumed.calories)}</strong> kcal</span>
-                <span>{L("Burned","已消耗")}: <strong style={{color:C.text}}>{Math.round(burned)}</strong> kcal</span>
-              </div>
+              {(() => {
+                const calBarPct = targets.calories ? (net/targets.calories)*100 : 0;
+                const calBarWidth = Math.min(100, Math.max(0, calBarPct));
+                const calLabelInside = calBarWidth >= 14;
+                return (
+                  <div>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:12 }}>
+                      <span style={{ fontWeight:"700", color:C.pink }}>🔥 {L("Calories","热量")}</span>
+                      <span style={{ color:C.text }}>{Math.round(net)} / {Math.round(targets.calories)} kcal</span>
+                    </div>
+                    <div style={{ position:"relative", height:12, background:C.border, borderRadius:6, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${calBarWidth}%`, background:`linear-gradient(90deg, color-mix(in srgb, ${C.pink} 100%, white 35%), color-mix(in srgb, ${C.pink} 100%, black 15%))`, borderRadius:6, transition:"width .5s ease" }} />
+                      <div style={{
+                        position:"absolute", top:0, bottom:0, display:"flex", alignItems:"center",
+                        left: calLabelInside ? "auto" : `calc(${calBarWidth}% + 6px)`,
+                        right: calLabelInside ? `calc(${100-calBarWidth}% + 6px)` : "auto",
+                        fontSize:10, fontWeight:"800",
+                        color: calLabelInside ? "#fff" : C.text,
+                        textShadow: calLabelInside ? "0 1px 2px rgba(0,0,0,0.5)" : "none",
+                        whiteSpace:"nowrap"
+                      }}>
+                        {Math.round(calBarPct)}%
+                      </div>
+                    </div>
+                    {(() => {
+                      // Tally with the plan chosen in "Your Calorie Plan": that plan is defined as
+                      // baseTargets.calories set some delta away from TDEE (e.g. picking "Deficit:
+                      // Starter" sets a flat -200). Show that same fixed number here rather than a
+                      // live net-vs-target figure, which fluctuates all day and wouldn't match what
+                      // was actually chosen (e.g. showing a misleading "large deficit" first thing
+                      // in the morning before any food is logged).
+                      const delta = tdeeInfo ? Math.round(baseTargets.calories - tdeeInfo.tdee) : 0;
+                      const abs = Math.abs(delta);
+                      let comment;
+                      if (!tdeeInfo || abs < 50) {
+                        comment = L("Right on target — nicely balanced today!", "非常接近目标 —— 今天保持得很平衡！");
+                      } else if (delta < 0) {
+                        comment = abs <= 300
+                          ? L("Great start — stay consistent and the results will follow!", "良好的开端 —— 保持稳定，成果自然会到来！")
+                          : abs <= 600
+                          ? L("A solid, sustainable deficit — keep this pace up.", "稳健且可持续的热量缺口 —— 保持这个节奏。")
+                          : L("That's a hardcore deficit — impressive discipline! Just make sure you're still fueling enough to sustain it.", "这是相当硬核的热量缺口 —— 自律令人佩服！但也要确保摄入足够，才能长久坚持。");
+                      } else {
+                        comment = abs <= 300
+                          ? L("A small surplus — no big deal if that's part of your plan.", "略有盈余 —— 如果这是计划的一部分，无需担心。")
+                          : abs <= 600
+                          ? L("A meaningful surplus — great if you're building, otherwise ease off a little.", "较明显的热量盈余 —— 增肌期很不错，否则可以稍微收一收。")
+                          : L("A big surplus — no stress, just rebalance over the next few days.", "盈余较大 —— 别有压力，接下来几天调整回来就好。");
+                      }
+                      const deltaLabel = delta < 0
+                        ? L(`Calorie deficit: ${abs} kcal`, `热量缺口：${abs} 千卡`)
+                        : L(`Calorie surplus: +${abs} kcal`, `热量盈余：+${abs} 千卡`);
+                      return (
+                        <div style={{ marginTop:10, fontSize:12, lineHeight:1.5 }}>
+                          <div style={{ color: delta < 0 ? C.green : delta > 0 ? C.caution : C.text, fontWeight:"700" }}>{(!tdeeInfo || abs < 50) ? L("On target","达成目标") : deltaLabel}</div>
+                          <div style={{ color:C.textMuted, marginTop:2 }}>{comment}</div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
             </div>
             <div className="card-primary" style={{ padding:"20px 18px", marginBottom:14 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -2715,8 +2804,8 @@ function NutriLogPro({ session, onLogout }) {
                         <span style={{ fontWeight:"700", color }}>{icon} {label}</span>
                         <span style={{ color:C.text }}>{Math.round(consumed[key])} / {Math.round(target)}g</span>
                       </div>
-                      <div style={{ position:"relative", height:18, background:C.border, borderRadius:9, overflow:"hidden" }}>
-                        <div style={{ height:"100%", width:`${barWidth}%`, background:color, borderRadius:9, transition:"width .5s ease" }} />
+                      <div style={{ position:"relative", height:12, background:C.border, borderRadius:6, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${barWidth}%`, background:`linear-gradient(90deg, color-mix(in srgb, ${color} 100%, white 35%), color-mix(in srgb, ${color} 100%, black 15%))`, borderRadius:6, transition:"width .5s ease" }} />
                         <div style={{
                           position:"absolute", top:0, bottom:0, display:"flex", alignItems:"center",
                           left: labelInside ? "auto" : `calc(${barWidth}% + 6px)`,
@@ -2761,8 +2850,8 @@ function NutriLogPro({ session, onLogout }) {
                       <span style={{ fontWeight:"700", color:C.text }}>{icon} {label}</span>
                       <span style={{ color: over?C.red:C.textMuted }}>{Math.round(val)} / {Math.round(target)}{unit} {isCap ? (over?L("(over limit)","(超出限额)"):"") : (val>=target?L("(goal met!)","(已达标!)"):"")}</span>
                     </div>
-                    <div style={{ position:"relative", height:18, background:C.border, borderRadius:9, overflow:"hidden" }}>
-                      <div style={{ height:"100%", width:`${barWidth}%`, background:barColor, borderRadius:9, transition:"width .5s ease" }} />
+                    <div style={{ position:"relative", height:12, background:C.border, borderRadius:6, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${barWidth}%`, background:barColor, borderRadius:6, transition:"width .5s ease" }} />
                       <div style={{
                         position:"absolute", top:0, bottom:0, display:"flex", alignItems:"center",
                         left: labelInside ? "auto" : `calc(${barWidth}% + 6px)`,
@@ -2820,7 +2909,7 @@ function NutriLogPro({ session, onLogout }) {
               <div style={{ marginTop:14, borderTop:`1px solid ${C.border}`, paddingTop:10 }}>
                 {workoutWeeklyTrend.slice().reverse().map((w,i) => (
                   <div key={i} className="hist-sub-row">
-                    <span style={{ fontWeight:"700", color:C.textMuted }}>{L("Week of","周起始日：")} {w.label}</span>
+                    <span style={{ fontWeight:"700", color:C.textMuted }}>{w.label}</span>
                     <span style={{ color:C.workoutAccent, fontWeight:"700" }}>{w.burned} kcal</span>
                   </div>
                 ))}
@@ -2879,16 +2968,15 @@ function NutriLogPro({ session, onLogout }) {
 
             <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
               <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:14 }}>{L("Last 30 Days, At a Glance","近 30 天概览")}</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:10 }}>
                 {[
-                  { label:L("Avg Consumed","平均摄入"), val:`${last30Stats.avgConsumed}`, unit:L("kcal/day","千卡/天"), color:C.pink },
-                  { label:L("Avg Burned","平均消耗"), val:`${last30Stats.avgBurned}`, unit:L("kcal/day","千卡/天"), color:C.workoutAccent },
-                  { label:L("Avg Water","平均饮水"), val:`${last30Stats.avgWater}`, unit:L("ml/day","毫升/天"), color:C.water },
-                  { label:L("Days On Target","达标天数"), val:`${last30Stats.deficitDays}/${last30Stats.daysTracked||0}`, unit:L("days","天"), color:C.gold },
-                ].map(({label,val,unit,color}) => (
-                  <div key={label} style={{ background:C.surface, borderRadius:12, padding:"10px 12px" }}>
-                    <div style={{ fontSize:9, color:C.textMuted, letterSpacing:".06em", fontWeight:"700", marginBottom:3 }}>{label.toUpperCase()}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:20, fontWeight:"800", color, lineHeight:1 }}>{val}</div>
+                  { label:L("Avg Consumed","平均摄入"), icon:"🔥", val:`${last30Stats.avgConsumed}`, unit:L("kcal/day","千卡/天"), color:C.pink },
+                  { label:L("Avg Water","平均饮水"), icon:"💧", val:`${last30Stats.avgWater}`, unit:L("ml/day","毫升/天"), color:C.water },
+                  { label:L("Avg Burned","平均消耗"), icon:"🏃", val:`${last30Stats.avgBurned}`, unit:L("kcal/day","千卡/天"), color:C.workoutAccent },
+                ].map(({label,icon,val,unit,color}) => (
+                  <div key={label} style={{ background:C.surface, borderRadius:12, padding:"10px 8px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:C.textMuted, letterSpacing:".04em", fontWeight:"700", marginBottom:3 }}>{icon} {label.toUpperCase()}</div>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color, lineHeight:1 }}>{val}</div>
                     <div style={{ fontSize:9, color:C.textDim }}>{unit}</div>
                   </div>
                 ))}
@@ -2926,7 +3014,7 @@ function NutriLogPro({ session, onLogout }) {
             {favMeals.length > 0 && (
               <div className="card" style={{ padding:12, marginBottom:12 }}>
                 <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:6 }}>★ {L("MY FAVORITES","我的收藏")}</div>
-                <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4 }}>
+                <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
                   {favMeals.map(fav => (
                     <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteMeal(fav)}>
                       <span>{fav.name} ({Math.round(fav.calories)} kcal)</span>
@@ -3050,7 +3138,7 @@ function NutriLogPro({ session, onLogout }) {
             {favDrinks.length > 0 && (
               <div className="card" style={{ padding:12, marginBottom:14 }}>
                 <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif" }}>★ {L("MY FAVORITES","我的收藏")}</div>
-                <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4 }}>
+                <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
                   {favDrinks.map(fav => (
                     <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteDrink(fav)}>
                       <span>{fav.drink_type || fav.name} ({fav.amount_ml}ml{fav.calories>0?`, ${Math.round(fav.calories)}kcal`:""})</span>
@@ -3156,20 +3244,41 @@ function NutriLogPro({ session, onLogout }) {
               <div className="card" style={{ padding:"16px", marginBottom:14, borderColor:`${C.workoutAccent}59` }}>
                 <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent, marginBottom:10 }}>{L("Workout Boost Active 🔥","运动加成已激活 🔥")}</div>
                 <div style={{ fontSize:13, fontStyle:"italic", color:C.textMuted }}>{L(`You burned ${burned} kcal — your targets have been adjusted:`, `已消耗 ${burned} 千卡 —— 目标已相应调整：`)}</div>
-                <div style={{ marginTop:10, display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                  {[[L("Calorie target","热量目标"),`+${Math.round(targets.calories-baseTargets.calories)} kcal`],[L("Protein target","蛋白质目标"),`+${Math.round(targets.protein-baseTargets.protein)}g`],[L("Carbs target","碳水目标"),`+${Math.round(targets.carbs-baseTargets.carbs)}g`],[L("Fat target","脂肪目标"),`+${Math.round(targets.fat-baseTargets.fat)}g`]].map(([l,v]) => (
-                    <div key={l} style={{ background:C.surface, borderRadius:12, padding:"8px 10px" }}>
-                      <div style={{ fontSize:10, color:C.textMuted, letterSpacing:".08em", fontWeight:"700" }}>{l.toUpperCase()}</div>
-                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
+                {(() => {
+                  // Water isn't boosted when the person has manually overridden their water target —
+                  // calcWaterTarget's workout bonus is only ever applied to the auto-calculated value.
+                  const waterBoost = !baseTargets.water_target_ml
+                    ? Math.round(calcWaterTarget(currentWeightForCalc, baseTargets.activity_level, burned) - calcWaterTarget(currentWeightForCalc, baseTargets.activity_level, 0))
+                    : 0;
+                  return (
+                    <React.Fragment>
+                      <div style={{ marginTop:10, display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                        <div style={{ background:C.surface, borderRadius:12, padding:"8px 10px", textAlign:"center" }}>
+                          <div style={{ fontSize:10, color:C.textMuted, letterSpacing:".08em", fontWeight:"700" }}>🔥 {L("Calorie target","热量目标").toUpperCase()}</div>
+                          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent }}>+{Math.round(targets.calories-baseTargets.calories)} kcal</div>
+                        </div>
+                        <div style={{ background:C.surface, borderRadius:12, padding:"8px 10px", textAlign:"center" }}>
+                          <div style={{ fontSize:10, color:C.textMuted, letterSpacing:".08em", fontWeight:"700" }}>💧 {L("Water target","饮水目标").toUpperCase()}</div>
+                          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.water }}>{waterBoost>0?`+${waterBoost}`:"±0"} ml</div>
+                        </div>
+                      </div>
+                      <div style={{ marginTop:8, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                        {[[L("Protein","蛋白质"),`+${Math.round(targets.protein-baseTargets.protein)}g`,"🥩"],[L("Carbs","碳水"),`+${Math.round(targets.carbs-baseTargets.carbs)}g`,"🍞"],[L("Fat","脂肪"),`+${Math.round(targets.fat-baseTargets.fat)}g`,"🥑"]].map(([l,v,ic]) => (
+                          <div key={l} style={{ background:C.surface, borderRadius:12, padding:"8px 6px", textAlign:"center" }}>
+                            <div style={{ fontSize:10, color:C.textMuted, letterSpacing:".04em", fontWeight:"700" }}>{ic} {l.toUpperCase()}</div>
+                            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"800", color:C.workoutAccent }}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </React.Fragment>
+                  );
+                })()}
               </div>
             )}
             {favWorkouts.length > 0 && (
               <div className="card" style={{ padding:12, marginBottom:14 }}>
                 <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif" }}>★ {L("MY FAVORITES","我的收藏")}</div>
-                <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4 }}>
+                <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
                   {favWorkouts.map(fav => (
                     <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteWorkout(fav)}>
                       <span>{fav.activity || fav.name} (−{Math.round(fav.calories)} kcal)</span>
@@ -3250,7 +3359,7 @@ function NutriLogPro({ session, onLogout }) {
                 <div style={{ marginBottom:14 }}>
                   <input type="date" className="inp" value={historyDate} max={today} onChange={e=>setHistoryDate(e.target.value)} style={{ width:"100%" }} />
                 </div>
-                <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:6, marginBottom:16 }}>
+                <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:6, marginBottom:16 }}>
                   {[...Array(14)].map((_,i) => {
                     const d = new Date(); d.setDate(d.getDate()-i);
                     const key = localDateKey(d);
