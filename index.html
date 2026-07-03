@@ -2726,11 +2726,59 @@ function NutriLogPro({ session, onLogout }) {
                 <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink }}>🔥 {L("Today's Calorie Balance","今日热量平衡")}</span>
               </div>
               {(() => {
+                // Plan status: tallies with "Your Calorie Plan" (baseTargets.calories set some fixed
+                // delta from TDEE, e.g. picking "Deficit: Starter" sets -200). This is a fixed number
+                // reflecting the plan chosen, not a live figure.
+                const planDelta = tdeeInfo ? Math.round(baseTargets.calories - tdeeInfo.tdee) : 0;
+                const planAbs = Math.abs(planDelta);
+                let planComment;
+                if (!tdeeInfo || planAbs < 50) {
+                  planComment = L("Right on target — nicely balanced today!", "非常接近目标 —— 今天保持得很平衡！");
+                } else if (planDelta < 0) {
+                  planComment = planAbs <= 300
+                    ? L("Great start — stay consistent and the results will follow!", "良好的开端 —— 保持稳定，成果自然会到来！")
+                    : planAbs <= 600
+                    ? L("A solid, sustainable deficit — keep this pace up.", "稳健且可持续的热量缺口 —— 保持这个节奏。")
+                    : L("That's a hardcore deficit — impressive discipline! Just make sure you're still fueling enough to sustain it.", "这是相当硬核的热量缺口 —— 自律令人佩服！但也要确保摄入足够，才能长久坚持。");
+                } else {
+                  planComment = planAbs <= 300
+                    ? L("A small surplus — no big deal if that's part of your plan.", "略有盈余 —— 如果这是计划的一部分，无需担心。")
+                    : planAbs <= 600
+                    ? L("A meaningful surplus — great if you're building, otherwise ease off a little.", "较明显的热量盈余 —— 增肌期很不错，否则可以稍微收一收。")
+                    : L("A big surplus — no stress, just rebalance over the next few days.", "盈余较大 —— 别有压力，接下来几天调整回来就好。");
+                }
+                const planLabel = planDelta < 0
+                  ? L(`Calorie deficit: ${planAbs} kcal`, `热量缺口：${planAbs} 千卡`)
+                  : planDelta > 0
+                  ? L(`Calorie surplus: +${planAbs} kcal`, `热量盈余：+${planAbs} 千卡`)
+                  : L("Maintain", "维持");
+
+                // Live status: how today's actual net calories compare to the boosted target right now.
                 const calBarPct = targets.calories ? (net/targets.calories)*100 : 0;
                 const calBarWidth = Math.min(100, Math.max(0, calBarPct));
                 const calLabelInside = calBarWidth >= 14;
+                const over = calBarPct - 100;
+                let liveColor, liveLabel, liveComment;
+                if (over > 20) {
+                  liveColor = C.red;
+                  liveLabel = L(`Over target: ${Math.round(over)}%`, `超出目标：${Math.round(over)}%`);
+                  liveComment = L("You're over target today — that's okay, tomorrow's a fresh start to bounce back!", "今天超出了目标 —— 没关系，明天又是新的开始，重新出发！");
+                } else if (over > 0) {
+                  liveColor = C.caution;
+                  liveLabel = L(`Over target: ${Math.round(over)}%`, `超出目标：${Math.round(over)}%`);
+                  liveComment = L("You're doing fine — slightly over, but let's aim a touch closer tomorrow.", "表现还不错 —— 略微超出，明天再靠近目标一点点。");
+                } else {
+                  liveColor = C.green;
+                  liveLabel = L(`Within target: ${Math.round(calBarPct)}%`, `未超目标：${Math.round(calBarPct)}%`);
+                  liveComment = L("Awesome! Right on track — keep this momentum going!", "太棒了！完全在节奏上 —— 保持这股势头！");
+                }
+
                 return (
                   <div>
+                    <div style={{ fontSize:12, lineHeight:1.5, marginBottom:10 }}>
+                      <div style={{ color: planDelta < 0 ? C.green : planDelta > 0 ? C.caution : C.text, fontWeight:"700" }}>{planLabel}</div>
+                      <div style={{ color:C.textMuted, marginTop:2 }}>{planComment}</div>
+                    </div>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:12 }}>
                       <span style={{ fontWeight:"700", color:C.pink }}>🔥 {L("Calories","热量")}</span>
                       <span style={{ color:C.text }}>{Math.round(net)} / {Math.round(targets.calories)} kcal</span>
@@ -2749,41 +2797,10 @@ function NutriLogPro({ session, onLogout }) {
                         {Math.round(calBarPct)}%
                       </div>
                     </div>
-                    {(() => {
-                      // Tally with the plan chosen in "Your Calorie Plan": that plan is defined as
-                      // baseTargets.calories set some delta away from TDEE (e.g. picking "Deficit:
-                      // Starter" sets a flat -200). Show that same fixed number here rather than a
-                      // live net-vs-target figure, which fluctuates all day and wouldn't match what
-                      // was actually chosen (e.g. showing a misleading "large deficit" first thing
-                      // in the morning before any food is logged).
-                      const delta = tdeeInfo ? Math.round(baseTargets.calories - tdeeInfo.tdee) : 0;
-                      const abs = Math.abs(delta);
-                      let comment;
-                      if (!tdeeInfo || abs < 50) {
-                        comment = L("Right on target — nicely balanced today!", "非常接近目标 —— 今天保持得很平衡！");
-                      } else if (delta < 0) {
-                        comment = abs <= 300
-                          ? L("Great start — stay consistent and the results will follow!", "良好的开端 —— 保持稳定，成果自然会到来！")
-                          : abs <= 600
-                          ? L("A solid, sustainable deficit — keep this pace up.", "稳健且可持续的热量缺口 —— 保持这个节奏。")
-                          : L("That's a hardcore deficit — impressive discipline! Just make sure you're still fueling enough to sustain it.", "这是相当硬核的热量缺口 —— 自律令人佩服！但也要确保摄入足够，才能长久坚持。");
-                      } else {
-                        comment = abs <= 300
-                          ? L("A small surplus — no big deal if that's part of your plan.", "略有盈余 —— 如果这是计划的一部分，无需担心。")
-                          : abs <= 600
-                          ? L("A meaningful surplus — great if you're building, otherwise ease off a little.", "较明显的热量盈余 —— 增肌期很不错，否则可以稍微收一收。")
-                          : L("A big surplus — no stress, just rebalance over the next few days.", "盈余较大 —— 别有压力，接下来几天调整回来就好。");
-                      }
-                      const deltaLabel = delta < 0
-                        ? L(`Calorie deficit: ${abs} kcal`, `热量缺口：${abs} 千卡`)
-                        : L(`Calorie surplus: +${abs} kcal`, `热量盈余：+${abs} 千卡`);
-                      return (
-                        <div style={{ marginTop:10, fontSize:12, lineHeight:1.5 }}>
-                          <div style={{ color: delta < 0 ? C.green : delta > 0 ? C.caution : C.text, fontWeight:"700" }}>{(!tdeeInfo || abs < 50) ? L("On target","达成目标") : deltaLabel}</div>
-                          <div style={{ color:C.textMuted, marginTop:2 }}>{comment}</div>
-                        </div>
-                      );
-                    })()}
+                    <div style={{ fontSize:12, lineHeight:1.5, marginTop:10 }}>
+                      <div style={{ color:liveColor, fontWeight:"700" }}>{liveLabel}</div>
+                      <div style={{ color:C.textMuted, marginTop:2 }}>{liveComment}</div>
+                    </div>
                   </div>
                 );
               })()}
