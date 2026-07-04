@@ -2198,22 +2198,6 @@ function NutriLogPro({ session, onLogout }) {
     return out;
   })();
 
-  const last30Stats = (() => {
-    const byDate = {};
-    histRangeData.meals.forEach(m => { (byDate[m.log_date] ||= {cons:0,burn:0,water:0}).cons += Number(m.calories||0); });
-    histRangeData.workouts.forEach(w => { (byDate[w.log_date] ||= {cons:0,burn:0,water:0}).burn += Number(w.calories||0); });
-    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= {cons:0,burn:0,water:0}); e.water += Number(d.amount_ml||0); e.cons += Number(d.calories||0); });
-    const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-30);
-    const cutoffKey = localDateKey(cutoff);
-    const relevant = Object.keys(byDate).filter(k => k >= cutoffKey);
-    const days = relevant.length || 1;
-    const totalCons = relevant.reduce((s,k)=>s+byDate[k].cons,0);
-    const totalBurn = relevant.reduce((s,k)=>s+byDate[k].burn,0);
-    const totalWater = relevant.reduce((s,k)=>s+byDate[k].water,0);
-    const deficitDays = relevant.filter(k => (byDate[k].cons - byDate[k].burn) < targetsForWeek(k).calories).length;
-    return { avgConsumed: Math.round(totalCons/days), avgBurned: Math.round(totalBurn/days), avgWater: Math.round(totalWater/days), daysTracked: relevant.length, deficitDays };
-  })();
-
   // ── This calendar week (Mon–Sun) calorie target hit/miss, for the streak dots on Main ──
   const streakWeek = (() => {
     const byDate = {};
@@ -4115,14 +4099,15 @@ function NutriLogPro({ session, onLogout }) {
                         .sort((a,b) => (b.green_count - a.green_count) || (b.yellow_count - a.yellow_count))
                         .map((row, i) => {
                           const isMe = row.user_id === userId;
-                          const initial = (row.display_name||"?").trim().charAt(0).toUpperCase();
                           return (
                             <div key={row.user_id} className="card" style={{ padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10, background: isMe ? C.pinkDeep : C.card, borderColor: isMe ? C.pinkDim : C.border }}>
                               <div style={{ fontSize:14, fontWeight:"800", color:C.textMuted, width:20, textAlign:"center", flexShrink:0 }}>{i+1}</div>
                               {row.avatar_url ? (
                                 <img src={row.avatar_url} alt={row.display_name} style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0, border:`1px solid ${C.border}` }} />
                               ) : (
-                                <div style={{ width:36, height:36, borderRadius:"50%", background:C.pinkDeep, border:`1px solid ${C.pinkDim}`, color:C.pink, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:"800", flexShrink:0 }}>{initial}</div>
+                                <div style={{ width:36, height:36, borderRadius:"50%", background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+                                  {row.gender === "female" ? "👩" : row.gender === "male" ? "👨" : "🙂"}
+                                </div>
                               )}
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
