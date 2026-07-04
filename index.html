@@ -149,7 +149,7 @@ const MOTIVATIONAL_QUOTES = [
 const DEFAULT_TARGETS = { calories:1200, protein:90, carbs:110, fat:44 };
 const SLOTS = ["Breakfast","Lunch","Tea Time","Dinner","Supper"];
 const SLOT_ICONS = { Breakfast:"☀️", Lunch:"🌤️", "Tea Time":"🍵", Dinner:"🌙", Supper:"🌌" };
-const TABS = ["main","today","meal","water","workout","history"];
+const TABS = ["main","today","meal","water","workout","history","social"];
 const TAB_LABELS = { main:"Main", today:"Dashboard", meal:"Meal", water:"Water", workout:"Workout", history:"History" };
 
 // ════════════════════════════════════════════════════════════
@@ -159,7 +159,16 @@ const TAB_LABELS = { main:"Main", today:"Dashboard", meal:"Meal", water:"Water",
 // ════════════════════════════════════════════════════════════
 const STRINGS = {
   en: {
-    tab_main: "Main", tab_today: "Dashboard", tab_meal: "Meal", tab_water: "Water", tab_workout: "Workout", tab_history: "History",
+    tab_main: "Main", tab_today: "Dashboard", tab_meal: "Meal", tab_water: "Water", tab_workout: "Workout", tab_history: "History", tab_social: "Social",
+    social_gallery: "📷 Gallery", social_leaderboard: "🏆 Leaderboard",
+    gallery_empty: "No meal photos yet — snap a photo next time you log a meal and it'll show up here.",
+    gallery_hint: "Browse past meal photos and tap ☆ to save any of them as a favorite. This is just browsing — it won't add anything to today's log.",
+    leaderboard_optin_label: "Show me on the leaderboard",
+    leaderboard_optin_hint: "Off by default. When on, other opted-in users can see your display name and how many days you hit target each week — nothing else (no food logs, weight, or photos are ever shared).",
+    leaderboard_need_name: "Set a display name in your Profile (👤 on Main) to join the leaderboard.",
+    leaderboard_empty: "No one's opted in yet for this week. Be the first!",
+    leaderboard_not_set_up: "Leaderboard isn't set up yet — this needs a one-time database migration. Ask your developer to run it.",
+    leaderboard_you: "You",
     slot_Breakfast: "Breakfast", slot_Lunch: "Lunch", "slot_Tea Time": "Tea Time", slot_Dinner: "Dinner", slot_Supper: "Supper",
 
     settings_title: "Settings",
@@ -194,12 +203,13 @@ const STRINGS = {
     main_weight_note: "Helps track your trend and keep calorie targets accurate. Skip a day and we'll assume it stayed the same.",
     main_daily_login: "Daily Login",
     main_week: "Week",
-    main_plan_title: "⚡ Your Calorie Plan",
+    main_plan_title: "⚡ Your Weekly Diet Plan",
     main_plan_incomplete: "Complete your Profile (gender, height) and log your weight via the 👤 icon above to see your personalized plan here.",
-    main_todays_plan: "📋 Today's Plan",
+    main_todays_plan: "📋 This Week's Plan",
     main_calories_label: "CALORIES", main_water_label: "WATER",
     main_kcal_day: "kcal/day", main_ml_day: "ml/day",
     main_tdee_desc: "Your maintenance level (TDEE) is about",
+    main_weekly_note: "This applies to this week onward — past weeks keep whatever plan was active at the time.",
     main_tdee_desc2: "— this is roughly what keeps your weight steady. Pick how you'd like to adjust it:",
     main_tier_maintain: "Maintain", main_tier_lose_starter: "Deficit: Starter", main_tier_lose_steady: "Deficit: Steady",
     main_tier_lose_committed: "Deficit: Committed", main_tier_gain_starter: "Surplus: Starter", main_tier_gain_steady: "Surplus: Steady",
@@ -216,7 +226,16 @@ const STRINGS = {
     app_name: "NutriLog", app_tagline: "pro",
   },
   zh: {
-    tab_main: "主页", tab_today: "仪表盘", tab_meal: "饮食", tab_water: "饮水", tab_workout: "运动", tab_history: "历史记录",
+    tab_main: "主页", tab_today: "仪表盘", tab_meal: "饮食", tab_water: "饮水", tab_workout: "运动", tab_history: "历史记录", tab_social: "社群",
+    social_gallery: "📷 相册", social_leaderboard: "🏆 排行榜",
+    gallery_empty: "还没有餐食照片 —— 下次记录时拍张照片，就会出现在这里。",
+    gallery_hint: "浏览过往的餐食照片，点击 ☆ 即可收藏为最爱。这里只是浏览，不会加入今天的记录。",
+    leaderboard_optin_label: "在排行榜显示我",
+    leaderboard_optin_hint: "默认关闭。开启后，其他已开启此设置的用户可以看到您的显示名称，以及您每周达标的天数 —— 仅此而已（不会分享任何饮食记录、体重或照片）。",
+    leaderboard_need_name: "请先在个人资料 (主页的 👤) 中设置显示名称，才能加入排行榜。",
+    leaderboard_empty: "本周还没有人开启排行榜，快来当第一个吧！",
+    leaderboard_not_set_up: "排行榜尚未设置 —— 需要一次性的数据库迁移，请联系开发者执行。",
+    leaderboard_you: "您",
     slot_Breakfast: "早餐", slot_Lunch: "午餐", "slot_Tea Time": "下午茶", slot_Dinner: "晚餐", slot_Supper: "宵夜",
 
     settings_title: "设置",
@@ -251,12 +270,13 @@ const STRINGS = {
     main_weight_note: "有助于追踪体重趋势并保持热量目标准确。若某天未记录，将默认体重与前一天相同。",
     main_daily_login: "每日签到",
     main_week: "第",
-    main_plan_title: "⚡ 您的热量方案",
+    main_plan_title: "⚡ 您的每周饮食方案",
     main_plan_incomplete: "请点击上方 👤 图标完善您的资料（性别、身高）并记录体重，即可查看专属方案。",
-    main_todays_plan: "📋 今日方案",
+    main_todays_plan: "📋 本周方案",
     main_calories_label: "热量", main_water_label: "饮水",
     main_kcal_day: "千卡/天", main_ml_day: "毫升/天",
     main_tdee_desc: "您的维持热量 (TDEE) 约为",
+    main_weekly_note: "此调整将从本周开始生效 —— 过去几周仍保留当时实际使用的方案。",
     main_tdee_desc2: "—— 这大致是维持体重稳定所需的热量。选择您希望的调整方式：",
     main_tier_maintain: "维持", main_tier_lose_starter: "缺口：入门", main_tier_lose_steady: "缺口：稳健",
     main_tier_lose_committed: "缺口：加强", main_tier_gain_starter: "盈余：入门", main_tier_gain_steady: "盈余：稳健",
@@ -328,6 +348,15 @@ function localDateKey(dateObj) {
   const m = String(dateObj.getMonth()+1).padStart(2,'0');
   const d = String(dateObj.getDate()).padStart(2,'0');
   return `${y}-${m}-${d}`;
+}
+// Returns the Monday of the calendar week containing dateKey (as a "YYYY-MM-DD" string).
+// Used to look up which weekly plan snapshot was active for a given date.
+function getMondayKey(dateKey) {
+  const d = new Date(dateKey+"T00:00:00");
+  const dow = d.getDay(); // 0=Sun..6=Sat
+  const offset = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + offset);
+  return localDateKey(d);
 }
 function getGreeting(lang) {
   const h = new Date().getHours();
@@ -605,11 +634,37 @@ const DataAPI = {
       plan_active: !!data.plan_active, plan_goal_kg: data.plan_goal_kg||null, plan_weeks: data.plan_weeks||null,
       plan_daily_exercise_kcal: data.plan_daily_exercise_kcal||0,
       sugar_limit_g: data.sugar_limit_g||50, sodium_limit_mg: data.sodium_limit_mg||2300, fiber_target_g: data.fiber_target_g||25,
-      water_target_ml: data.water_target_ml||null
+      water_target_ml: data.water_target_ml||null,
+      leaderboard_opt_in: !!data.leaderboard_opt_in
     };
   },
   async setTargets(userId, targets) {
     const { error } = await supabase.from('user_targets').upsert({ user_id: userId, ...targets, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  },
+  async getWeeklyLeaderboard(weekStartKey) {
+    const { data, error } = await supabase.rpc('get_weekly_leaderboard', { p_week_start: weekStartKey });
+    if (error) throw error;
+    return data || [];
+  },
+  async setLeaderboardOptIn(userId, optIn) {
+    const { error } = await supabase.from('user_targets').update({ leaderboard_opt_in: optIn }).eq('user_id', userId);
+    if (error) throw error;
+  },
+
+  // Weekly plan snapshots: one row per (user, week_start), recording what the calorie plan
+  // was for that week. This is what lets history/streaks reflect the plan that was actually
+  // active at the time, instead of retroactively re-scoring past weeks against today's plan.
+  async getWeeklyTargets(userId) {
+    const { data, error } = await supabase.from('weekly_targets').select('*').eq('user_id', userId).order('week_start', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+  async saveWeeklyTargetSnapshot(userId, weekStart, snapshot) {
+    const { error } = await supabase.from('weekly_targets').upsert(
+      { user_id: userId, week_start: weekStart, calories: snapshot.calories, protein: snapshot.protein, carbs: snapshot.carbs, fat: snapshot.fat, goal: snapshot.goal, delta: snapshot.delta },
+      { onConflict: 'user_id,week_start' }
+    );
     if (error) throw error;
   },
 
@@ -1429,11 +1484,16 @@ function NutriLogPro({ session, onLogout }) {
   const T = (key) => translate(lang, key);
   const L = (en, zh) => lang === "zh" ? zh : en; // inline bilingual string for one-off dynamic sentences (not worth a STRINGS entry)
   const [activeTab, setActiveTab] = useState("main");
+  const [socialSubTab, setSocialSubTab] = useState("gallery");
+  const [leaderboardData, setLeaderboardData] = useState(null); // null = not loaded yet
+  const [leaderboardError, setLeaderboardError] = useState(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [activeSlot, setActiveSlot] = useState("Breakfast");
 
   const [loading, setLoading] = useState(true);
   const [dayData, setDayData] = useState({ meals: [], workouts: [], drinks: [] });
   const [baseTargets, setBaseTargets] = useState(DEFAULT_TARGETS);
+  const [weeklyTargets, setWeeklyTargets] = useState([]); // plan snapshots per week, sorted by week_start ascending
 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeStatusMsg, setAnalyzeStatusMsg] = useState("Reading your photo...");
@@ -1478,6 +1538,9 @@ function NutriLogPro({ session, onLogout }) {
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem("nutrilog_gemini_key") || "");
   const [showSettings, setShowSettings] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
+  const [paletteSettingsOpen, setPaletteSettingsOpen] = useState(false);
+  const [languageSettingsOpen, setLanguageSettingsOpen] = useState(false);
   const [cutoffSettingsOpen, setCutoffSettingsOpen] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [drinkMenuOpen, setDrinkMenuOpen] = useState(null);
@@ -1538,6 +1601,13 @@ function NutriLogPro({ session, onLogout }) {
       } finally {
         setLoading(false);
       }
+      // Loaded separately and non-fatally: if the weekly_targets table hasn't been created yet
+      // (see setup note), this just silently leaves weeklyTargets empty rather than blocking
+      // the rest of the app — history then falls back to today's live plan, same as before.
+      try {
+        const wt = await DataAPI.getWeeklyTargets(userId);
+        setWeeklyTargets(wt);
+      } catch (err) { /* table not set up yet — fine, falls back gracefully */ }
     })();
     refreshFavorites();
   }, [userId]);
@@ -1547,24 +1617,110 @@ function NutriLogPro({ session, onLogout }) {
     setDayData(day);
   };
 
+  // Lazily load the leaderboard the first time the Social > Leaderboard sub-tab is opened,
+  // rather than fetching it on every app load (most sessions won't visit it).
+  useEffect(() => {
+    if (activeTab !== "social" || socialSubTab !== "leaderboard" || leaderboardData !== null || leaderboardLoading) return;
+    (async () => {
+      setLeaderboardLoading(true);
+      setLeaderboardError(null);
+      try {
+        const prevMonday = getMondayKey(localDateKey(new Date(new Date().setDate(new Date().getDate() - 7))));
+        const rows = await DataAPI.getWeeklyLeaderboard(prevMonday);
+        setLeaderboardData(rows);
+      } catch (err) {
+        setLeaderboardError(err.message || "not_set_up");
+        setLeaderboardData([]);
+      } finally {
+        setLeaderboardLoading(false);
+      }
+    })();
+  }, [activeTab, socialSubTab]);
+
   const mealTotals = dayData.meals.reduce((a,m) => ({ calories:a.calories+Number(m.calories), protein:a.protein+Number(m.protein), carbs:a.carbs+Number(m.carbs), fat:a.fat+Number(m.fat), sugar:a.sugar+Number(m.sugar_g||0), sodium:a.sodium+Number(m.sodium_mg||0), fiber:a.fiber+Number(m.fiber_g||0) }), { calories:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
   const drinkTotals = (dayData.drinks||[]).reduce((a,d) => ({ calories:a.calories+Number(d.calories||0), protein:a.protein+Number(d.protein||0), carbs:a.carbs+Number(d.carbs||0), fat:a.fat+Number(d.fat||0), sugar:a.sugar+Number(d.sugar_g||0), sodium:a.sodium+Number(d.sodium_mg||0), fiber:a.fiber+Number(d.fiber_g||0) }), { calories:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
   const consumed = { calories: mealTotals.calories+drinkTotals.calories, protein: mealTotals.protein+drinkTotals.protein, carbs: mealTotals.carbs+drinkTotals.carbs, fat: mealTotals.fat+drinkTotals.fat, sugar: mealTotals.sugar+drinkTotals.sugar, sodium: mealTotals.sodium+drinkTotals.sodium, fiber: mealTotals.fiber+drinkTotals.fiber };
   const burned = (dayData.workouts||[]).reduce((a,w) => a+Number(w.calories), 0);
 
+  const currentWeightForCalc = todayWeight || (weightHistory.length ? weightHistory[weightHistory.length-1].weight_kg : null);
+  const tdeeInfo = calcBMRTargets({ gender: baseTargets.gender, heightCm: baseTargets.height_cm, birthYear: baseTargets.birth_year, weightKg: currentWeightForCalc, activityLevel: baseTargets.activity_level, goal:"maintain" });
+
+  const applyMacrosForCalories = (calories, isGain) => {
+    // Lose/maintain: balanced 30/40/30. Gain: higher carbs to fuel training, lower fat —
+    // evidence-based range for healthy weight/muscle gain (ISSN/ACSM-aligned: ~25-30% protein,
+    // 45-55% carbs, 20-25% fat), rather than just scaling up the same ratio.
+    const split = isGain ? { p:0.30, c:0.50, f:0.20 } : { p:0.30, c:0.40, f:0.30 };
+    return {
+      calories,
+      protein: Math.round((calories*split.p)/4),
+      carbs: Math.round((calories*split.c)/4),
+      fat: Math.round((calories*split.f)/9)
+    };
+  };
+
+  // Finds the weight logged closest to dateKey: exact match if logged that day, otherwise the
+  // most recent prior entry (carrying the last known weight forward), otherwise the earliest
+  // entry after it (for dates before any weight was ever logged), otherwise today's weight.
+  const weightForDate = useCallback((dateKey) => {
+    if (!weightHistory || weightHistory.length === 0) return currentWeightForCalc;
+    const sorted = weightHistory.slice().sort((a,b) => a.log_date.localeCompare(b.log_date));
+    const exact = sorted.find(w => w.log_date === dateKey);
+    if (exact) return exact.weight_kg;
+    const before = sorted.filter(w => w.log_date < dateKey).pop();
+    if (before) return before.weight_kg;
+    const after = sorted.find(w => w.log_date > dateKey);
+    if (after) return after.weight_kg;
+    return currentWeightForCalc;
+  }, [weightHistory, currentWeightForCalc]);
+
+  const tdeeForDate = useCallback((dateKey) => {
+    const w = weightForDate(dateKey);
+    return calcBMRTargets({ gender: baseTargets.gender, heightCm: baseTargets.height_cm, birthYear: baseTargets.birth_year, weightKg: w, activityLevel: baseTargets.activity_level, goal:"maintain" }).tdee;
+  }, [weightForDate, baseTargets.gender, baseTargets.height_cm, baseTargets.birth_year, baseTargets.activity_level]);
+
+  // Looks up what calorie/macro target applies for the week containing dateKey. The WEEKLY PLAN
+  // (the deficit/surplus delta, e.g. -200) is what's fixed for the week — but TDEE itself still
+  // depends on weight, which fluctuates daily, so the actual calorie target is recalculated here
+  // using that specific date's logged weight, not frozen at whatever weight was current when the
+  // plan was last saved. This also applies to TODAY (see computeTargetsLocal below), so logging a
+  // new weight today updates today's target immediately without needing to re-save the plan.
+  const targetsForWeek = useCallback((dateKey) => {
+    const monday = getMondayKey(dateKey);
+    let applicable = null;
+    for (const snap of weeklyTargets) { // sorted ascending by week_start
+      if (snap.week_start <= monday) applicable = snap;
+      else break;
+    }
+    if (!applicable) {
+      // No plan history yet (brand new user, or before this feature existed) — fall back to
+      // today's live stored plan, same as before this change.
+      return { calories: baseTargets.calories, protein: baseTargets.protein, carbs: baseTargets.carbs, fat: baseTargets.fat, goal: baseTargets.goal, delta: null };
+    }
+    if (applicable.delta === null || applicable.delta === undefined) {
+      // Legacy snapshot saved before delta-tracking existed — use its flat stored values as-is.
+      return { calories: applicable.calories, protein: applicable.protein, carbs: applicable.carbs, fat: applicable.fat, goal: applicable.goal || baseTargets.goal, delta: null };
+    }
+    const dayTdee = tdeeForDate(dateKey);
+    const isGain = applicable.delta > 0;
+    const calories = Math.max(800, Math.round(dayTdee + applicable.delta));
+    const macros = applyMacrosForCalories(calories, isGain);
+    return { calories: macros.calories, protein: macros.protein, carbs: macros.carbs, fat: macros.fat, goal: applicable.goal || baseTargets.goal, delta: applicable.delta };
+  }, [weeklyTargets, baseTargets.calories, baseTargets.protein, baseTargets.carbs, baseTargets.fat, baseTargets.goal, tdeeForDate]);
+
   // Workout boost: burning calories raises your daily allowance. Extra calories are distributed
   // across macros using the same 30/40/30 (protein/carbs/fat) split as the BMR calculator,
   // so the boosted target stays nutritionally consistent with the base targets.
   const computeTargetsLocal = (burnedKcal) => {
+    const base = targetsForWeek(today); // today's weight + this week's plan delta, not a frozen number
     const extraCalories = burnedKcal; // 1:1 — burn 100kcal, get 100kcal more allowance
     const extraProtein = (extraCalories * 0.30) / 4; // 4 kcal/g protein
     const extraCarbs   = (extraCalories * 0.40) / 4; // 4 kcal/g carbs
     const extraFat     = (extraCalories * 0.30) / 9; // 9 kcal/g fat
     return {
-      calories: baseTargets.calories + extraCalories,
-      protein: baseTargets.protein + extraProtein,
-      carbs: baseTargets.carbs + extraCarbs,
-      fat: baseTargets.fat + extraFat
+      calories: base.calories + extraCalories,
+      protein: base.protein + extraProtein,
+      carbs: base.carbs + extraCarbs,
+      fat: base.fat + extraFat
     };
   };
 
@@ -1573,9 +1729,7 @@ function NutriLogPro({ session, onLogout }) {
   const deficit = net < targets.calories;
   const totalDrinkMl = (dayData.drinks||[]).reduce((s,d) => s + Number(d.amount_ml||0), 0);
   const drinkCalories = (dayData.drinks||[]).reduce((s,d) => s + Number(d.calories||0), 0);
-  const currentWeightForCalc = todayWeight || (weightHistory.length ? weightHistory[weightHistory.length-1].weight_kg : null);
-  const tdeeInfo = calcBMRTargets({ gender: baseTargets.gender, heightCm: baseTargets.height_cm, birthYear: baseTargets.birth_year, weightKg: currentWeightForCalc, activityLevel: baseTargets.activity_level, goal:"maintain" });
-  const isGainPlan = tdeeInfo ? baseTargets.calories > tdeeInfo.tdee : false;
+  const isGainPlan = targetsForWeek(today).goal === "gain";
   const waterTarget = baseTargets.water_target_ml || calcWaterTarget(currentWeightForCalc, baseTargets.activity_level, burned);
   const waterMilestones = getWaterMilestones(waterTarget, lang);
   const achievedMilestone = waterMilestones.slice().reverse().find(m => totalDrinkMl >= m.ml) || null;
@@ -1684,17 +1838,17 @@ function NutriLogPro({ session, onLogout }) {
     try { await DataAPI.setTargets(userId, updated); } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
   };
 
-  const applyMacrosForCalories = (calories, isGain) => {
-    // Lose/maintain: balanced 30/40/30. Gain: higher carbs to fuel training, lower fat —
-    // evidence-based range for healthy weight/muscle gain (ISSN/ACSM-aligned: ~25-30% protein,
-    // 45-55% carbs, 20-25% fat), rather than just scaling up the same ratio.
-    const split = isGain ? { p:0.30, c:0.50, f:0.20 } : { p:0.30, c:0.40, f:0.30 };
-    return {
-      calories,
-      protein: Math.round((calories*split.p)/4),
-      carbs: Math.round((calories*split.c)/4),
-      fat: Math.round((calories*split.f)/9)
-    };
+  // Saves (or updates) a snapshot of the plan for the CURRENT week only — this is what makes the
+  // plan "weekly": changing it today updates this week going forward, but never rewrites past
+  // weeks' snapshots, so history/streaks keep reflecting whatever was actually active back then.
+  const saveWeeklyPlanSnapshot = async (macros, goal, delta) => {
+    const thisMonday = getMondayKey(todayKey(baseTargets.day_cutoff_hour));
+    const snapshot = { calories: macros.calories, protein: macros.protein, carbs: macros.carbs, fat: macros.fat, goal, delta: (delta===undefined?null:delta) };
+    setWeeklyTargets(prev => {
+      const withoutThisWeek = prev.filter(w => w.week_start !== thisMonday);
+      return [...withoutThisWeek, { week_start: thisMonday, ...snapshot }].sort((a,b) => a.week_start.localeCompare(b.week_start));
+    });
+    try { await DataAPI.saveWeeklyTargetSnapshot(userId, thisMonday, snapshot); } catch (err) { /* non-fatal — table may not be set up yet */ }
   };
 
   const applyCalorieTier = async (tdee, delta) => {
@@ -1708,6 +1862,7 @@ function NutriLogPro({ session, onLogout }) {
     const waterNeeded = calcWaterTarget(currentWeightForCalc, baseTargets.activity_level, burned);
     setPlanConfirmation({ ...macros, waterNeeded });
     try { await DataAPI.setTargets(userId, updated); } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
+    saveWeeklyPlanSnapshot(macros, isGain ? "gain" : (delta === 0 ? "maintain" : "lose"), delta);
   };
 
   const applyCustomDelta = async (tdee) => {
@@ -1732,13 +1887,15 @@ function NutriLogPro({ session, onLogout }) {
     const waterNeeded = calcWaterTarget(currentWeightForCalc, baseTargets.activity_level, burned);
     setPlanConfirmation({ ...macros, waterNeeded });
     try { await DataAPI.setTargets(userId, updated); } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
+    saveWeeklyPlanSnapshot(macros, isGain ? "gain" : (delta === 0 ? "maintain" : "lose"), delta);
   };
 
   const openPlanEditor = () => {
-    setEditCal(Math.round(baseTargets.calories).toString());
-    setEditProt(Math.round(baseTargets.protein).toString());
-    setEditCarb(Math.round(baseTargets.carbs).toString());
-    setEditFat(Math.round(baseTargets.fat).toString());
+    const live = targetsForWeek(today);
+    setEditCal(Math.round(live.calories).toString());
+    setEditProt(Math.round(live.protein).toString());
+    setEditCarb(Math.round(live.carbs).toString());
+    setEditFat(Math.round(live.fat).toString());
     setEditSugar(Math.round(baseTargets.sugar_limit_g||50).toString());
     setEditSodium(Math.round(baseTargets.sodium_limit_mg||2300).toString());
     setEditFiber(Math.round(baseTargets.fiber_target_g||25).toString());
@@ -1762,6 +1919,8 @@ function NutriLogPro({ session, onLogout }) {
     setBaseTargets(updated);
     setShowPlanEditor(false);
     try { await DataAPI.setTargets(userId, updated); } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
+    const editDelta = (tdeeInfo && tdeeInfo.tdee) ? Math.round(updated.calories - tdeeInfo.tdee) : null;
+    saveWeeklyPlanSnapshot({ calories:updated.calories, protein:updated.protein, carbs:updated.carbs, fat:updated.fat }, baseTargets.goal, editDelta);
   };
 
   const resetWaterToAuto = () => {
@@ -1794,6 +1953,9 @@ function NutriLogPro({ session, onLogout }) {
         setWeightHistory(hist);
       }
     } catch (err) { setError(L("Failed to save targets: ","保存目标失败：") + err.message); }
+    const freshTdee = calcBMRTargets({ gender: up.gender, heightCm: up.height_cm, birthYear: up.birth_year, weightKg: currentWeightForCalc, activityLevel: up.activity_level, goal:"maintain" }).tdee;
+    const customDelta = freshTdee ? Math.round(up.calories - freshTdee) : null;
+    saveWeeklyPlanSnapshot({ calories:up.calories, protein:up.protein, carbs:up.carbs, fat:up.fat }, up.goal, customDelta);
   };
 
   // ── AI calls (Gemini, BYO key) ──
@@ -2048,7 +2210,7 @@ function NutriLogPro({ session, onLogout }) {
     const totalCons = relevant.reduce((s,k)=>s+byDate[k].cons,0);
     const totalBurn = relevant.reduce((s,k)=>s+byDate[k].burn,0);
     const totalWater = relevant.reduce((s,k)=>s+byDate[k].water,0);
-    const deficitDays = relevant.filter(k => (byDate[k].cons - byDate[k].burn) < baseTargets.calories).length;
+    const deficitDays = relevant.filter(k => (byDate[k].cons - byDate[k].burn) < targetsForWeek(k).calories).length;
     return { avgConsumed: Math.round(totalCons/days), avgBurned: Math.round(totalBurn/days), avgWater: Math.round(totalWater/days), daysTracked: relevant.length, deficitDays };
   })();
 
@@ -2160,14 +2322,17 @@ function NutriLogPro({ session, onLogout }) {
     histRangeData.workouts.forEach(w => { byDate[w.log_date] = (byDate[w.log_date]||0) - Number(w.calories||0); });
     (histRangeData.drinks||[]).forEach(d => { byDate[d.log_date] = (byDate[d.log_date]||0) + Number(d.calories||0); });
     let streak = 0;
-    const target = baseTargets.calories || 1;
     // Goal-aware, matching streakWeek's "hit" logic above: for a gain goal, staying AT or
     // ABOVE target is the win; for lose/maintain, staying AT or BELOW target is the win.
+    // Each day is judged against the plan that was active for its own week (see targetsForWeek),
+    // not today's live plan.
     for (let i=1; i<=180; i++) {
       const d = new Date(); d.setDate(d.getDate()-i);
       const key = localDateKey(d);
       if (byDate[key] === undefined) break; // no data logged that day — streak ends
-      const hit = baseTargets.goal === "gain" ? byDate[key] >= target : byDate[key] <= target;
+      const wt = targetsForWeek(key);
+      const target = wt.calories || 1;
+      const hit = wt.goal === "gain" ? byDate[key] >= target : byDate[key] <= target;
       if (hit) streak++;
       else break;
     }
@@ -2190,12 +2355,13 @@ function NutriLogPro({ session, onLogout }) {
     Object.keys(byDate).forEach(k => {
       const date = new Date(k+"T00:00:00"); if (isNaN(date.getTime())) return;
       const range = getWeekRangeString(date);
-      if (!groups[range]) groups[range] = { days:[], totalConsumed:0, totalBurned:0, totalWater:0, daysTracked:0 };
+      if (!groups[range]) groups[range] = { days:[], totalConsumed:0, totalBurned:0, totalWater:0, daysTracked:0, totalTarget:0 };
       const dData = byDate[k];
       const cons = dData.meals.reduce((s,m)=>s+Number(m.calories),0) + (dData.drinkCal||0);
       const burn = dData.workouts.reduce((s,w)=>s+Number(w.calories),0);
       groups[range].days.push({ key:k, dateStr:date.toLocaleDateString("en-US",{weekday:'short',day:'numeric'}), consumed:cons, burned:burn, water:dData.water });
       groups[range].totalConsumed+=cons; groups[range].totalBurned+=burn; groups[range].totalWater+=dData.water; groups[range].daysTracked+=1;
+      groups[range].totalTarget += targetsForWeek(k).calories;
     });
     return groups;
   })();
@@ -2222,6 +2388,106 @@ function NutriLogPro({ session, onLogout }) {
         return Math.ceil((((monday - onejan) / 86400000) + onejan.getDay()+1) / 7);
       })();
       weeks.push({ label: lang==="zh" ? `第${weekNum}周` : `Week ${weekNum}`, burned: Math.round(total) });
+    }
+    return weeks;
+  })();
+
+  // ── Weekly calorie balance: last 6 calendar weeks, each measured against the plan that was
+  // actually active THAT week (via targetsForWeek), for the "Weekly Balance" motivation chart ──
+  // ── Previous week analysis: a retrospective on the most recently COMPLETED week (not the
+  // current, still-in-progress one), scored against the plan that was actually active then.
+  // Calories get a yellow/red tier when over target; macros are only called out when they're
+  // significantly (>20%) off — sugar/water/sodium/fiber are left out since they don't drive
+  // the calorie balance the way protein/carbs/fat do.
+  const previousWeekAnalysis = (() => {
+    const now = new Date();
+    const dow = now.getDay();
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const thisMonday = new Date(now); thisMonday.setDate(now.getDate() + mondayOffset);
+    const prevMonday = new Date(thisMonday); prevMonday.setDate(thisMonday.getDate() - 7);
+    const prevMondayKey = localDateKey(prevMonday);
+    const wt = targetsForWeek(prevMondayKey);
+
+    const byDate = {};
+    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0}); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); e.sugar += Number(m.sugar_g||0); });
+    histRangeData.workouts.forEach(w => { (byDate[w.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0}).burn += Number(w.calories||0); });
+    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0}); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.sugar += Number(d.sugar_g||0); });
+
+    let hits = 0, tracked = 0, totalNet = 0, totalTarget = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalSugar = 0;
+    const tierCounts = { green:0, yellow:0, red:0 };
+    for (let d=0; d<7; d++) {
+      const day = new Date(prevMonday); day.setDate(prevMonday.getDate()+d);
+      const key = localDateKey(day);
+      const e = byDate[key];
+      if (!e) continue;
+      tracked++;
+      const net = e.cons - e.burn;
+      totalNet += net;
+      totalTarget += wt.calories;
+      totalProtein += e.protein; totalCarbs += e.carbs; totalFat += e.fat; totalSugar += e.sugar;
+      const hit = wt.goal === "gain" ? net >= wt.calories : net <= wt.calories;
+      if (hit) hits++;
+      // Same tiering as Dashboard's daily "Live status": how far off target, in the direction
+      // that matters for this goal (over target for lose/maintain, under target for gain).
+      const offPct = wt.calories ? (wt.goal === "gain" ? ((wt.calories - net)/wt.calories)*100 : ((net - wt.calories)/wt.calories)*100) : 0;
+      if (offPct > 20) tierCounts.red++;
+      else if (offPct > 0) tierCounts.yellow++;
+      else tierCounts.green++;
+    }
+    if (tracked === 0) return null;
+
+    const weekNum = (() => {
+      const onejan = new Date(prevMonday.getFullYear(),0,1);
+      return Math.ceil((((prevMonday - onejan) / 86400000) + onejan.getDay()+1) / 7);
+    })();
+
+    const avgCalPct = totalTarget ? Math.round((totalNet/totalTarget)*100) : 100;
+    const calOverPct = totalTarget ? ((totalNet - totalTarget)/totalTarget)*100 : 0;
+    const calStatus = calOverPct > 20 ? "red" : calOverPct > 0 ? "yellow" : null;
+
+    const sugarLimit = baseTargets.sugar_limit_g || 50;
+    const avgSugarPct = sugarLimit ? Math.round((totalSugar/(sugarLimit*tracked))*100) : null;
+
+    const RED_THRESHOLD = 20;
+    const macroIssues = [];
+    [["protein",totalProtein,wt.protein],["carbs",totalCarbs,wt.carbs],["fat",totalFat,wt.fat]].forEach(([name,total,perDayTarget]) => {
+      const targetTotal = perDayTarget * tracked;
+      if (!targetTotal) return;
+      const devPct = ((total - targetTotal)/targetTotal)*100;
+      if (Math.abs(devPct) > RED_THRESHOLD) macroIssues.push({ name, devPct });
+    });
+
+    const ratio = hits / tracked;
+    const tone = (hits === 7 && tracked === 7) ? "perfect" : ratio >= 0.7 ? "good" : ratio >= 0.4 ? "mixed" : "tough";
+
+    // Uses the actual delta stored with the plan snapshot (now that plans store their weekly
+    // deficit/surplus delta directly). Only falls back to a TDEE approximation for legacy
+    // snapshots saved before delta-tracking existed.
+    const planDelta = (wt.delta !== null && wt.delta !== undefined)
+      ? wt.delta
+      : (tdeeInfo ? Math.round(wt.calories - tdeeInfo.tdee) : 0);
+
+    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, macroIssues, tone, tierCounts };
+  })();
+
+  // Plan Tracker: shows the fixed plan delta chosen for each of the last 6 weeks (e.g. Week 26:
+  // -200, Week 27: -300) — not live performance. Just a readout of the plan itself over time,
+  // for motivation ("look how much more committed the deficit has gotten").
+  const planTrend = (() => {
+    const weeks = [];
+    const now = new Date();
+    const curDay = now.getDay();
+    const mondayOffset = curDay === 0 ? -6 : 1 - curDay;
+    for (let w=5; w>=0; w--) {
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + mondayOffset - (w*7));
+      const mondayKeyStr = localDateKey(monday);
+      const wt = targetsForWeek(mondayKeyStr);
+      const weekNum = (() => {
+        const onejan = new Date(monday.getFullYear(),0,1);
+        return Math.ceil((((monday - onejan) / 86400000) + onejan.getDay()+1) / 7);
+      })();
+      weeks.push({ label: lang==="zh" ? `第${weekNum}周` : `W${weekNum}`, delta: (wt.delta === null || wt.delta === undefined) ? null : Math.round(wt.delta) });
     }
     return weeks;
   })();
@@ -2320,30 +2586,54 @@ function NutriLogPro({ session, onLogout }) {
                   <div className="card fade" style={{ position:"absolute", top:"calc(100% + 8px)", right:0, zIndex:50, width:280, maxHeight:"70vh", overflowY:"auto", padding:14, background:C.card, borderColor:C.border, boxShadow:"0 8px 28px rgba(0,0,0,0.22)" }}>
                     <div style={{ fontSize:11, color:C.textMuted, marginBottom:12 }}>{T("logged_in_as")} <strong style={{color:C.text}}>{userEmail}</strong></div>
 
-                    <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:6 }}>{T("settings_theme").toUpperCase()}</div>
-                    <div style={{ display:"flex", gap:8, marginBottom:14 }}>
-                      <button onClick={() => setTheme("dark")} className={theme==="dark"?"":"ghost-btn"} style={theme==="dark"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>🌙 {T("settings_theme_dark")}</button>
-                      <button onClick={() => setTheme("light")} className={theme==="light"?"":"ghost-btn"} style={theme==="light"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>☀️ {T("settings_theme_light")}</button>
+                    <div onClick={() => setThemeSettingsOpen(!themeSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0" }}>
+                      <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_theme").toUpperCase()}</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:11, color:C.textMuted }}>{theme==="dark" ? `🌙 ${T("settings_theme_dark")}` : `☀️ ${T("settings_theme_light")}`}</span>
+                        <span style={{ fontSize:10, color:C.textMuted }}>{themeSettingsOpen ? "▲" : "▼"}</span>
+                      </span>
                     </div>
+                    {themeSettingsOpen && (
+                      <div className="fade" style={{ display:"flex", gap:8, marginTop:8, marginBottom:14 }}>
+                        <button onClick={() => setTheme("dark")} className={theme==="dark"?"":"ghost-btn"} style={theme==="dark"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>🌙 {T("settings_theme_dark")}</button>
+                        <button onClick={() => setTheme("light")} className={theme==="light"?"":"ghost-btn"} style={theme==="light"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>☀️ {T("settings_theme_light")}</button>
+                      </div>
+                    )}
 
-                    <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:6 }}>{T("settings_color").toUpperCase()}</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
-                      {Object.entries(PALETTES).map(([key, pal]) => {
-                        const previewColor = pal[theme].pink;
-                        const isActive = palette === key;
-                        return (
-                          <button key={key} onClick={() => setPalette(key)} title={pal.label} style={{ width:34, height:34, borderRadius:"50%", background:previewColor, border: isActive ? `2px solid ${previewColor}` : "2px solid transparent", boxShadow: isActive ? `0 0 0 3px ${previewColor}44` : "none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>
-                            {isActive ? "✓" : pal.emoji}
-                          </button>
-                        );
-                      })}
+                    <div onClick={() => setPaletteSettingsOpen(!paletteSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
+                      <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_color").toUpperCase()}</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:11, color:C.textMuted }}>{(PALETTES[palette]||PALETTES.sweet).emoji} {(PALETTES[palette]||PALETTES.sweet).label}</span>
+                        <span style={{ fontSize:10, color:C.textMuted }}>{paletteSettingsOpen ? "▲" : "▼"}</span>
+                      </span>
                     </div>
+                    {paletteSettingsOpen && (
+                      <div className="fade" style={{ display:"flex", flexWrap:"wrap", gap:8, marginTop:8, marginBottom:14 }}>
+                        {Object.entries(PALETTES).map(([key, pal]) => {
+                          const previewColor = pal[theme].pink;
+                          const isActive = palette === key;
+                          return (
+                            <button key={key} onClick={() => setPalette(key)} title={pal.label} style={{ width:34, height:34, borderRadius:"50%", background:previewColor, border: isActive ? `2px solid ${previewColor}` : "2px solid transparent", boxShadow: isActive ? `0 0 0 3px ${previewColor}44` : "none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>
+                              {isActive ? "✓" : pal.emoji}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                    <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:6 }}>{T("settings_language").toUpperCase()}</div>
-                    <div style={{ display:"flex", gap:8, marginBottom:14 }}>
-                      <button onClick={() => setLang("en")} className={lang==="en"?"":"ghost-btn"} style={lang==="en"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>English</button>
-                      <button onClick={() => setLang("zh")} className={lang==="zh"?"":"ghost-btn"} style={lang==="zh"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>中文</button>
+                    <div onClick={() => setLanguageSettingsOpen(!languageSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
+                      <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_language").toUpperCase()}</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:11, color:C.textMuted }}>{lang==="en" ? "English" : "中文"}</span>
+                        <span style={{ fontSize:10, color:C.textMuted }}>{languageSettingsOpen ? "▲" : "▼"}</span>
+                      </span>
                     </div>
+                    {languageSettingsOpen && (
+                      <div className="fade" style={{ display:"flex", gap:8, marginTop:8, marginBottom:14 }}>
+                        <button onClick={() => setLang("en")} className={lang==="en"?"":"ghost-btn"} style={lang==="en"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>English</button>
+                        <button onClick={() => setLang("zh")} className={lang==="zh"?"":"ghost-btn"} style={lang==="zh"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>中文</button>
+                      </div>
+                    )}
 
                     <div onClick={() => setAiSettingsOpen(!aiSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:11, fontWeight:"700", color:C.pink, fontFamily:"'DM Sans',sans-serif", letterSpacing:"0.05em" }}>⚙️ {T("settings_ai_settings").toUpperCase()}</span>
@@ -2499,9 +2789,9 @@ function NutriLogPro({ session, onLogout }) {
                       }}>
                         {isPending ? (
                           <span style={{ fontSize:12, fontWeight:"800", color:day.isToday?C.pink:C.textDim }}>{day.label}</span>
-                        ) : (
+                        ) : resultColor !== C.red ? (
                           <span style={{ fontSize:14, fontWeight:"900", color:"#fff", lineHeight:1 }}>✓</span>
-                        )}
+                        ) : null}
                       </div>
                       <span style={{ fontSize:10, color:day.isToday?C.pink:C.textDim, fontWeight:"700" }}>{day.label}</span>
                     </div>
@@ -2536,7 +2826,10 @@ function NutriLogPro({ session, onLogout }) {
               }
 
               if (!showPicker) {
-                // Plan is active — show the compact "Today's Plan" summary instead of the picker
+                // Plan is active — show the compact "This Week's Plan" summary instead of the picker.
+                // Uses today's live (weight-adjusted) target, not the raw stored baseTargets values,
+                // so this reflects the same number actually used on Dashboard today.
+                const livePlan = targetsForWeek(today);
                 return (
                   <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -2549,7 +2842,7 @@ function NutriLogPro({ session, onLogout }) {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
                       <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
                         <div style={{ fontSize:10, letterSpacing:".08em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>🔥 {T("main_calories_label")}</div>
-                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C.pink, lineHeight:1 }}>{Math.round(baseTargets.calories)}</div>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C.pink, lineHeight:1 }}>{Math.round(livePlan.calories)}</div>
                         <div style={{ fontSize:10, color:C.textDim }}>{T("main_kcal_day")}</div>
                       </div>
                       <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
@@ -2559,7 +2852,7 @@ function NutriLogPro({ session, onLogout }) {
                       </div>
                     </div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                      {[[T("common_protein"),baseTargets.protein,C.protein,"🥩"],[T("common_carbs"),baseTargets.carbs,C.carbs,"🍞"],[T("common_fat"),baseTargets.fat,C.fat,"🥑"]].map(([l,v,c,ic]) => (
+                      {[[T("common_protein"),livePlan.protein,C.protein,"🥩"],[T("common_carbs"),livePlan.carbs,C.carbs,"🍞"],[T("common_fat"),livePlan.fat,C.fat,"🥑"]].map(([l,v,c,ic]) => (
                         <div key={l} style={{ background:C.surface, borderRadius:12, padding:"8px", textAlign:"center" }}>
                           <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{ic} {l.toUpperCase()}</div>
                           <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", color:c }}>{Math.round(v)}g</div>
@@ -2576,8 +2869,11 @@ function NutriLogPro({ session, onLogout }) {
                     <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>{T("main_plan_title")}</span>
                     {baseTargets.plan_active && <button onClick={()=>setShowTierPicker(false)} className="ghost-btn" style={{ fontSize:10, padding:"4px 10px" }}>{T("common_cancel")}</button>}
                   </div>
-                  <div style={{ fontSize:12, color:C.textMuted, marginBottom:14 }}>
+                  <div style={{ fontSize:12, color:C.textMuted, marginBottom:6 }}>
                     {T("main_tdee_desc")} <strong style={{color:C.text}}>{tdee.tdee} kcal/day</strong> {T("main_tdee_desc2")}
+                  </div>
+                  <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic", marginBottom:14 }}>
+                    📅 {T("main_weekly_note")}
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:8 }}>
                     {[
@@ -2588,7 +2884,10 @@ function NutriLogPro({ session, onLogout }) {
                       { label:T("main_tier_gain_starter"), delta:200 },
                       { label:T("main_tier_gain_steady"), delta:350 },
                     ].map(tier => {
-                      const isActive = Math.round(baseTargets.calories) === Math.round(tdee.tdee + tier.delta);
+                      const currentDelta = targetsForWeek(today).delta;
+                      const isActive = (currentDelta !== null && currentDelta !== undefined)
+                        ? currentDelta === tier.delta
+                        : Math.round(baseTargets.calories) === Math.round(tdee.tdee + tier.delta);
                       return (
                         <button key={tier.label} onClick={() => { applyCalorieTier(tdee.tdee, tier.delta); setShowTierPicker(false); }} className="slot-btn" style={{ fontSize:10, padding:"8px 4px", borderColor: isActive?C.pinkDim:C.border, background: isActive?C.pinkGlow:"transparent", color: isActive?C.pink:C.textMuted }}>
                           {tier.label}<br/><span style={{ fontSize:9, opacity:0.8 }}>{tier.delta===0?"±0":(tier.delta>0?"+":"")+tier.delta}</span>
@@ -2622,6 +2921,161 @@ function NutriLogPro({ session, onLogout }) {
                 <button onClick={()=>setPlanConfirmation(null)} className="ghost-btn" style={{ width:"100%", marginTop:10, fontSize:11, padding:"6px" }}>{T("common_got_it")}</button>
               </div>
             )}
+
+            {(() => {
+              const deltas = planTrend.filter(w => w.delta !== null).map(w => Math.abs(w.delta));
+              const maxAbs = Math.max(50, ...deltas, 1);
+              const anyData = deltas.length > 0;
+              return (
+                <div className="card" style={{ padding:"16px", marginBottom:14 }}>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:4 }}>📈 {L("Plan Tracker","计划追踪")}</div>
+                  <div style={{ fontSize:11, color:C.textMuted, marginBottom:14 }}>{L("Your chosen deficit/surplus, week by week.","您每周设定的热量缺口／盈余目标。")}</div>
+                  {!anyData ? (
+                    <div style={{ textAlign:"center", padding:"20px 0", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("Set a weekly plan to see it tracked here.","设定每周计划后，即可在此查看追踪记录。")}</div>
+                  ) : (
+                    <div style={{ display:"flex", gap:6 }}>
+                      {planTrend.map((w,i) => {
+                        const barColor = w.delta === null ? C.border : w.delta < 0 ? C.green : w.delta > 0 ? C.caution : C.textDim;
+                        const barPct = w.delta === null ? 0 : Math.min(100, (Math.abs(w.delta)/maxAbs)*100);
+                        return (
+                          <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center" }}>
+                            <div style={{ height:44, display:"flex", alignItems:"flex-end", justifyContent:"center", width:"100%" }}>
+                              {w.delta > 0 && <div style={{ width:14, height:`${barPct}%`, minHeight:3, background:barColor, borderRadius:"4px 4px 0 0" }} />}
+                            </div>
+                            <div style={{ width:"100%", height:1, background:C.border }} />
+                            <div style={{ height:44, display:"flex", alignItems:"flex-start", justifyContent:"center", width:"100%" }}>
+                              {w.delta < 0 && <div style={{ width:14, height:`${barPct}%`, minHeight:3, background:barColor, borderRadius:"0 0 4px 4px" }} />}
+                            </div>
+                            <div style={{ fontSize:9, fontWeight:"700", color:barColor, marginTop:5, whiteSpace:"nowrap" }}>{w.delta===null ? "–" : (w.delta>0?`+${w.delta}`:(w.delta===0?"±0":w.delta))}</div>
+                            <div style={{ fontSize:9, color:C.textDim, marginTop:2 }}>{w.label}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {previousWeekAnalysis && (() => {
+              const a = previousWeekAnalysis;
+              const planLabel = a.planDelta < 0
+                ? L(`Deficit ${a.planDelta}`, `缺口 ${a.planDelta}`)
+                : a.planDelta > 0
+                ? L(`Surplus +${a.planDelta}`, `盈余 +${a.planDelta}`)
+                : L("Maintain","维持");
+              const macroLabel = { protein:L("protein","蛋白质"), carbs:L("carbs","碳水"), fat:L("fat","脂肪") };
+
+              // Each line is built as an array of {text, bold} segments so the key terms (the
+              // nutrient name and the percentage) can be bolded within the sentence, making the
+              // actual number/problem jump out rather than reading as one flat block of text.
+              const didWell = [];
+              const needImprove = [];
+              if (!a.calStatus) {
+                didWell.push([
+                  { text: L("Calories","热量"), bold:true },
+                  { text: L(" consumption controlled at avg ","摄入控制得宜，平均为目标的 ") },
+                  { text: `${a.avgCalPct}%`, bold:true }
+                ]);
+              } else {
+                needImprove.push([
+                  { text: L("Calories","热量"), bold:true },
+                  { text: L(" over target by avg ","平均超出目标 ") },
+                  { text: `${Math.round(a.calOverPct)}%`, bold:true }
+                ]);
+              }
+              if (a.avgSugarPct !== null) {
+                if (a.avgSugarPct <= 70) {
+                  didWell.push([
+                    { text: L("Sugar","糖分"), bold:true },
+                    { text: L(" level is low at avg ","摄入偏低，平均为限额的 ") },
+                    { text: `${a.avgSugarPct}%`, bold:true }
+                  ]);
+                } else if (a.avgSugarPct > 100) {
+                  needImprove.push(lang==="zh"
+                    ? [ { text: "糖分", bold:true }, { text: "平均超出限额 " }, { text: `${a.avgSugarPct-100}%`, bold:true } ]
+                    : [ { text: "Sugar", bold:true }, { text: " is " }, { text: `${a.avgSugarPct-100}% over target`, bold:true } ]);
+                }
+              }
+              a.macroIssues.forEach(mi => {
+                const over = mi.devPct > 0;
+                const pct = Math.round(Math.abs(mi.devPct));
+                needImprove.push(lang==="zh"
+                  ? [ { text: "本周整体" }, { text: macroLabel[mi.name], bold:true }, { text: over?"超出目标 ":"低于目标 " }, { text: `${pct}%`, bold:true } ]
+                  : [ { text: "Overall weekly " }, { text: macroLabel[mi.name], bold:true }, { text: " is " }, { text: `${over?"over":"under"} target by ${pct}%`, bold:true } ]);
+              });
+
+              const achieveLine = a.hits === 0
+                ? L(`You didn't quite hit your target last week — that's okay, this week is a new start!`, `上周没能达标 —— 没关系，新的一周重新开始！`)
+                : L(`You achieved your target ${a.hits} time${a.hits===1?"":"s"} last week!!`, `上周成功达标 ${a.hits} 次！！`);
+
+              let comment;
+              if (a.tone === "perfect" || a.tone === "good") {
+                comment = L("Great job staying consistent this week.", "这周保持得非常稳定，做得很好。");
+              } else if (a.tone === "mixed") {
+                comment = L("You had a mixed week, but that's ok — sometimes you miss the target. Here's a closer look:", "这周表现有起有落，没关系，有时会偏离目标 —— 一起来看看细节：");
+              } else {
+                comment = L("This was a tough week, but every week is a fresh start. Here's a closer look:", "这周比较艰难，但每周都是新的开始 —— 一起来看看细节：");
+              }
+              const closer = needImprove.length > 0
+                ? L("Let's improve again this week!!!","这周继续加油改善！！！")
+                : L("Keep up the great work!","继续保持这份出色的状态！");
+
+              return (
+                <div className="card" style={{ padding:"16px", marginBottom:14 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                    <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>📆 {L("Previous Week Review","上周回顾")}</span>
+                    <span style={{ fontSize:11, color:C.textMuted, fontWeight:"700" }}>{L("Week","第")} {a.weekNum}{lang==="zh"?"周":""}: {planLabel}</span>
+                  </div>
+                  <div style={{ display:"flex", gap:14 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:"800", color:C.text, marginBottom:6 }}>{achieveLine}</div>
+                      <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.6, marginBottom:10 }}>{comment}</div>
+
+                      {didWell.length > 0 && (
+                        <div style={{ marginBottom:10 }}>
+                          <div style={{ fontSize:12, fontWeight:"700", color:C.green, marginBottom:4 }}>{L("Here is what you did well!!:","以下是您做得好的地方！！：")}</div>
+                          <div style={{ fontSize:12, lineHeight:1.9 }}>
+                            {didWell.map((segments,i) => (
+                              <div key={i} style={{ color:C.textMuted }}>
+                                • {segments.map((seg,j) => seg.bold ? <strong key={j} style={{ fontWeight:"800", color:C.text }}>{seg.text}</strong> : <React.Fragment key={j}>{seg.text}</React.Fragment>)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {needImprove.length > 0 && (
+                        <div style={{ marginBottom:10 }}>
+                          <div style={{ fontSize:12, fontWeight:"700", color:C.red, marginBottom:4 }}>{L("Here is what you need to improve:","以下是需要改善的地方：")}</div>
+                          <div style={{ fontSize:12, lineHeight:1.9 }}>
+                            {needImprove.map((segments,i) => (
+                              <div key={i} style={{ color:C.textMuted }}>
+                                • {segments.map((seg,j) => seg.bold ? <strong key={j} style={{ fontWeight:"800", color:C.text }}>{seg.text}</strong> : <React.Fragment key={j}>{seg.text}</React.Fragment>)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ fontSize:12, color:C.text, fontWeight:"700" }}>{closer}</div>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:12, flexShrink:0, justifyContent:"center" }} title={L("Days on target / slightly over / over target","达标／略超／超出目标的天数")}>
+                      {[["green",C.green,a.tierCounts.green],["yellow",C.caution,a.tierCounts.yellow],["red",C.red,a.tierCounts.red]].map(([tier,color,count]) => (
+                        <div key={tier} style={{
+                          width:48, height:48, borderRadius:14, display:"flex", alignItems:"center", justifyContent:"center",
+                          background:`${color}22`, border:`2px solid ${color}`,
+                          color, fontSize:20, fontWeight:"800", fontFamily:"'DM Sans',sans-serif",
+                          opacity: count===0 ? 0.35 : 1
+                        }}>
+                          {count}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -2726,10 +3180,14 @@ function NutriLogPro({ session, onLogout }) {
                 <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink }}>🔥 {L("Today's Calorie Balance","今日热量平衡")}</span>
               </div>
               {(() => {
-                // Plan status: tallies with "Your Calorie Plan" (baseTargets.calories set some fixed
-                // delta from TDEE, e.g. picking "Deficit: Starter" sets -200). This is a fixed number
-                // reflecting the plan chosen, not a live figure.
-                const planDelta = tdeeInfo ? Math.round(baseTargets.calories - tdeeInfo.tdee) : 0;
+                // Plan status: this week's fixed deficit/surplus delta (see "Your Weekly Diet Plan"),
+                // e.g. picking "Deficit: Starter" fixes delta at -200 for the week — while the actual
+                // calorie target (used in targets.calories below) still recalculates daily from TDEE,
+                // since TDEE itself moves with logged weight.
+                const todayPlan = targetsForWeek(today);
+                const planDelta = (todayPlan.delta !== null && todayPlan.delta !== undefined)
+                  ? todayPlan.delta
+                  : (tdeeInfo ? Math.round(baseTargets.calories - tdeeInfo.tdee) : 0);
                 const planAbs = Math.abs(planDelta);
                 let planComment;
                 if (!tdeeInfo || planAbs < 50) {
@@ -2981,35 +3439,6 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
               </div>
               <TrendChart days={last7Days} target={targets.calories} theme={theme} C={C} />
-            </div>
-
-            <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:14 }}>{L("Last 30 Days, At a Glance","近 30 天概览")}</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:10 }}>
-                {[
-                  { label:L("Avg Consumed","平均摄入"), icon:"🔥", val:`${last30Stats.avgConsumed}`, unit:L("kcal/day","千卡/天"), color:C.pink },
-                  { label:L("Avg Water","平均饮水"), icon:"💧", val:`${last30Stats.avgWater}`, unit:L("ml/day","毫升/天"), color:C.water },
-                  { label:L("Avg Burned","平均消耗"), icon:"🏃", val:`${last30Stats.avgBurned}`, unit:L("kcal/day","千卡/天"), color:C.workoutAccent },
-                ].map(({label,icon,val,unit,color}) => (
-                  <div key={label} style={{ background:C.surface, borderRadius:12, padding:"10px 8px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:C.textMuted, letterSpacing:".04em", fontWeight:"700", marginBottom:3 }}>{icon} {label.toUpperCase()}</div>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color, lineHeight:1 }}>{val}</div>
-                    <div style={{ fontSize:9, color:C.textDim }}>{unit}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize:11, color:C.textMuted, fontStyle:"italic", textAlign:"center" }}>
-                {last30Stats.daysTracked===0 ? L("Start logging to see your trends here.","开始记录后即可在此查看趋势。") : L(`Based on ${last30Stats.daysTracked} tracked day(s) in the last 30.`, `基于近 30 天中 ${last30Stats.daysTracked} 天的记录数据。`)}
-              </div>
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-              {[{label:L("Meals Logged","已记录餐次"),val:dayData.meals.length,color:C.pink},{label:L("Workouts Tracked","已记录运动"),val:(dayData.workouts||[]).length,color:C.workoutAccent}].map(({label,val,color}) => (
-                <div key={label} className="card" style={{ padding:"16px" }}>
-                  <div style={{ fontSize:10, color:C.textMuted, letterSpacing:".1em", marginBottom:6, fontWeight:"700" }}>{label.toUpperCase()}</div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:32, fontWeight:"800", color }}>{val}</div>
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -3506,6 +3935,7 @@ function NutriLogPro({ session, onLogout }) {
                   const avgCons = Math.round(w.totalConsumed/w.daysTracked);
                   const avgBurn = Math.round(w.totalBurned/w.daysTracked);
                   const avgWater = Math.round(w.totalWater/w.daysTracked);
+                  const weekBalance = Math.round((w.totalConsumed - w.totalBurned) - w.totalTarget);
                   const isExpanded = expandedWeek===range;
                   return (
                     <div key={range} className="card" style={{ padding:"16px", marginBottom:14, overflow:"hidden" }}>
@@ -3514,7 +3944,10 @@ function NutriLogPro({ session, onLogout }) {
                           <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"800", color:C.text }}>{range}</div>
                           <div style={{ fontSize:12, color:C.textMuted, marginTop:4 }}>{L(`${w.daysTracked} day(s) tracked`, `已记录 ${w.daysTracked} 天`)}</div>
                         </div>
-                        <div style={{ fontSize:15, color:C.pink }}>{isExpanded?"▲":"▼"}</div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontSize:13, fontWeight:"800", color: weekBalance<0 ? C.green : weekBalance>0 ? C.caution : C.text }}>{weekBalance<0?`${weekBalance}`:`+${weekBalance}`} kcal</div>
+                          <div style={{ fontSize:15, color:C.pink }}>{isExpanded?"▲":"▼"}</div>
+                        </div>
                       </div>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:12 }}>
                         {[[L("DAILY AVG KCAL","日均热量"),avgCons+" kcal",C.pink],[L("DAILY AVG BURNED","日均消耗"),avgBurn+" kcal",C.workoutAccent],[L("DAILY AVG WATER","日均饮水"),avgWater+" ml",C.water]].map(([l,v,c]) => (
@@ -3597,6 +4030,117 @@ function NutriLogPro({ session, onLogout }) {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab==="social" && (
+          <div className="fade">
+            <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+              <button className={socialSubTab==="gallery"?"":"ghost-btn"} onClick={()=>setSocialSubTab("gallery")} style={{ flex:1, padding:"9px", fontSize:12.5, fontWeight:"700", ...(socialSubTab==="gallery"?{ background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, cursor:"pointer" }:{}) }}>{T("social_gallery")}</button>
+              <button className={socialSubTab==="leaderboard"?"":"ghost-btn"} onClick={()=>setSocialSubTab("leaderboard")} style={{ flex:1, padding:"9px", fontSize:12.5, fontWeight:"700", ...(socialSubTab==="leaderboard"?{ background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, cursor:"pointer" }:{}) }}>{T("social_leaderboard")}</button>
+            </div>
+
+            {socialSubTab === "gallery" && (() => {
+              const galleryMeals = histRangeData.meals
+                .filter(m => m.image_url)
+                .slice()
+                .sort((a,b) => new Date(b.logged_at||b.log_date) - new Date(a.logged_at||a.log_date));
+              return (
+                <div>
+                  <div style={{ fontSize:11, color:C.textMuted, marginBottom:14, lineHeight:1.5 }}>{T("gallery_hint")}</div>
+                  {galleryMeals.length === 0 ? (
+                    <div style={{ textAlign:"center", padding:"40px 20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{T("gallery_empty")}</div>
+                  ) : (
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      {galleryMeals.map(m => {
+                        const isFav = favMeals.some(f => f.name===m.name && f.calories===m.calories);
+                        return (
+                          <div key={m.id} className="card" style={{ padding:0, overflow:"hidden" }}>
+                            <div style={{ position:"relative" }}>
+                              <img src={m.image_url} alt={m.name} style={{ width:"100%", height:120, objectFit:"cover", display:"block" }} />
+                              <button
+                                onClick={() => saveFavorite("meal", { name:m.name, calories:m.calories, protein:m.protein, carbs:m.carbs, fat:m.fat, sugar_g:m.sugar_g, sodium_mg:m.sodium_mg, fiber_g:m.fiber_g, default_slot:m.slot })}
+                                title={L("Save as favorite","收藏为最爱")}
+                                style={{ position:"absolute", top:6, right:6, background:"rgba(0,0,0,0.5)", border:"none", borderRadius:8, width:28, height:28, fontSize:15, color: isFav?C.pink:"#fff", cursor:"pointer" }}
+                              >
+                                {isFav ? "★" : "☆"}
+                              </button>
+                            </div>
+                            <div style={{ padding:"8px 10px" }}>
+                              <div style={{ fontSize:11.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.name}</div>
+                              <div style={{ fontSize:10, color:C.textMuted, marginTop:2 }}>
+                                {new Date(m.log_date+"T00:00:00").toLocaleDateString(lang==="zh"?"zh-CN":"en-US",{month:"short",day:"numeric"})} · {Math.round(m.calories)} kcal
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {socialSubTab === "leaderboard" && (() => {
+              const myName = baseTargets.display_name;
+              return (
+                <div>
+                  <div className="card" style={{ padding:"14px 16px", marginBottom:14 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+                      <div style={{ fontSize:12.5, fontWeight:"700", color:C.text }}>{T("leaderboard_optin_label")}</div>
+                      <div
+                        onClick={async () => {
+                          const optIn = !baseTargets.leaderboard_opt_in;
+                          setBaseTargets(prev => ({ ...prev, leaderboard_opt_in: optIn }));
+                          try { await DataAPI.setLeaderboardOptIn(userId, optIn); } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
+                        }}
+                        role="switch"
+                        aria-checked={!!baseTargets.leaderboard_opt_in}
+                        style={{ position:"relative", width:42, height:24, flexShrink:0, background: baseTargets.leaderboard_opt_in ? C.pink : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
+                      >
+                        <span style={{ position:"absolute", top:3, left: baseTargets.leaderboard_opt_in ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize:10.5, color:C.textDim, lineHeight:1.5, marginTop:8 }}>{T("leaderboard_optin_hint")}</div>
+                    {!myName && <div style={{ fontSize:11, color:C.caution, marginTop:8 }}>⚠️ {T("leaderboard_need_name")}</div>}
+                  </div>
+
+                  {leaderboardLoading ? (
+                    <div style={{ textAlign:"center", padding:"30px 0", color:C.textDim, fontSize:12 }}>{L("Loading leaderboard…","正在加载排行榜…")}</div>
+                  ) : leaderboardError ? (
+                    <div style={{ textAlign:"center", padding:"30px 20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{T("leaderboard_not_set_up")}</div>
+                  ) : (leaderboardData && leaderboardData.length === 0) ? (
+                    <div style={{ textAlign:"center", padding:"30px 20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{T("leaderboard_empty")}</div>
+                  ) : leaderboardData && (
+                    <div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:10, textAlign:"center" }}>{L("Last week's standings","上周排名")}</div>
+                      {leaderboardData
+                        .slice()
+                        .sort((a,b) => (b.green_count - a.green_count) || (b.yellow_count - a.yellow_count))
+                        .map((row, i) => {
+                          const isMe = row.user_id === userId;
+                          return (
+                            <div key={row.user_id} className="card" style={{ padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10, background: isMe ? C.pinkDeep : C.card, borderColor: isMe ? C.pinkDim : C.border }}>
+                              <div style={{ fontSize:14, fontWeight:"800", color:C.textMuted, width:22, textAlign:"center", flexShrink:0 }}>{i+1}</div>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                                  {row.display_name}{isMe ? ` (${T("leaderboard_you")})` : ""}
+                                </div>
+                                <div style={{ fontSize:10, color:C.textDim, marginTop:2 }}>{row.days_tracked} {L("days tracked","天记录")}</div>
+                              </div>
+                              <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+                                {[["green",C.green,row.green_count],["yellow",C.caution,row.yellow_count],["red",C.red,row.red_count]].map(([tier,color,count]) => (
+                                  <div key={tier} style={{ width:26, height:26, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", background:`${color}22`, border:`1px solid ${color}`, color, fontSize:12, fontWeight:"800" }}>{count}</div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
