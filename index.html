@@ -2676,8 +2676,10 @@ function NutriLogPro({ session, onLogout }) {
                       </div>
                     )}
 
-                    <button className="ghost-btn" style={{ width:"100%", marginBottom:8 }} onClick={() => { setShowSettings(false); setShowAboutModal(true); }}>ℹ️ {T("settings_about")}</button>
-                    <button className="ghost-btn" style={{ width:"100%" }} onClick={onLogout}>{T("settings_logout")}</button>
+                    <div style={{ display:"flex", gap:6, marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+                      <button className="ghost-btn" style={{ flex:1, padding:"6px 8px", fontSize:11 }} onClick={() => { setShowSettings(false); setShowAboutModal(true); }}>ℹ️ {T("settings_about")}</button>
+                      <button className="ghost-btn" style={{ flex:1, padding:"6px 8px", fontSize:11, color:C.red }} onClick={onLogout}>↪️ {T("settings_logout")}</button>
+                    </div>
                   </div>
                 </React.Fragment>
               )}
@@ -3005,9 +3007,14 @@ function NutriLogPro({ session, onLogout }) {
                   : [ { text: "Overall weekly " }, { text: macroLabel[mi.name], bold:true }, { text: " is " }, { text: `${over?"over":"under"} target by ${pct}%`, bold:true } ]);
               });
 
-              const achieveLine = a.hits === 0
+              const Dot = ({color}) => <span style={{ display:"inline-block", width:11, height:11, borderRadius:"50%", background:color, margin:"0 2px", verticalAlign:"middle" }} />;
+              const achieveLine = (a.tierCounts.green + a.tierCounts.yellow) === 0
                 ? L(`You didn't quite hit your target last week — that's okay, this week is a new start!`, `上周没能达标 —— 没关系，新的一周重新开始！`)
-                : L(`You achieved your target ${a.hits} time${a.hits===1?"":"s"} last week!!`, `上周成功达标 ${a.hits} 次！！`);
+                : (
+                  <React.Fragment>
+                    {L("You achieved ","上周达标 ")}<Dot color={C.green}/>{a.tierCounts.green}{L(" and were close ","次，另有接近目标 ")}<Dot color={C.caution}/>{a.tierCounts.yellow}{L(" last week!!"," 次！！")}
+                  </React.Fragment>
+                );
 
               let comment;
               if (a.tone === "perfect" || a.tone === "good") {
@@ -3023,56 +3030,42 @@ function NutriLogPro({ session, onLogout }) {
 
               return (
                 <div className="card" style={{ padding:"16px", marginBottom:14 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
                     <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>📆 {L("Previous Week Review","上周回顾")}</span>
                     <span style={{ fontSize:11, color:C.textMuted, fontWeight:"700" }}>{L("Week","第")} {a.weekNum}{lang==="zh"?"周":""}: {planLabel}</span>
                   </div>
-                  <div style={{ display:"flex", gap:14 }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:"800", color:C.text, marginBottom:6 }}>{achieveLine}</div>
-                      <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.6, marginBottom:10 }}>{comment}</div>
 
-                      {didWell.length > 0 && (
-                        <div style={{ marginBottom:10 }}>
-                          <div style={{ fontSize:12, fontWeight:"700", color:C.green, marginBottom:4 }}>{L("Here is what you did well!!:","以下是您做得好的地方！！：")}</div>
-                          <div style={{ fontSize:12, lineHeight:1.9 }}>
-                            {didWell.map((segments,i) => (
-                              <div key={i} style={{ color:C.textMuted }}>
-                                • {segments.map((seg,j) => seg.bold ? <strong key={j} style={{ fontWeight:"800", color:C.text }}>{seg.text}</strong> : <React.Fragment key={j}>{seg.text}</React.Fragment>)}
-                              </div>
-                            ))}
+                  <div style={{ fontSize:14, fontWeight:"800", color:C.text, marginBottom:14 }}>{achieveLine}</div>
+
+                  <div style={{ fontSize:13, color:C.textMuted, lineHeight:1.7, marginBottom:16 }}>{comment}</div>
+
+                  {didWell.length > 0 && (
+                    <div style={{ marginBottom:16 }}>
+                      <div style={{ fontSize:13, fontWeight:"700", color:C.green, marginBottom:8 }}>{L("Here is what you did well!!:","以下是您做得好的地方！！：")}</div>
+                      <div style={{ fontSize:13, lineHeight:2.1 }}>
+                        {didWell.map((segments,i) => (
+                          <div key={i} style={{ color:C.textMuted }}>
+                            • {segments.map((seg,j) => seg.bold ? <strong key={j} style={{ fontWeight:"800", color:C.text }}>{seg.text}</strong> : <React.Fragment key={j}>{seg.text}</React.Fragment>)}
                           </div>
-                        </div>
-                      )}
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                      {needImprove.length > 0 && (
-                        <div style={{ marginBottom:10 }}>
-                          <div style={{ fontSize:12, fontWeight:"700", color:C.red, marginBottom:4 }}>{L("Here is what you need to improve:","以下是需要改善的地方：")}</div>
-                          <div style={{ fontSize:12, lineHeight:1.9 }}>
-                            {needImprove.map((segments,i) => (
-                              <div key={i} style={{ color:C.textMuted }}>
-                                • {segments.map((seg,j) => seg.bold ? <strong key={j} style={{ fontWeight:"800", color:C.text }}>{seg.text}</strong> : <React.Fragment key={j}>{seg.text}</React.Fragment>)}
-                              </div>
-                            ))}
+                  {needImprove.length > 0 && (
+                    <div style={{ marginBottom:16 }}>
+                      <div style={{ fontSize:13, fontWeight:"700", color:C.red, marginBottom:8 }}>{L("Here is what you need to improve:","以下是需要改善的地方：")}</div>
+                      <div style={{ fontSize:13, lineHeight:2.1 }}>
+                        {needImprove.map((segments,i) => (
+                          <div key={i} style={{ color:C.textMuted }}>
+                            • {segments.map((seg,j) => seg.bold ? <strong key={j} style={{ fontWeight:"800", color:C.text }}>{seg.text}</strong> : <React.Fragment key={j}>{seg.text}</React.Fragment>)}
                           </div>
-                        </div>
-                      )}
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                      <div style={{ fontSize:12, color:C.text, fontWeight:"700" }}>{closer}</div>
-                    </div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:12, flexShrink:0, justifyContent:"center" }} title={L("Days on target / slightly over / over target","达标／略超／超出目标的天数")}>
-                      {[["green",C.green,a.tierCounts.green],["yellow",C.caution,a.tierCounts.yellow],["red",C.red,a.tierCounts.red]].map(([tier,color,count]) => (
-                        <div key={tier} style={{
-                          width:48, height:48, borderRadius:14, display:"flex", alignItems:"center", justifyContent:"center",
-                          background:`${color}22`, border:`2px solid ${color}`,
-                          color, fontSize:20, fontWeight:"800", fontFamily:"'DM Sans',sans-serif",
-                          opacity: count===0 ? 0.35 : 1
-                        }}>
-                          {count}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <div style={{ fontSize:13, color:C.text, fontWeight:"700" }}>{closer}</div>
                 </div>
               );
             })()}
@@ -4108,7 +4101,10 @@ function NutriLogPro({ session, onLogout }) {
                   {leaderboardLoading ? (
                     <div style={{ textAlign:"center", padding:"30px 0", color:C.textDim, fontSize:12 }}>{L("Loading leaderboard…","正在加载排行榜…")}</div>
                   ) : leaderboardError ? (
-                    <div style={{ textAlign:"center", padding:"30px 20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{T("leaderboard_not_set_up")}</div>
+                    <div style={{ textAlign:"center", padding:"30px 20px", color:C.textDim, fontSize:12 }}>
+                      <div style={{ fontStyle:"italic", marginBottom:8 }}>{T("leaderboard_not_set_up")}</div>
+                      <div style={{ fontSize:10, color:C.red, fontFamily:"monospace", wordBreak:"break-word" }}>{leaderboardError}</div>
+                    </div>
                   ) : (leaderboardData && leaderboardData.length === 0) ? (
                     <div style={{ textAlign:"center", padding:"30px 20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{T("leaderboard_empty")}</div>
                   ) : leaderboardData && (
@@ -4119,9 +4115,15 @@ function NutriLogPro({ session, onLogout }) {
                         .sort((a,b) => (b.green_count - a.green_count) || (b.yellow_count - a.yellow_count))
                         .map((row, i) => {
                           const isMe = row.user_id === userId;
+                          const initial = (row.display_name||"?").trim().charAt(0).toUpperCase();
                           return (
                             <div key={row.user_id} className="card" style={{ padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10, background: isMe ? C.pinkDeep : C.card, borderColor: isMe ? C.pinkDim : C.border }}>
-                              <div style={{ fontSize:14, fontWeight:"800", color:C.textMuted, width:22, textAlign:"center", flexShrink:0 }}>{i+1}</div>
+                              <div style={{ fontSize:14, fontWeight:"800", color:C.textMuted, width:20, textAlign:"center", flexShrink:0 }}>{i+1}</div>
+                              {row.avatar_url ? (
+                                <img src={row.avatar_url} alt={row.display_name} style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0, border:`1px solid ${C.border}` }} />
+                              ) : (
+                                <div style={{ width:36, height:36, borderRadius:"50%", background:C.pinkDeep, border:`1px solid ${C.pinkDim}`, color:C.pink, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:"800", flexShrink:0 }}>{initial}</div>
+                              )}
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                                   {row.display_name}{isMe ? ` (${T("leaderboard_you")})` : ""}
