@@ -1618,15 +1618,19 @@ function NutriLogPro({ session, onLogout }) {
   };
 
   // Lazily load the leaderboard the first time the Social > Leaderboard sub-tab is opened,
-  // rather than fetching it on every app load (most sessions won't visit it).
+  // rather than fetching it on every app load (most sessions won't visit it). Uses the CURRENT
+  // week (same one shown in Main's streak widget) so it reads as a live, in-progress standings —
+  // "last week" is already covered in depth by Previous Week Review, so this is deliberately
+  // the complementary "right now" view, not a duplicate of it. Future days in the week simply
+  // won't be "tracked" yet server-side, so a partial week is scored correctly as it fills in.
   useEffect(() => {
     if (activeTab !== "social" || socialSubTab !== "leaderboard" || leaderboardData !== null || leaderboardLoading) return;
     (async () => {
       setLeaderboardLoading(true);
       setLeaderboardError(null);
       try {
-        const prevMonday = getMondayKey(localDateKey(new Date(new Date().setDate(new Date().getDate() - 7))));
-        const rows = await DataAPI.getWeeklyLeaderboard(prevMonday);
+        const thisMonday = getMondayKey(today);
+        const rows = await DataAPI.getWeeklyLeaderboard(thisMonday);
         setLeaderboardData(rows);
       } catch (err) {
         setLeaderboardError(err.message || "not_set_up");
@@ -2393,11 +2397,12 @@ function NutriLogPro({ session, onLogout }) {
     const wt = targetsForWeek(prevMondayKey);
 
     const byDate = {};
-    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0}); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); e.sugar += Number(m.sugar_g||0); });
-    histRangeData.workouts.forEach(w => { (byDate[w.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0}).burn += Number(w.calories||0); });
-    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0}); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.sugar += Number(d.sugar_g||0); });
+    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,water:0,workedOut:false}); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); e.sugar += Number(m.sugar_g||0); });
+    histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,water:0,workedOut:false}); e.burn += Number(w.calories||0); e.workedOut = true; });
+    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,water:0,workedOut:false}); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.sugar += Number(d.sugar_g||0); e.water += Number(d.amount_ml||0); });
 
     let hits = 0, tracked = 0, totalNet = 0, totalTarget = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalSugar = 0;
+    let waterHitDays = 0, workoutDays = 0;
     const tierCounts = { green:0, yellow:0, red:0 };
     for (let d=0; d<7; d++) {
       const day = new Date(prevMonday); day.setDate(prevMonday.getDate()+d);
@@ -2409,6 +2414,8 @@ function NutriLogPro({ session, onLogout }) {
       totalNet += net;
       totalTarget += wt.calories;
       totalProtein += e.protein; totalCarbs += e.carbs; totalFat += e.fat; totalSugar += e.sugar;
+      if (e.water >= waterTarget) waterHitDays++;
+      if (e.workedOut) workoutDays++;
       const hit = wt.goal === "gain" ? net >= wt.calories : net <= wt.calories;
       if (hit) hits++;
       // Same tiering as Dashboard's daily "Live status": how far off target, in the direction
@@ -2432,12 +2439,16 @@ function NutriLogPro({ session, onLogout }) {
     const sugarLimit = baseTargets.sugar_limit_g || 50;
     const avgSugarPct = sugarLimit ? Math.round((totalSugar/(sugarLimit*tracked))*100) : null;
 
+    // devPct is computed for all three macros now (not just the ones significantly off) since the
+    // report card grades every category — macroIssues (>20% off) is still kept separately for the
+    // "need to improve" bullet list.
     const RED_THRESHOLD = 20;
+    const macroDev = {};
     const macroIssues = [];
     [["protein",totalProtein,wt.protein],["carbs",totalCarbs,wt.carbs],["fat",totalFat,wt.fat]].forEach(([name,total,perDayTarget]) => {
       const targetTotal = perDayTarget * tracked;
-      if (!targetTotal) return;
-      const devPct = ((total - targetTotal)/targetTotal)*100;
+      const devPct = targetTotal ? ((total - targetTotal)/targetTotal)*100 : 0;
+      macroDev[name] = devPct;
       if (Math.abs(devPct) > RED_THRESHOLD) macroIssues.push({ name, devPct });
     });
 
@@ -2451,7 +2462,20 @@ function NutriLogPro({ session, onLogout }) {
       ? wt.delta
       : (tdeeInfo ? Math.round(wt.calories - tdeeInfo.tdee) : 0);
 
-    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, macroIssues, tone, tierCounts };
+    // Per-category 0-100 scores feeding the report card grade. Macro scores use a gentle linear
+    // falloff (never below 20) so even an off week still nets some credit — the whole point of
+    // moving to a C–SSS scale is to keep this feeling encouraging rather than punitive.
+    const macroScore = (devPct) => Math.max(20, Math.min(100, Math.round(100 - Math.abs(devPct)*1.5)));
+    const categoryScores = {
+      calories: tracked ? Math.round(((tierCounts.green*100) + (tierCounts.yellow*50)) / tracked) : 0,
+      protein: macroScore(macroDev.protein),
+      carbs: macroScore(macroDev.carbs),
+      fat: macroScore(macroDev.fat),
+      water: tracked ? Math.round((waterHitDays/tracked)*100) : 0,
+      workout: tracked ? Math.round((workoutDays/tracked)*100) : 0,
+    };
+
+    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, macroIssues, tone, tierCounts, categoryScores };
   })();
 
   // Plan Tracker: shows the fixed plan delta chosen for each of the last 6 weeks (e.g. Week 26:
@@ -2992,13 +3016,62 @@ function NutriLogPro({ session, onLogout }) {
               });
 
               const Dot = ({color}) => <span style={{ display:"inline-block", width:11, height:11, borderRadius:"50%", background:color, margin:"0 2px", verticalAlign:"middle" }} />;
-              const achieveLine = (a.tierCounts.green + a.tierCounts.yellow) === 0
+
+              // Only mentions the tiers that actually happened — saying "and were close 0 times"
+              // when a count is zero reads oddly, so each clause is included only if count > 0.
+              const achieveParts = [];
+              if (a.tierCounts.green > 0) achieveParts.push(<React.Fragment key="g">{L("hit your target ","达标 ")}<Dot color={C.green}/>{a.tierCounts.green}{L(" time"+(a.tierCounts.green===1?"":"s")," 次")}</React.Fragment>);
+              if (a.tierCounts.yellow > 0) achieveParts.push(<React.Fragment key="y">{L("were close ","接近目标 ")}<Dot color={C.caution}/>{a.tierCounts.yellow}{L(" time"+(a.tierCounts.yellow===1?"":"s")," 次")}</React.Fragment>);
+              const achieveLine = achieveParts.length === 0
                 ? L(`You didn't quite hit your target last week — that's okay, this week is a new start!`, `上周没能达标 —— 没关系，新的一周重新开始！`)
                 : (
                   <React.Fragment>
-                    {L("You achieved ","上周达标 ")}<Dot color={C.green}/>{a.tierCounts.green}{L(" and were close ","次，另有接近目标 ")}<Dot color={C.caution}/>{a.tierCounts.yellow}{L(" last week!!"," 次！！")}
+                    {L("You ","上周")}
+                    {achieveParts.map((part,i) => <React.Fragment key={i}>{i>0 && L(" and ","，")}{part}</React.Fragment>)}
+                    {L(" last week!!","！！")}
                   </React.Fragment>
                 );
+
+              // Gamified C→SSS scale (instead of a traditional C-F school scale) so even a rough
+              // week still lands on a grade that feels okay, not punishing — the floor is C, not F.
+              // The composite averages all 6 tracked categories: calories, the 3 macros, water,
+              // and workout — a "report card" across the whole week, not just calories.
+              const gradeFor = (score) => {
+                if (score >= 95) return { grade:"SSS", color:C.pink };
+                if (score >= 85) return { grade:"SS", color:C.gold };
+                if (score >= 75) return { grade:"S", color:C.water };
+                if (score >= 60) return { grade:"A", color:C.green };
+                if (score >= 45) return { grade:"B", color:C.caution };
+                return { grade:"C", color:C.textMuted };
+              };
+              const cs = a.categoryScores;
+              const compositeScore = Math.round((cs.calories + cs.protein + cs.carbs + cs.fat + cs.water + cs.workout) / 6);
+              const { grade, color:gradeColor } = gradeFor(compositeScore);
+              const subjects = [
+                { key:"calories", label:L("Calories","热量"), icon:"🔥", score:cs.calories },
+                { key:"protein", label:L("Protein","蛋白质"), icon:"🥩", score:cs.protein },
+                { key:"carbs", label:L("Carbs","碳水"), icon:"🍞", score:cs.carbs },
+                { key:"fat", label:L("Fat","脂肪"), icon:"🥑", score:cs.fat },
+                { key:"water", label:L("Water","饮水"), icon:"💧", score:cs.water },
+                { key:"workout", label:L("Workout","运动"), icon:"🏃", score:cs.workout },
+              ];
+
+              // A single, clearest-priority takeaway for the coming week — picks whichever issue
+              // deviated furthest from target, so there's one obvious thing to focus on instead of
+              // a list to weigh. Falls back to pure encouragement when nothing needs fixing.
+              const focusIssue = (() => {
+                const candidates = [];
+                if (a.calStatus) candidates.push({ label:L("calories","热量"), icon:"🔥", pct:a.calOverPct, over:true });
+                a.macroIssues.forEach(mi => candidates.push({ label:macroLabel[mi.name], icon: mi.name==="protein"?"🥩":mi.name==="carbs"?"🍞":"🥑", pct:Math.abs(mi.devPct), over:mi.devPct>0 }));
+                if (a.avgSugarPct !== null && a.avgSugarPct > 100) candidates.push({ label:L("sugar","糖分"), icon:"🍬", pct:a.avgSugarPct-100, over:true });
+                if (candidates.length === 0) return null;
+                candidates.sort((x,y) => y.pct - x.pct);
+                return candidates[0];
+              })();
+              const focusLine = focusIssue
+                ? L(`🎯 This week's focus: ${focusIssue.over ? "ease off" : "bring up"} ${focusIssue.label} ${focusIssue.icon}`,
+                    `🎯 本周焦点：${focusIssue.over ? "稍微减少" : "提高"}${focusIssue.label}摄入 ${focusIssue.icon}`)
+                : L("🎯 Nothing to fix — just keep doing exactly this!","🎯 无需调整 —— 保持现在的状态就好！");
 
               let comment;
               if (a.tone === "perfect" || a.tone === "good") {
@@ -3013,13 +3086,37 @@ function NutriLogPro({ session, onLogout }) {
                 : L("Keep up the great work!","继续保持这份出色的状态！");
 
               return (
-                <div className="card" style={{ padding:"16px", marginBottom:14 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                    <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>📆 {L("Previous Week Review","上周回顾")}</span>
+                <div className="card" style={{ padding:"16px", marginBottom:14, overflow:"hidden" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                    <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>📋 {L("Last Week Report Card","上周成绩单")}</span>
                     <span style={{ fontSize:11, color:C.textMuted, fontWeight:"700" }}>{L("Week","第")} {a.weekNum}{lang==="zh"?"周":""}: {planLabel}</span>
                   </div>
 
-                  <div style={{ fontSize:14, fontWeight:"800", color:C.text, marginBottom:14 }}>{achieveLine}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
+                    <div style={{ position:"relative", width:74, height:74, borderRadius:"50%", flexShrink:0,
+                      background:`radial-gradient(circle at 35% 30%, color-mix(in srgb, ${gradeColor} 100%, white 45%), ${gradeColor})`,
+                      boxShadow:`0 0 0 3px ${gradeColor}33, 0 4px 16px ${gradeColor}66`,
+                      display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <span style={{ fontSize: grade.length>2 ? 19 : 26, fontWeight:"800", color:"#fff", fontFamily:"'DM Sans',sans-serif", textShadow:"0 1px 3px rgba(0,0,0,0.25)" }}>{grade}</span>
+                      {(grade==="SS"||grade==="SSS") && <span style={{ position:"absolute", top:-4, right:-2, fontSize:16 }}>✨</span>}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:14, fontWeight:"800", color:C.text }}>{achieveLine}</div>
+                      <div style={{ fontSize:11, color:C.textDim, marginTop:2 }}>{L("Overall score: ","总体评分：")}{compositeScore}%</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8, marginBottom:16 }}>
+                    {subjects.map(s => {
+                      const sub = gradeFor(s.score);
+                      return (
+                        <div key={s.key} style={{ background:C.surface, borderRadius:12, padding:"8px 6px", textAlign:"center" }}>
+                          <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700" }}>{s.icon} {s.label}</div>
+                          <div style={{ fontSize:15, fontWeight:"800", color:sub.color, fontFamily:"'DM Sans',sans-serif", marginTop:2 }}>{sub.grade}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
                   <div style={{ fontSize:13, color:C.textMuted, lineHeight:1.7, marginBottom:16 }}>{comment}</div>
 
@@ -3048,6 +3145,10 @@ function NutriLogPro({ session, onLogout }) {
                       </div>
                     </div>
                   )}
+
+                  <div className="card" style={{ padding:"10px 12px", marginBottom:12, background:C.pinkDeep, borderColor:C.pinkDim }}>
+                    <div style={{ fontSize:13, fontWeight:"700", color:C.pink }}>{focusLine}</div>
+                  </div>
 
                   <div style={{ fontSize:13, color:C.text, fontWeight:"700" }}>{closer}</div>
                 </div>
@@ -4093,7 +4194,7 @@ function NutriLogPro({ session, onLogout }) {
                     <div style={{ textAlign:"center", padding:"30px 20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{T("leaderboard_empty")}</div>
                   ) : leaderboardData && (
                     <div>
-                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:10, textAlign:"center" }}>{L("Last week's standings","上周排名")}</div>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:10, textAlign:"center" }}>{L("This week's standings (live)","本周排名（实时）")}</div>
                       {leaderboardData
                         .slice()
                         .sort((a,b) => (b.green_count - a.green_count) || (b.yellow_count - a.yellow_count))
