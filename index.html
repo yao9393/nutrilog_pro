@@ -150,7 +150,6 @@ const DEFAULT_TARGETS = { calories:1200, protein:90, carbs:110, fat:44 };
 const SLOTS = ["Breakfast","Lunch","Tea Time","Dinner","Supper"];
 const SLOT_ICONS = { Breakfast:"☀️", Lunch:"🌤️", "Tea Time":"🍵", Dinner:"🌙", Supper:"🌌" };
 const TABS = ["main","today","meal","water","workout","history","social"];
-const TAB_LABELS = { main:"Main", today:"Dashboard", meal:"Meal", water:"Water", workout:"Workout", history:"History" };
 
 // ════════════════════════════════════════════════════════════
 // LOCALIZATION — English / Simplified Chinese
@@ -448,6 +447,19 @@ function getGreeting(lang) {
 
 // ── BMR (Mifflin-St Jeor) + activity multiplier → daily calorie target ──
 const ACTIVITY_MULTIPLIERS = { sedentary:1.2, light:1.375, moderate:1.55, active:1.725, very_active:1.9 };
+// Protein and fat both scale with activity level (reusing the same field already driving TDEE),
+// not just goal — someone training hard needs meaningfully more protein for repair/growth than a
+// sedentary person at the same weight and goal, and correspondingly less room is needed for fat
+// (freeing calories toward protein/carbs instead). Protein g/kg stays within the ISSN-cited
+// 1.6-2.2 g/kg evidence range throughout; fat % stays within the 20-35% AMDR range.
+const PROTEIN_PER_KG_BY_ACTIVITY = { sedentary:1.4, light:1.6, moderate:1.8, active:2.0, very_active:2.2 };
+const FAT_PCT_BY_ACTIVITY = { sedentary:0.30, light:0.27, moderate:0.25, active:0.22, very_active:0.20 };
+function macroProfileForActivity(activityLevel, isGain) {
+  const base = PROTEIN_PER_KG_BY_ACTIVITY[activityLevel] || 1.8;
+  const proteinPerKg = Math.min(2.2, base + (isGain ? 0.2 : 0)); // gain gets a small bump, capped at the evidence ceiling
+  const fatPct = FAT_PCT_BY_ACTIVITY[activityLevel] || 0.25;
+  return { proteinPerKg, fatPct };
+}
 const ACTIVITY_LABELS = { sedentary:"Sedentary (little/no exercise)", light:"Light (1-3 days/week)", moderate:"Moderate (3-5 days/week)", active:"Active (6-7 days/week)", very_active:"Very active (physical job/2x day)" };
 const ACTIVITY_LABELS_ZH = { sedentary:"久坐 (几乎不运动)", light:"轻度 (每周1-3天)", moderate:"中度 (每周3-5天)", active:"活跃 (每周6-7天)", very_active:"非常活跃 (体力工作/每天2次)" };
 function activityLabel(key, lang) { return (lang==="zh" ? ACTIVITY_LABELS_ZH : ACTIVITY_LABELS)[key]; }
@@ -460,10 +472,17 @@ function calcBMRTargets({ gender, heightCm, birthYear, weightKg, activityLevel, 
   const tdee = bmr * (ACTIVITY_MULTIPLIERS[activityLevel] || 1.55);
   const calorieAdjust = goal === "lose" ? -500 : goal === "gain" ? 300 : 0;
   const calories = Math.max(1200, Math.round(tdee + calorieAdjust));
-  // Standard macro split: 30% protein, 40% carbs, 30% fat (reasonable general default)
-  const protein = Math.round((calories*0.30)/4);
-  const carbs = Math.round((calories*0.40)/4);
-  const fat = Math.round((calories*0.30)/9);
+  // Protein and fat both scale with activity level, not just goal (see macroProfileForActivity) —
+  // someone training hard needs meaningfully more protein than a sedentary person at the same
+  // weight/goal, with fat giving up room to make space for it. Fat is a % of calories, not fixed
+  // grams — a fixed-gram baseline looked fine at moderate calories but became an unreasonably
+  // small % share at high intake (e.g. just 13% of calories at 4000kcal) while risking crowding
+  // out carbs at very low intake.
+  const { proteinPerKg, fatPct } = macroProfileForActivity(activityLevel, goal === "gain");
+  const minFatPerKg = 0.5; // hard floor for essential-fatty-acid/hormonal health at very low calories
+  const protein = Math.round(proteinPerKg * weightKg);
+  const fat = Math.max(Math.round(minFatPerKg * weightKg), Math.round((calories*fatPct)/9));
+  const carbs = Math.round(Math.max(0, calories - protein*4 - fat*9)/4);
   return { calories, protein, carbs, fat, bmr: Math.round(bmr), tdee: Math.round(tdee) };
 }
 
@@ -492,6 +511,14 @@ function calcWaterTarget(weightKg, activityLevel, workoutBurnedKcal) {
   const workoutBonus = workoutBurnedKcal ? Math.round((workoutBurnedKcal / 350) * 500) : 0;
   const target = Math.round((base + activityBonus + workoutBonus) / 50) * 50; // round to nearest 50ml
   return Math.max(1500, Math.min(target, 5000)); // sensible floor/ceiling
+}
+// Small, CAPPED sodium allowance bump for real sweat/electrolyte loss from today's workouts —
+// deliberately not proportional to burned calories the way carbs/protein are, since sodium need
+// doesn't keep climbing indefinitely the way fuel/repair needs do. Caps at +800mg regardless of
+// how much was burned.
+function sodiumWorkoutBonus(burnedKcal) {
+  if (!burnedKcal) return 0;
+  return Math.min(800, Math.round((burnedKcal/350) * 300));
 }
 
 const getWeekRangeString = (dateObj) => {
@@ -1697,10 +1724,6 @@ function NutriLogPro({ session, onLogout }) {
   const [error, setError] = useState(null);
 
   const [showTargetModal, setShowTargetModal] = useState(false);
-  const [tempCal, setTempCal] = useState("");
-  const [tempProt, setTempProt] = useState("");
-  const [tempCarb, setTempCarb] = useState("");
-  const [tempFat, setTempFat] = useState("");
   const [tempGender, setTempGender] = useState("");
   const [tempHeight, setTempHeight] = useState("");
   const [tempBirthYear, setTempBirthYear] = useState("");
@@ -1849,17 +1872,30 @@ function NutriLogPro({ session, onLogout }) {
   const currentWeightForCalc = todayWeight || (weightHistory.length ? weightHistory[weightHistory.length-1].weight_kg : null);
   const tdeeInfo = calcBMRTargets({ gender: baseTargets.gender, heightCm: baseTargets.height_cm, birthYear: baseTargets.birth_year, weightKg: currentWeightForCalc, activityLevel: baseTargets.activity_level, goal:"maintain" });
 
-  const applyMacrosForCalories = (calories, isGain) => {
-    // Lose/maintain: balanced 30/40/30. Gain: higher carbs to fuel training, lower fat —
-    // evidence-based range for healthy weight/muscle gain (ISSN/ACSM-aligned: ~25-30% protein,
-    // 45-55% carbs, 20-25% fat), rather than just scaling up the same ratio.
-    const split = isGain ? { p:0.30, c:0.50, f:0.20 } : { p:0.30, c:0.40, f:0.30 };
-    return {
-      calories,
-      protein: Math.round((calories*split.p)/4),
-      carbs: Math.round((calories*split.c)/4),
-      fat: Math.round((calories*split.f)/9)
-    };
+  const applyMacrosForCalories = (calories, isGain, weightKg, activityLevel) => {
+    // Protein is bodyweight-anchored — this works well across the whole calorie range, since
+    // muscle needs are about lean mass, not total energy intake, so it doesn't need to scale with
+    // calories the way fat/carbs do. Both protein and fat now also scale with activity level (see
+    // macroProfileForActivity) — someone training hard needs meaningfully more protein than a
+    // sedentary person at the same weight/goal, with fat giving up the room to make space for it.
+    //
+    // Fat is a % of calories (not fixed grams) — simulated across 1200-4000 kcal before landing
+    // here: a fixed-gram fat baseline looked fine at moderate calories, but broke down at both
+    // extremes. At an aggressive cut it could crowd out carbs; at a large surplus its FIXED grams
+    // became a shrinking % of an ever-larger total (e.g. just 13% of calories at 4000kcal) — an
+    // unusually low-fat, unusually high-carb split that would look bizarre to anyone bulking.
+    const { proteinPerKg, fatPct } = macroProfileForActivity(activityLevel, isGain);
+    const minFatPerKg = 0.5; // hard floor for essential-fatty-acid/hormonal health at very low calories
+    const w = weightKg || 70; // fallback if no weight logged yet
+    const protein = Math.round(proteinPerKg * w);
+    const fat = Math.max(Math.round(minFatPerKg * w), Math.round((calories*fatPct)/9));
+    const carbs = Math.round(Math.max(0, calories - protein*4 - fat*9)/4);
+    // Sugar and fiber scale with calorie level (WHO: added sugar ~10% of calories; USDA: ~14g
+    // fiber per 1000kcal) instead of staying flat regardless of how much the person actually eats —
+    // a flat 50g/25g default is a mismatch at both very low and very high calorie levels.
+    const sugarLimit = Math.round((calories*0.10)/4);
+    const fiberTarget = Math.round((calories/1000)*14);
+    return { calories, protein, carbs, fat, sugarLimit, fiberTarget };
   };
 
   // Finds the weight logged closest to dateKey: exact match if logged that day, otherwise the
@@ -1906,20 +1942,22 @@ function NutriLogPro({ session, onLogout }) {
     }
     const dayTdee = tdeeForDate(dateKey);
     const isGain = applicable.delta > 0;
-    const calories = Math.max(800, Math.round(dayTdee + applicable.delta));
-    const macros = applyMacrosForCalories(calories, isGain);
+    const calories = Math.max(1200, Math.round(dayTdee + applicable.delta));
+    const macros = applyMacrosForCalories(calories, isGain, weightForDate(dateKey), baseTargets.activity_level);
     return { calories: macros.calories, protein: macros.protein, carbs: macros.carbs, fat: macros.fat, goal: applicable.goal || baseTargets.goal, delta: applicable.delta };
-  }, [weeklyTargets, baseTargets.calories, baseTargets.protein, baseTargets.carbs, baseTargets.fat, baseTargets.goal, tdeeForDate]);
+  }, [weeklyTargets, baseTargets.calories, baseTargets.protein, baseTargets.carbs, baseTargets.fat, baseTargets.goal, baseTargets.activity_level, tdeeForDate, weightForDate]);
 
-  // Workout boost: burning calories raises your daily allowance. Extra calories are distributed
-  // across macros using the same 30/40/30 (protein/carbs/fat) split as the BMR calculator,
-  // so the boosted target stays nutritionally consistent with the base targets.
-  const computeTargetsLocal = (burnedKcal) => {
-    const base = targetsForWeek(today); // today's weight + this week's plan delta, not a frozen number
+  // Workout boost: burning calories raises your daily allowance, but NOT evenly across
+  // macros — protein (repair) and carbs (glycogen/fuel) are what training actually demands more
+  // of; fat has no real physiological reason to grow just because you exercised, so it gets only
+  // a token share. Sodium gets a small, capped bump for real sweat/electrolyte loss — not
+  // proportional growth, just enough to reflect genuine replacement needs.
+  const computeTargetsLocal = (burnedKcal, dateKey) => {
+    const base = targetsForWeek(dateKey || today); // that date's weight + its week's plan delta — defaults to today
     const extraCalories = burnedKcal; // 1:1 — burn 100kcal, get 100kcal more allowance
-    const extraProtein = (extraCalories * 0.30) / 4; // 4 kcal/g protein
-    const extraCarbs   = (extraCalories * 0.40) / 4; // 4 kcal/g carbs
-    const extraFat     = (extraCalories * 0.30) / 9; // 9 kcal/g fat
+    const extraProtein = (extraCalories * 0.35) / 4; // 4 kcal/g protein — supports repair
+    const extraCarbs   = (extraCalories * 0.60) / 4; // 4 kcal/g carbs — the dial that should move most
+    const extraFat     = (extraCalories * 0.05) / 9; // 9 kcal/g fat — token share only, not a growth lever
     return {
       calories: base.calories + extraCalories,
       protein: base.protein + extraProtein,
@@ -1940,7 +1978,6 @@ function NutriLogPro({ session, onLogout }) {
   const net = consumed.calories - burned;
   const deficit = net < targets.calories;
   const totalDrinkMl = (dayData.drinks||[]).reduce((s,d) => s + Number(d.amount_ml||0), 0);
-  const drinkCalories = (dayData.drinks||[]).reduce((s,d) => s + Number(d.calories||0), 0);
   const isGainPlan = targetsForWeek(today).goal === "gain";
   const waterTarget = waterTargetForDate(today, burned);
   const waterMilestones = getWaterMilestones(waterTarget, lang);
@@ -2018,17 +2055,6 @@ function NutriLogPro({ session, onLogout }) {
     if (Math.abs(diff) < 0.2) return L("Holding steady over this period.","这段时间体重保持稳定。");
     return diff < 0 ? L(`Down ${Math.abs(diff)}kg over this period — great progress!`, `这段时间下降了 ${Math.abs(diff)}kg —— 进步很棒！`) : L(`Up ${diff}kg over this period.`, `这段时间上升了 ${diff}kg。`);
   })();
-  const bmrPreview = calcBMRTargets({
-    gender: tempGender, heightCm: parseFloat(tempHeight), birthYear: parseInt(tempBirthYear),
-    weightKg: currentWeightForCalc, activityLevel: tempActivity, goal: tempGoal
-  });
-  const applyBMRToFields = () => {
-    if (!bmrPreview) { setError(L("Need weight (log it first), height, and gender to calculate.","计算需要体重（请先记录）、身高与性别。")); return; }
-    setTempCal(bmrPreview.calories.toString());
-    setTempProt(bmrPreview.protein.toString());
-    setTempCarb(bmrPreview.carbs.toString());
-    setTempFat(bmrPreview.fat.toString());
-  };
   const uploadAvatar = async (file) => {
     if (!file) return;
     setError(null);
@@ -2065,11 +2091,29 @@ function NutriLogPro({ session, onLogout }) {
 
   const applyCalorieTier = async (tdee, delta) => {
     const isGain = delta > 0;
-    const finalCalories = Math.max(800, Math.round(tdee + delta));
-    const macros = applyMacrosForCalories(finalCalories, isGain);
-    const updated = { ...baseTargets, ...macros, plan_active: true };
+    const finalCalories = Math.max(1200, Math.round(tdee + delta));
+    const macros = applyMacrosForCalories(finalCalories, isGain, currentWeightForCalc, baseTargets.activity_level);
+    // Same spirit of guardrail the custom-delta input already had — but the preset tier buttons
+    // previously had none at all, regardless of how extreme a choice was relative to someone's
+    // actual TDEE or current BMI. These are informational nudges only — never blocking — since
+    // the person may have context (e.g. covering part of a gap with exercise) that the app doesn't.
+    if (delta !== 0 && tdee + delta < 1200) {
+      setCustomDeltaWarning(L("This tier puts your daily calories at the safety floor (1200 kcal) for your profile — a lighter tier, or covering part of the gap with exercise, may be easier to sustain.", "该档位会让您的每日热量触及安全下限（1200 千卡）—— 建议选择更温和的档位，或搭配运动来补足差额，会更容易长期坚持。"));
+    } else if (tdee && Math.abs(delta)/tdee > 0.25) {
+      setCustomDeltaWarning(L("This is a fairly steep change relative to your maintenance calories (over 25%) — many people find this hard to sustain long-term.", "相对于您的维持热量，这个调整幅度较大（超过 25%）—— 许多人发现这种程度较难长期坚持。"));
+    } else if (delta < 0 && calcBMI(currentWeightForCalc, baseTargets.height_cm)?.key === "under") {
+      setCustomDeltaWarning(L("Your BMI is currently in the underweight range — a calorie deficit isn't usually recommended here. Consider Maintain or a Surplus tier instead.", "您目前的 BMI 处于偏瘦范围 —— 通常不建议在此情况下设定热量缺口，建议改选「维持」或「盈余」档位。"));
+    } else if (delta < 0 && macros.carbs < 50) {
+      // Protein and fat are fixed to bodyweight regardless of tier — on a steep enough cut for a
+      // larger person, those two alone can eat up most of the calorie budget, leaving very little
+      // for carbs. Worth surfacing since it's a side effect of body size + tier choice, not
+      // something the person would necessarily anticipate from the tier label alone.
+      setCustomDeltaWarning(L(`This tier leaves only about ${macros.carbs}g of carbs once your protein and fat needs are covered — that's quite low. A lighter tier would leave more room.`, `在满足蛋白质与脂肪需求后，该档位仅剩约 ${macros.carbs}g 碳水额度 —— 偏低。选择更温和的档位会留出更多空间。`));
+    } else {
+      setCustomDeltaWarning(null);
+    }
+    const updated = { ...baseTargets, calories:macros.calories, protein:macros.protein, carbs:macros.carbs, fat:macros.fat, sugar_limit_g:macros.sugarLimit, fiber_target_g:macros.fiberTarget, plan_active: true };
     setBaseTargets(updated);
-    setCustomDeltaWarning(null);
     setCustomDeltaInput(delta.toString());
     const waterNeeded = calcWaterTarget(currentWeightForCalc, baseTargets.activity_level, burned);
     setPlanConfirmation({ ...macros, waterNeeded });
@@ -2081,20 +2125,25 @@ function NutriLogPro({ session, onLogout }) {
     const delta = parseFloat(customDeltaInput);
     if (isNaN(delta)) { setError(L("Enter a number, e.g. -300 or +250.","请输入数字，例如 -300 或 +250。")); return; }
     setError(null);
-    // Soft warning only — never blocks the user, since they may plan to cover the gap with exercise
+    const isGain = delta > 0;
+    const finalCalories = Math.max(1200, Math.round(tdee + delta));
+    const macros = applyMacrosForCalories(finalCalories, isGain, currentWeightForCalc, baseTargets.activity_level);
+    // Soft warnings only — never blocks the user, since they may plan to cover the gap with
+    // exercise or have other context the app doesn't. Same checks as the preset tier buttons.
     if (Math.abs(delta) > 750) {
       setCustomDeltaWarning(delta < 0
-        ? "That's a larger deficit than usually recommended without medical supervision. If you're planning to cover part of it with extra exercise, that's fine — just keep an eye on how you feel."
-        : "That's a larger surplus than typical for steady weight gain. Make sure that's intentional.");
-    } else if (tdee + delta < 1000) {
-      setCustomDeltaWarning("This would put your daily calories quite low. Consider relying more on exercise instead of cutting food this much.");
+        ? L("That's a larger deficit than usually recommended without medical supervision. If you're planning to cover part of it with extra exercise, that's fine — just keep an eye on how you feel.", "这个热量缺口比通常在无医疗监督下建议的幅度更大。如果您计划通过额外运动来补足一部分，也是可以的 —— 但请留意自己的身体感受。")
+        : L("That's a larger surplus than typical for steady weight gain. Make sure that's intentional.", "这个热量盈余比稳健增重通常建议的幅度更大，请确认这是您有意为之的选择。"));
+    } else if (tdee + delta < 1200) {
+      setCustomDeltaWarning(L("This would put your daily calories quite low. Consider relying more on exercise instead of cutting food this much.", "这会让您的每日热量偏低 —— 建议更多依靠运动，而非大幅减少饮食摄入。"));
+    } else if (delta < 0 && calcBMI(currentWeightForCalc, baseTargets.height_cm)?.key === "under") {
+      setCustomDeltaWarning(L("Your BMI is currently in the underweight range — a calorie deficit isn't usually recommended here.", "您目前的 BMI 处于偏瘦范围 —— 通常不建议在此情况下设定热量缺口。"));
+    } else if (delta < 0 && macros.carbs < 50) {
+      setCustomDeltaWarning(L(`This leaves only about ${macros.carbs}g of carbs once your protein and fat needs are covered — that's quite low.`, `在满足蛋白质与脂肪需求后，仅剩约 ${macros.carbs}g 碳水额度 —— 偏低。`));
     } else {
       setCustomDeltaWarning(null);
     }
-    const isGain = delta > 0;
-    const finalCalories = Math.max(800, Math.round(tdee + delta));
-    const macros = applyMacrosForCalories(finalCalories, isGain);
-    const updated = { ...baseTargets, ...macros, plan_active: true };
+    const updated = { ...baseTargets, calories:macros.calories, protein:macros.protein, carbs:macros.carbs, fat:macros.fat, sugar_limit_g:macros.sugarLimit, fiber_target_g:macros.fiberTarget, plan_active: true };
     setBaseTargets(updated);
     const waterNeeded = calcWaterTarget(currentWeightForCalc, baseTargets.activity_level, burned);
     setPlanConfirmation({ ...macros, waterNeeded });
@@ -2140,9 +2189,26 @@ function NutriLogPro({ session, onLogout }) {
   };
 
   const saveCustomTargets = async () => {
+    // Recalculates fresh from the profile (weight/height/activity/goal) every time this is saved,
+    // using the same activity-aware formula as the tier picker — this used to read tempCal/
+    // tempProt/tempCarb/tempFat, but those were never actually wired to any input field the user
+    // could edit (always empty), so this silently preserved stale numbers even when someone
+    // changed their activity level or goal right here in the same save. Manual macro editing has
+    // its own dedicated, working editor elsewhere (the ✏️ plan editor), so this modal now always
+    // reflects the current profile rather than pretending to offer a second, broken editing path.
+    const freshTargets = calcBMRTargets({
+      gender: tempGender||null, heightCm: parseFloat(tempHeight)||null, birthYear: parseInt(tempBirthYear)||null,
+      weightKg: currentWeightForCalc, activityLevel: tempActivity, goal: tempGoal
+    });
+    const calories = freshTargets ? freshTargets.calories : baseTargets.calories;
+    const protein = freshTargets ? freshTargets.protein : baseTargets.protein;
+    const carbs = freshTargets ? freshTargets.carbs : baseTargets.carbs;
+    const fat = freshTargets ? freshTargets.fat : baseTargets.fat;
+    const sugarLimit = Math.round((calories*0.10)/4);
+    const fiberTarget = Math.round((calories/1000)*14);
     const up = {
-      calories:parseInt(tempCal)||baseTargets.calories, protein:parseInt(tempProt)||baseTargets.protein,
-      carbs:parseInt(tempCarb)||baseTargets.carbs, fat:parseInt(tempFat)||baseTargets.fat,
+      calories, protein, carbs, fat,
+      sugar_limit_g: sugarLimit, fiber_target_g: fiberTarget,
       gender: tempGender||null, height_cm: parseFloat(tempHeight)||null, birth_year: parseInt(tempBirthYear)||null,
       activity_level: tempActivity, goal: tempGoal, auto_calc: tempAutoCalc,
       display_name: tempDisplayName.trim()||null, avatar_url: baseTargets.avatar_url||null,
@@ -2165,8 +2231,7 @@ function NutriLogPro({ session, onLogout }) {
         setWeightHistory(hist);
       }
     } catch (err) { setError(L("Failed to save targets: ","保存目标失败：") + err.message); }
-    const freshTdee = calcBMRTargets({ gender: up.gender, heightCm: up.height_cm, birthYear: up.birth_year, weightKg: currentWeightForCalc, activityLevel: up.activity_level, goal:"maintain" }).tdee;
-    const customDelta = freshTdee ? Math.round(up.calories - freshTdee) : null;
+    const customDelta = freshTargets ? Math.round(up.calories - freshTargets.tdee) : null;
     saveWeeklyPlanSnapshot({ calories:up.calories, protein:up.protein, carbs:up.carbs, fat:up.fat }, up.goal, customDelta);
   };
 
@@ -2394,7 +2459,7 @@ function NutriLogPro({ session, onLogout }) {
     const d = (histDayData.drinks||[]).reduce((a,x)=>({ protein:a.protein+Number(x.protein||0), carbs:a.carbs+Number(x.carbs||0), fat:a.fat+Number(x.fat||0), sugar:a.sugar+Number(x.sugar_g||0), sodium:a.sodium+Number(x.sodium_mg||0) }), { protein:0, carbs:0, fat:0, sugar:0, sodium:0 });
     return { protein:m.protein+d.protein, carbs:m.carbs+d.carbs, fat:m.fat+d.fat, sugar:m.sugar+d.sugar, sodium:m.sodium+d.sodium };
   })();
-  const histTargets = computeTargetsLocal(histBurned);
+  const histTargets = computeTargetsLocal(histBurned, historyDate);
 
   const last7Days = (() => {
     const byDate = {};
@@ -2649,11 +2714,15 @@ function NutriLogPro({ session, onLogout }) {
     // calorie score curve (negative = achieved further in the healthy direction than required).
     const avgOffPct = totalTarget ? (wt.goal === "gain" ? ((totalTarget-totalNet)/totalTarget)*100 : ((totalNet-totalTarget)/totalTarget)*100) : 0;
 
-    const sugarLimit = baseTargets.sugar_limit_g || 50;
+    // Sugar and fiber are derived from THAT WEEK's calorie target (wt.calories), same formula as
+    // the tier picker — not today's current baseTargets values, which could differ if the plan
+    // has changed since. Sodium stays a flat guideline-based ceiling (it doesn't scale with
+    // calorie intake the way sugar/fiber do), so the current baseline value is fine there.
+    const sugarLimit = wt.calories ? Math.round((wt.calories*0.10)/4) : (baseTargets.sugar_limit_g || 50);
     const avgSugarPct = sugarLimit ? Math.round((totalSugar/(sugarLimit*tracked))*100) : null;
     const sodiumLimit = baseTargets.sodium_limit_mg || 2300;
     const avgSodiumPct = sodiumLimit ? Math.round((totalSodium/(sodiumLimit*tracked))*100) : null;
-    const fiberTarget = baseTargets.fiber_target_g || 25;
+    const fiberTarget = wt.calories ? Math.round((wt.calories/1000)*14) : (baseTargets.fiber_target_g || 25);
     const avgFiberPct = fiberTarget ? Math.round((totalFiber/(fiberTarget*tracked))*100) : null;
 
     // devPct is still tracked for protein/carbs/fat (used by "need to improve" and macroIssues),
@@ -2746,12 +2815,10 @@ function NutriLogPro({ session, onLogout }) {
     histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= blankDay()); e.burn += Number(w.calories||0); e.workedOut = true; });
     (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= blankDay()); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.sugar += Number(d.sugar_g||0); e.sodium += Number(d.sodium_mg||0); e.fiber += Number(d.fiber_g||0); e.water += Number(d.amount_ml||0); });
 
-    const sugarLimit = baseTargets.sugar_limit_g || 50;
     const sodiumLimit = baseTargets.sodium_limit_mg || 2300;
-    const fiberTarget = baseTargets.fiber_target_g || 25;
 
     const scoreDays = (dayKeys) => {
-      let tracked=0, totalNet=0, totalTarget=0, totalProtein=0, totalProteinTarget=0, totalCarbs=0, totalCarbsTarget=0, totalFat=0, totalFatTarget=0, totalSugar=0, totalSodium=0, totalFiber=0, waterHitDays=0, workoutDays=0;
+      let tracked=0, totalNet=0, totalTarget=0, totalProtein=0, totalProteinTarget=0, totalCarbs=0, totalCarbsTarget=0, totalFat=0, totalFatTarget=0, totalSugar=0, totalSugarTarget=0, totalSodium=0, totalFiber=0, totalFiberTarget=0, waterHitDays=0, workoutDays=0;
       let weekGoal = null;
       dayKeys.forEach(key => {
         const e = byDate[key];
@@ -2764,7 +2831,11 @@ function NutriLogPro({ session, onLogout }) {
         totalProtein += e.protein; totalProteinTarget += wt.protein;
         totalCarbs += e.carbs; totalCarbsTarget += wt.carbs;
         totalFat += e.fat; totalFatTarget += wt.fat;
-        totalSugar += e.sugar; totalSodium += e.sodium; totalFiber += e.fiber;
+        // Sugar/fiber scale with THAT DAY's own calorie target (may differ across a date range that
+        // spans multiple weeks with different plans), same formula as the tier picker.
+        totalSugar += e.sugar; totalSugarTarget += wt.calories ? (wt.calories*0.10)/4 : 50;
+        totalSodium += e.sodium;
+        totalFiber += e.fiber; totalFiberTarget += wt.calories ? (wt.calories/1000)*14 : 25;
         if (e.water >= waterTargetForDate(key, e.burn)) waterHitDays++;
         if (e.workedOut) workoutDays++;
       });
@@ -2773,8 +2844,8 @@ function NutriLogPro({ session, onLogout }) {
       const avgOffPct = totalTarget ? (weekGoal==="gain" ? ((totalTarget-totalNet)/totalTarget)*100 : ((totalNet-totalTarget)/totalTarget)*100) : 0;
       const fatRatioPct = totalFatTarget ? (totalFat/totalFatTarget)*100 : 100;
       const proteinRatioPct = totalProteinTarget ? (totalProtein/totalProteinTarget)*100 : 100;
-      const fiberRatioPct = fiberTarget ? (totalFiber/(fiberTarget*tracked))*100 : 100;
-      const sugarRatioPct = sugarLimit ? (totalSugar/(sugarLimit*tracked))*100 : 100;
+      const fiberRatioPct = totalFiberTarget ? (totalFiber/totalFiberTarget)*100 : 100;
+      const sugarRatioPct = totalSugarTarget ? (totalSugar/totalSugarTarget)*100 : 100;
       const sodiumRatioPct = sodiumLimit ? (totalSodium/(sodiumLimit*tracked))*100 : 100;
       const categoryScores = {
         calories: interpolateScore(avgOffPct, CAL_CURVE),
@@ -3276,15 +3347,19 @@ function NutriLogPro({ session, onLogout }) {
                     </div>
                     <button className="pink-btn" style={{ flexShrink:0 }} onClick={() => { applyCustomDelta(tdee.tdee); setShowTierPicker(false); }}>{T("common_set")}</button>
                   </div>
-                  {customDeltaWarning && (
-                    <div style={{ fontSize:11, color: C.caution, marginTop:8, lineHeight:1.5 }}>⚠️ {customDeltaWarning}</div>
-                  )}
                   <div style={{ fontSize:11, color:C.textMuted, fontStyle:"italic", marginTop:10 }}>
                     {T("main_workout_bonus_note")}
                   </div>
                 </div>
               );
             })()}
+
+            {customDeltaWarning && (
+              <div className="card fade" style={{ marginBottom:14, padding:"12px 16px", background:`${C.caution}18`, borderColor:C.caution }}>
+                <div style={{ fontSize:12, color:C.text, lineHeight:1.6 }}>⚠️ {customDeltaWarning}</div>
+                <button onClick={()=>setCustomDeltaWarning(null)} className="ghost-btn" style={{ width:"100%", marginTop:8, fontSize:11, padding:"6px" }}>{T("common_got_it")}</button>
+              </div>
+            )}
 
             {planConfirmation && (
               <div className="card fade" style={{ marginBottom:14, padding:"14px 16px", background:C.pinkDeep, borderColor:C.pinkDim }}>
@@ -3630,18 +3705,19 @@ function NutriLogPro({ session, onLogout }) {
             <div className="card-primary" style={{ padding:"20px 18px", marginBottom:14 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                 <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink }}>⚖️ {L("Macro Nutrients","宏量营养素")}</span>
-                <span style={{ fontSize:11, fontStyle:"italic", color:C.textMuted, fontWeight:"500" }}>{L("% and grams","百分比与克数")}</span>
+                <span style={{ fontSize:11, fontStyle:"italic", color:C.textMuted, fontWeight:"500" }}>{L("Fat: stay under · Protein & Carbs: aim to reach","脂肪：控制在目标以下 · 蛋白质与碳水：争取达到目标")}</span>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                {[{label:T("common_protein"),key:"protein",color:C.protein,target:targets.protein,icon:"🥩"},{label:T("common_carbs"),key:"carbs",color:C.carbs,target:targets.carbs,icon:"🍞"},{label:T("common_fat"),key:"fat",color:C.fat,target:targets.fat,icon:"🥑"}].map(({label,key,color,target,icon}) => {
+                {[{label:T("common_protein"),key:"protein",color:C.protein,target:targets.protein,icon:"🥩",isCap:false},{label:T("common_carbs"),key:"carbs",color:C.carbs,target:targets.carbs,icon:"🍞",isCap:false},{label:T("common_fat"),key:"fat",color:C.fat,target:targets.fat,icon:"🥑",isCap:true}].map(({label,key,color,target,icon,isCap}) => {
                   const realPct = target ? (consumed[key]/target)*100 : 0;
                   const barWidth = Math.min(100, realPct); // bar fill always caps at 100% — the real value is shown separately as text
                   const labelInside = barWidth >= 14;
+                  const over = isCap && consumed[key] > target;
                   return (
                     <div key={key}>
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:12 }}>
                         <span style={{ fontWeight:"700", color }}>{icon} {label}</span>
-                        <span style={{ color:C.text }}>{Math.round(consumed[key])} / {Math.round(target)}g</span>
+                        <span style={{ color: over?C.red:C.text }}>{Math.round(consumed[key])} / {Math.round(target)}g {isCap && over ? L("(over limit)","(超出限额)") : ""}</span>
                       </div>
                       <div style={{ position:"relative", height:12, background:C.border, borderRadius:6, overflow:"hidden" }}>
                         <div style={{ height:"100%", width:`${barWidth}%`, background:`linear-gradient(90deg, color-mix(in srgb, ${color} 100%, white 35%), color-mix(in srgb, ${color} 100%, black 15%))`, borderRadius:6, transition:"width .5s ease" }} />
@@ -3670,7 +3746,7 @@ function NutriLogPro({ session, onLogout }) {
               </div>
               {[
                 { label:L("Sugar","糖"), icon:"🍬", val:consumed.sugar, target:baseTargets.sugar_limit_g||50, unit:"g", isCap:true },
-                { label:L("Sodium","钠"), icon:"🧂", val:consumed.sodium, target:baseTargets.sodium_limit_mg||2300, unit:"mg", isCap:true },
+                { label:L("Sodium","钠"), icon:"🧂", val:consumed.sodium, target:(baseTargets.sodium_limit_mg||2300)+sodiumWorkoutBonus(burned), unit:"mg", isCap:true },
                 { label:L("Fiber","纤维"), icon:"🌾", val:consumed.fiber, target:baseTargets.fiber_target_g||25, unit:"g", isCap:false },
               ].map(({label,icon,val,target,unit,isCap}) => {
                 const realPct = target ? (val/target)*100 : 0;
