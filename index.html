@@ -15,7 +15,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=DM+Sans:opsz,wght@9..40,300..800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=DM+Sans:opsz,wght@9..40,300..800&display=swap" rel="stylesheet">
     <style>
       body { margin:0; overflow-x:hidden; }
       html { overflow-x:hidden; }
@@ -182,6 +182,15 @@ const STRINGS = {
     settings_ai_settings: "AI Settings",
     settings_configure_goals: "Configure Goals",
     settings_api_key_placeholder: "Paste Gemini API key here...",
+    settings_usage_today: "AI calls used today",
+    settings_mb_today: "Data uploaded today (est.)",
+    settings_claude_calls_today: "Claude calls used today",
+    settings_anthropic_label: "Claude API key (secondary provider, optional)",
+    settings_anthropic_hint: "A genuinely independent provider from Google — used automatically once your Gemini limit is reached or Gemini is rate-limited, so AI photo analysis can keep working. Get a key at console.anthropic.com.",
+    settings_daily_limit_label: "Daily AI limit",
+    settings_daily_limit_hint: "A soft cap this app enforces to protect your free Google quota — not Google's own limit. Raise it if your account has more headroom.",
+    settings_fallback_key_label: "Fallback API key (optional)",
+    settings_fallback_key_hint: "Only helps if this key is from a genuinely separate Google Cloud project — a second key in the same project shares the same quota and won't add headroom.",
     settings_get_key_title: "Get a free key",
     settings_get_key_step1: "Go to aistudio.google.com → Get API Key",
     settings_get_key_step2: "Create API Key (no domain restrictions by default)",
@@ -251,6 +260,15 @@ const STRINGS = {
     settings_ai_settings: "AI 设置",
     settings_configure_goals: "设置目标",
     settings_api_key_placeholder: "粘贴您的 Gemini API 密钥...",
+    settings_usage_today: "今日已用 AI 次数",
+    settings_mb_today: "今日已上传数据量（估算）",
+    settings_claude_calls_today: "今日已用 Claude 次数",
+    settings_anthropic_label: "Claude API 密钥（备用服务商，可选）",
+    settings_anthropic_hint: "与 Google 完全独立的服务商 —— 当 Gemini 达到限额或被限流时会自动启用，让 AI 拍照分析得以继续工作。可前往 console.anthropic.com 获取密钥。",
+    settings_daily_limit_label: "每日 AI 上限",
+    settings_daily_limit_hint: "这是本应用设定的软性上限，用于保护您的免费 Google 额度，并非 Google 本身的限制。如果您的账号额度充足，可以调高此值。",
+    settings_fallback_key_label: "备用 API 密钥（可选）",
+    settings_fallback_key_hint: "仅当此密钥来自完全独立的 Google Cloud 项目时才有帮助 —— 同一项目下的第二个密钥共享同一额度，不会增加可用量。",
     settings_get_key_title: "获取免费密钥",
     settings_get_key_step1: "前往 aistudio.google.com → 获取 API 密钥",
     settings_get_key_step2: "创建 API 密钥（默认无域名限制）",
@@ -371,6 +389,39 @@ function gradeForScore(score, C) {
   // whichever mood palette is selected instead of mixing in colors that may clash with it.
   return { grade: bases[idx] + suffix, color: C.pink, base: bases[idx] };
 }
+
+// Smooth piecewise-linear interpolation between (x, score) anchor points — used so each nutrient's
+// scoring curve is just a short list of "at this %, give this score" points instead of error-prone
+// nested if/else, and stays monotonic (no accidental dips) between them.
+function interpolateScore(x, points) {
+  if (x <= points[0][0]) return points[0][1];
+  const last = points[points.length-1];
+  if (x >= last[0]) return last[1];
+  for (let i=0; i<points.length-1; i++) {
+    const [x1,y1] = points[i], [x2,y2] = points[i+1];
+    if (x >= x1 && x <= x2) {
+      const t = (x-x1)/(x2-x1);
+      return Math.round(y1 + (y2-y1)*t);
+    }
+  }
+  return last[1];
+}
+
+// Calories: scored on "offPct" (0 = exactly on target; negative = achieving further in the healthy
+// direction than the plan required — e.g. eating even less on a cut; positive = drifting the wrong
+// way — e.g. eating more on a cut). Rewards exceeding the plan up to a point (-20, i.e. 20% further
+// in the healthy direction), but caps the reward there rather than continuing to reward more extreme
+// under/over-eating indefinitely. Crosses into C territory once off by +20 (120% of target) in the
+// unhealthy direction, per "if higher than 120%, rate as C — ask them to recalibrate their plan."
+const CAL_CURVE = [[-20,100],[-10,90],[0,70],[20,20],[40,0]];
+
+// Higher-is-better nutrients (protein, fiber): meeting target is solid, exceeding it generously
+// ("breaking the limit", 125%+) maxes out at SSS.
+const HIGHER_BETTER_CURVE = [[0,10],[80,64],[100,80],[125,100]];
+
+// Lower-is-better nutrients (sugar, fat, sodium): staying comfortably under target/limit (80% or
+// less) maxes out at SSS; drifting over climbs down through the grades, reaching C around 120%.
+const LOWER_BETTER_CURVE = [[0,100],[80,100],[100,75],[120,45],[140,10]];
 
 function getMondayKey(dateKey) {
   const d = new Date(dateKey+"T00:00:00");
@@ -735,29 +786,6 @@ const DataAPI = {
 // ════════════════════════════════════════════════════════════
 // SHARED SUB-COMPONENTS
 // ════════════════════════════════════════════════════════════
-const StatusBanner = React.memo(function StatusBanner({ net, target, deficit, burned, large, theme, C }) {
-  // green/red are constant across every mood palette (semantic, not thematic — see PALETTES),
-  // so reading them from C keeps this in sync with the palette table with no visual change.
-  const successBg = `${C.green}14`;
-  const successBorder = `${C.green}40`;
-  const successText = C.green;
-  const successSub = `${C.green}bb`;
-  const failBg = `${C.red}14`;
-  const failBorder = `${C.red}40`;
-  const failText = C.red;
-  const failSub = `${C.red}bb`;
-  return (
-    <div style={{ background:deficit?successBg:failBg, border:`1px solid ${deficit?successBorder:failBorder}`, borderRadius:18, padding:large?"16px 20px":"12px 16px", marginBottom:14, textAlign:"center", backdropFilter:"blur(6px)" }}>
-      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:large?24:18, fontWeight:"800", color:deficit?successText:failText, marginBottom:2, letterSpacing:"-0.02em" }}>
-        {deficit ? "✨ Calorie Deficit" : "⚠️ Over Target Limit"}
-      </div>
-      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, color:deficit?successSub:failSub }}>
-        {deficit ? `${Math.round(target-net)} kcal below target${burned>0?` · ${burned} kcal burned`:""}` : `${Math.round(net-target)} kcal over target — stay strong! 💪`}
-      </div>
-    </div>
-  );
-});
-
 const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme, mode, unit, accentLabel, C }) {
   const p = Math.min(100, Math.round((val/target)*100));
   const actualPct = target ? (val/target)*100 : 0;
@@ -1020,45 +1048,6 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
   );
 });
 
-const MacroDonutChart = React.memo(function MacroDonutChart({ consumed, theme, C }) {
-  const totalGrams = consumed.protein + consumed.carbs + consumed.fat;
-  const pPct = totalGrams ? (consumed.protein/totalGrams)*100 : 0;
-  const cPct = totalGrams ? (consumed.carbs/totalGrams)*100 : 0;
-  const fPct = totalGrams ? (consumed.fat/totalGrams)*100 : 0;
-  const radius = 35;
-  const circ = 2*Math.PI*radius;
-  const pLen = (pPct/100)*circ;
-  const cLen = (cPct/100)*circ;
-  const fLen = (fPct/100)*circ;
-  const innerBg = C.cardHover;
-  const strokeBg = `${C.border}66`;
-  const textMain = C.text;
-  const textSub = C.textMuted;
-  const proteinC = C.protein;
-  const carbsC = C.carbs;
-  const fatC = C.fat;
-  return (
-    <div style={{ position:"relative", width:"120px", height:"120px" }}>
-      <svg width="100%" height="100%" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={radius} fill="transparent" stroke={innerBg} strokeWidth="7" />
-        {totalGrams > 0 ? (
-          <React.Fragment>
-            <circle cx="50" cy="50" r={radius} fill="transparent" stroke={proteinC} strokeWidth="7" strokeLinecap="round" strokeDasharray={`${pLen} ${circ}`} strokeDashoffset="0" transform="rotate(-90 50 50)" />
-            <circle cx="50" cy="50" r={radius} fill="transparent" stroke={carbsC} strokeWidth="7" strokeLinecap="round" strokeDasharray={`${cLen} ${circ}`} strokeDashoffset={-pLen} transform="rotate(-90 50 50)" />
-            <circle cx="50" cy="50" r={radius} fill="transparent" stroke={fatC} strokeWidth="7" strokeLinecap="round" strokeDasharray={`${fLen} ${circ}`} strokeDashoffset={-(pLen+cLen)} transform="rotate(-90 50 50)" />
-          </React.Fragment>
-        ) : (
-          <circle cx="50" cy="50" r={radius} fill="transparent" stroke={strokeBg} strokeWidth="8" />
-        )}
-      </svg>
-      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", textAlign:"center" }}>
-        <div style={{ fontSize:"16px", fontWeight:"800", fontFamily:"'DM Sans',sans-serif", color:textMain }}>{totalGrams>0?`${Math.round(totalGrams)}g`:"0g"}</div>
-        <div style={{ fontSize:"9px", color:textSub, fontFamily:"'DM Sans',sans-serif", letterSpacing:"0.02em" }}>total</div>
-      </div>
-    </div>
-  );
-});
-
 // ── Simple SVG bar chart: consumed vs burned per day, with target line ──
 const TrendChart = React.memo(function TrendChart({ days, target, theme, C }) {
   const textColor = C.textMuted;
@@ -1168,7 +1157,6 @@ function useFavorites({ userId, today, activeSlot, setDayData, setError, L }) {
   const [favMeals, setFavMeals] = useState([]);
   const [favDrinks, setFavDrinks] = useState([]);
   const [favWorkouts, setFavWorkouts] = useState([]);
-  const [favDrawerOpen, setFavDrawerOpen] = useState({ meal:false, drink:false, workout:false });
 
   const refreshFavorites = async () => {
     try {
@@ -1236,7 +1224,7 @@ function useFavorites({ userId, today, activeSlot, setDayData, setError, L }) {
   };
 
   return {
-    favMeals, favDrinks, favWorkouts, favDrawerOpen, setFavDrawerOpen,
+    favMeals, favDrinks, favWorkouts,
     refreshFavorites, saveFavorite, removeFavorite,
     useFavoriteMeal, useFavoriteDrink, useFavoriteWorkout
   };
@@ -1245,13 +1233,76 @@ function useFavorites({ userId, today, activeSlot, setDayData, setError, L }) {
 // ════════════════════════════════════════════════════════════
 // HOOK — Gemini API client (rate limiting, retries, error mapping)
 // ════════════════════════════════════════════════════════════
-function useGeminiClient(geminiKey) {
-  const callGemini = async (body) => {
-    const key = geminiKey.trim();
-    if (!key) throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
+// Reads/writes a simple daily usage counter in localStorage, keyed by today's date so it resets
+// naturally each day with no server involvement. This is OUR OWN count of requests made through
+// this app — Google doesn't expose a "check remaining quota" endpoint, so this is an estimate
+// (it can't see usage from other apps on the same key), not a live sync with Google's real counter.
+// Google's RPD (requests-per-day) quotas reset at midnight Pacific time specifically — this
+// computes how long that actually is from right now, in the user's own local time, so error
+// messages can say "in about 3h 20m" instead of just "at midnight Pacific," which most people
+// can't quickly convert in their head.
+function pacificResetCountdown() {
+  const now = new Date();
+  // Get the current wall-clock time as it reads in Los Angeles, then find the next local midnight
+  // there — this naturally accounts for Pacific/Daylight time without hardcoding a fixed UTC offset.
+  const pacificNowStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+  const pacificNow = new Date(pacificNowStr);
+  const nextMidnightPacific = new Date(pacificNow);
+  nextMidnightPacific.setHours(24, 0, 0, 0);
+  const diffMs = nextMidnightPacific - pacificNow;
+  const resetLocal = new Date(now.getTime() + diffMs);
+  const hours = Math.floor(diffMs / 3600000);
+  const mins = Math.round((diffMs % 3600000) / 60000);
+  const countdownText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  const clockText = resetLocal.toLocaleTimeString([], { hour:"numeric", minute:"2-digit" });
+  return { countdownText, clockText };
+}
 
-    // Global request spacing: ensures we never fire requests faster than ~1 every 4s,
-    // which keeps us safely under typical free-tier RPM limits even with rapid back-to-back uploads.
+function getAiUsageToday() {
+  const key = `nutrilog_ai_usage_${todayKey(0)}`;
+  return parseInt(localStorage.getItem(key) || "0", 10);
+}
+function incrementAiUsageToday() {
+  const key = `nutrilog_ai_usage_${todayKey(0)}`;
+  const next = getAiUsageToday() + 1;
+  localStorage.setItem(key, String(next));
+  return next;
+}
+
+// Tracks cumulative uploaded image size per day (post-compression — this is the actual size sent
+// over the wire, not the original photo size), so the user can plan around real-world MB usage
+// rather than an abstract request count. Photos are compressed before ever reaching this point
+// (see compressImage), which is why these numbers are typically small (~100-300KB per photo).
+function getAiBytesToday() {
+  const key = `nutrilog_ai_bytes_${todayKey(0)}`;
+  return parseInt(localStorage.getItem(key) || "0", 10);
+}
+function addAiBytesToday(bytes) {
+  const key = `nutrilog_ai_bytes_${todayKey(0)}`;
+  const next = getAiBytesToday() + Math.max(0, bytes||0);
+  localStorage.setItem(key, String(next));
+  return next;
+}
+
+// Separate counter for Claude (Anthropic) usage, since it's a genuinely independent provider/quota
+// from Gemini — tracking them separately makes it clear which provider is actually doing the work.
+function getClaudeUsageToday() {
+  const key = `nutrilog_claude_usage_${todayKey(0)}`;
+  return parseInt(localStorage.getItem(key) || "0", 10);
+}
+function incrementClaudeUsageToday() {
+  const key = `nutrilog_claude_usage_${todayKey(0)}`;
+  const next = getClaudeUsageToday() + 1;
+  localStorage.setItem(key, String(next));
+  return next;
+}
+
+function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
+  // One attempt against a single key — used for both the primary key and, on quota exhaustion,
+  // the optional fallback key (which only helps if it's from a genuinely separate Google Cloud
+  // project — Google enforces quota per-project, so a second key in the *same* project shares
+  // the same bucket and wouldn't add any headroom).
+  const attemptWithKey = async (key, body) => {
     const now = Date.now();
     const minGapMs = 4200;
     const waitMs = Math.max(0, (window.__lastGeminiCallAt||0) + minGapMs - now);
@@ -1261,29 +1312,49 @@ function useGeminiClient(geminiKey) {
     const model = "gemini-2.5-flash-lite"; // higher free-tier RPM/RPD than 2.5-flash, plenty capable for this use case
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
-    const maxRetries = 3;
+    const maxRetries = 2; // reduced from 3 — if it's actually a daily-quota block, extra in-process
+    // retries just burn more of that same exhausted quota for nothing.
     let lastErr = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const res = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
         if (res.ok) {
           const data = await res.json();
+          window.__geminiRateLimitStreak = 0; // a success means we're not actually stuck — reset
           return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
         }
         const errBody = await res.json().catch(() => ({}));
         const msg = errBody?.error?.message || `HTTP ${res.status}`;
         if (msg.includes("allowlist")) throw new Error("KEY_RESTRICTED");
         if (res.status === 429) {
-          // Distinguish "burst too fast, retry shortly" from "out of daily quota entirely"
-          const isDailyQuota = /day|daily|RESOURCE_EXHAUSTED.*per.?day/i.test(msg);
+          // Google's quota errors include a structured `details` array (QuotaFailure with a
+          // quotaId/quotaMetric, and often a RetryInfo with an exact retryDelay) — checking that
+          // is far more reliable than guessing from the free-text message, which doesn't always
+          // literally contain the word "day" even when it genuinely is the daily cap.
+          const details = errBody?.error?.details || [];
+          const quotaDetail = details.find(d => (d["@type"]||"").includes("QuotaFailure"));
+          const quotaText = [msg, ...(quotaDetail?.violations||[]).map(v => `${v.quotaId||""} ${v.quotaMetric||""}`)].join(" ");
+          const retryInfo = details.find(d => (d["@type"]||"").includes("RetryInfo"));
+          const retrySecondsFromApi = retryInfo?.retryDelay ? parseInt(retryInfo.retryDelay) : null;
+
+          const isDailyQuota = /day/i.test(quotaText);
           if (isDailyQuota) throw new Error("QUOTA_EXHAUSTED");
+
+          // Track rate-limit hits ACROSS separate calls (not just this call's own retries). If this
+          // keeps recurring across several different user actions even after waiting, it's not
+          // really a "brief burst" — the message below escalates once this streak builds up.
+          window.__geminiRateLimitStreak = (window.__geminiRateLimitStreak||0) + 1;
+
           if (attempt < maxRetries) {
-            const backoff = 1500 * Math.pow(2, attempt); // 1.5s, 3s, 6s
-            await new Promise(r => setTimeout(r, backoff));
+            const backoff = retrySecondsFromApi ? retrySecondsFromApi*1000 : 2000 * Math.pow(2, attempt);
+            await new Promise(r => setTimeout(r, Math.min(backoff, 8000)));
             lastErr = new Error("RATE_LIMITED");
+            lastErr.retrySeconds = retrySecondsFromApi;
             continue;
           }
-          throw new Error("RATE_LIMITED");
+          const e = new Error("RATE_LIMITED");
+          e.retrySeconds = retrySecondsFromApi;
+          throw e;
         }
         throw new Error(msg);
       } catch (err) {
@@ -1295,10 +1366,111 @@ function useGeminiClient(geminiKey) {
     throw lastErr || new Error("Request failed after retries");
   };
 
+  // Extracts the plain prompt text + optional image from the Gemini-shaped `body` every call site
+  // already builds, and sends it to Claude instead — this way callers never need to know which
+  // provider actually served their request; they always get back the same plain text response.
+  const attemptWithClaude = async (apiKey, body) => {
+    const parts = body?.contents?.[0]?.parts || [];
+    const promptText = parts.find(p => p.text)?.text || "";
+    const imagePart = parts.find(p => p.inlineData)?.inlineData;
+    const content = [];
+    if (imagePart) content.push({ type:"image", source:{ type:"base64", media_type: imagePart.mimeType || "image/jpeg", data: imagePart.data } });
+    content.push({ type:"text", text: promptText });
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        messages: [{ role:"user", content }]
+      })
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      const msg = errBody?.error?.message || `HTTP ${res.status}`;
+      if (res.status === 429) throw new Error("CLAUDE_RATE_LIMITED");
+      throw new Error("Claude: " + msg);
+    }
+    const data = await res.json();
+    return (data.content || []).map(c => c.text || "").join("");
+  };
+
+  const callGemini = async (body) => {
+    const key = (geminiKey||"").trim();
+    const claudeKey = (anthropicKey||"").trim();
+    if (!key && !claudeKey) throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
+
+    // Soft, app-side daily cap on Gemini specifically — checked BEFORE spending a real request, so
+    // a day that's already used up fails fast instead of burning one more call for the same 429.
+    // This is our own count of requests made through this app (Google doesn't expose a "check
+    // remaining quota" endpoint), so treat it as an estimate, not gospel. Once this cap is hit, if
+    // Claude is configured we route straight there instead of touching Gemini at all — Claude is a
+    // genuinely separate provider with its own independent quota, not just another Google project.
+    const limit = dailyLimit || 15;
+    const usedSoFar = getAiUsageToday();
+    const geminiAvailable = !!key && usedSoFar < limit;
+
+    if (!geminiAvailable) {
+      if (claudeKey) {
+        const result = await attemptWithClaude(claudeKey, body);
+        incrementClaudeUsageToday();
+        return result;
+      }
+      if (!key) throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
+      const e = new Error("LOCAL_LIMIT_REACHED");
+      e.used = usedSoFar; e.limit = limit;
+      throw e;
+    }
+
+    try {
+      const result = await attemptWithKey(key, body);
+      incrementAiUsageToday();
+      return result;
+    } catch (err) {
+      // Only worth trying the Gemini fallback key for a genuine daily-quota block — it only helps
+      // if it's from a truly separate Google Cloud project (same-project keys share one bucket).
+      const fbKey = (fallbackKey||"").trim();
+      if (err.message === "QUOTA_EXHAUSTED" && fbKey) {
+        try {
+          const result = await attemptWithKey(fbKey, body);
+          incrementAiUsageToday();
+          return result;
+        } catch (fbErr) { /* fall through to Claude below if configured */ }
+      }
+      // Gemini (and its fallback key, if any) didn't work out — try Claude before giving up
+      // entirely, for either a daily-quota block or a persistent rate-limit situation.
+      if ((err.message === "QUOTA_EXHAUSTED" || err.message === "RATE_LIMITED") && claudeKey) {
+        const result = await attemptWithClaude(claudeKey, body);
+        incrementClaudeUsageToday();
+        return result;
+      }
+      throw err;
+    }
+  };
+
   const friendlyGeminiError = (err) => {
     if (err.message === "KEY_RESTRICTED") return "⚠️ Your key has domain restrictions. See Settings for a fix.";
-    if (err.message === "QUOTA_EXHAUSTED") return "You've used up today's free AI quota. It resets at midnight Pacific time — manual entry still works in the meantime!";
-    if (err.message === "RATE_LIMITED") return "AI is getting a lot of requests right now — please wait a few seconds and try again.";
+    if (err.message === "LOCAL_LIMIT_REACHED") return `You've hit your daily AI limit (${err.used}/${err.limit}) — this is a limit set in this app's Settings to protect your free quota, not Google's own cutoff. Raise it in Settings > AI Settings if you have headroom left, add a Claude key as a second provider, or use manual entry for now.`;
+    if (err.message === "QUOTA_EXHAUSTED") {
+      const { countdownText, clockText } = pacificResetCountdown();
+      return `You've used up today's free AI quota. It resets in about ${countdownText} (around ${clockText} your time) — manual entry works meanwhile. If this happens often, enabling billing on your Google AI Studio project removes the daily cap entirely (Gemini Flash-Lite costs a fraction of a cent per request), or add a Claude key in Settings as a second provider.`;
+    }
+    if (err.message === "CLAUDE_RATE_LIMITED") return "Claude is rate-limited right now too — please wait a bit and try again, or use manual entry.";
+    if (err.message === "RATE_LIMITED") {
+      const streak = window.__geminiRateLimitStreak || 0;
+      if (streak >= 4) {
+        const { countdownText } = pacificResetCountdown();
+        return `AI requests keep getting rate-limited even after waiting — that usually means your key's free daily limit is nearly used up, not a brief burst (it would fully reset in about ${countdownText}, if so). Manual entry works in the meantime; you can check your actual usage at aistudio.google.com, enable billing to remove the daily cap, or add a Claude key in Settings as a second provider.`;
+      }
+      const waitText = err.retrySeconds ? `about ${err.retrySeconds}s` : "a few seconds";
+      return `AI is getting a lot of requests right now — please wait ${waitText} and try again.`;
+    }
     return "AI failed: " + err.message;
   };
 
@@ -1558,6 +1730,9 @@ function NutriLogPro({ session, onLogout }) {
   const [expandedWinBox, setExpandedWinBox] = useState(null);
 
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem("nutrilog_gemini_key") || "");
+  const [geminiFallbackKey, setGeminiFallbackKey] = useState(() => localStorage.getItem("nutrilog_gemini_fallback_key") || "");
+  const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem("nutrilog_anthropic_key") || "");
+  const [aiDailyLimit, setAiDailyLimit] = useState(() => parseInt(localStorage.getItem("nutrilog_ai_daily_limit")||"15", 10));
   const [showSettings, setShowSettings] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
@@ -1588,7 +1763,7 @@ function NutriLogPro({ session, onLogout }) {
   const today = todayKey(dayCutoffHour);
 
   const {
-    favMeals, favDrinks, favWorkouts, favDrawerOpen, setFavDrawerOpen,
+    favMeals, favDrinks, favWorkouts,
     refreshFavorites, saveFavorite, removeFavorite,
     useFavoriteMeal, useFavoriteDrink, useFavoriteWorkout
   } = useFavorites({ userId, today, activeSlot, setDayData, setError, L });
@@ -1597,6 +1772,9 @@ function NutriLogPro({ session, onLogout }) {
   useEffect(() => { localStorage.setItem("nutrilog_lang", lang); }, [lang]);
   useEffect(() => { localStorage.setItem("nutrilog_palette", palette); }, [palette]);
   useEffect(() => { localStorage.setItem("nutrilog_gemini_key", geminiKey); }, [geminiKey]);
+  useEffect(() => { localStorage.setItem("nutrilog_gemini_fallback_key", geminiFallbackKey); }, [geminiFallbackKey]);
+  useEffect(() => { localStorage.setItem("nutrilog_anthropic_key", anthropicKey); }, [anthropicKey]);
+  useEffect(() => { localStorage.setItem("nutrilog_ai_daily_limit", String(aiDailyLimit)); }, [aiDailyLimit]);
 
   // Load today's data + targets + weight on mount.
   // Targets (which hold day_cutoff_hour) are fetched FIRST, then used to compute the
@@ -1750,13 +1928,21 @@ function NutriLogPro({ session, onLogout }) {
     };
   };
 
+  // Water target for any date: uses that date's actual logged weight (via weightForDate), same
+  // day-aware approach as calories/macros. A manual override (water_target_ml) is a flat number
+  // regardless of date, same as it already was for today.
+  const waterTargetForDate = useCallback((dateKey, burnedKcal) => {
+    if (baseTargets.water_target_ml) return baseTargets.water_target_ml;
+    return calcWaterTarget(weightForDate(dateKey), baseTargets.activity_level, burnedKcal||0);
+  }, [weightForDate, baseTargets.water_target_ml, baseTargets.activity_level]);
+
   const targets = computeTargetsLocal(burned);
   const net = consumed.calories - burned;
   const deficit = net < targets.calories;
   const totalDrinkMl = (dayData.drinks||[]).reduce((s,d) => s + Number(d.amount_ml||0), 0);
   const drinkCalories = (dayData.drinks||[]).reduce((s,d) => s + Number(d.calories||0), 0);
   const isGainPlan = targetsForWeek(today).goal === "gain";
-  const waterTarget = baseTargets.water_target_ml || calcWaterTarget(currentWeightForCalc, baseTargets.activity_level, burned);
+  const waterTarget = waterTargetForDate(today, burned);
   const waterMilestones = getWaterMilestones(waterTarget, lang);
   const achievedMilestone = waterMilestones.slice().reverse().find(m => totalDrinkMl >= m.ml) || null;
 
@@ -1985,7 +2171,7 @@ function NutriLogPro({ session, onLogout }) {
   };
 
   // ── AI calls (Gemini, BYO key) ──
-  const { callGemini, friendlyGeminiError } = useGeminiClient(geminiKey);
+  const { callGemini, friendlyGeminiError } = useGeminiClient(geminiKey, geminiFallbackKey, aiDailyLimit, anthropicKey);
 
   const {
     manualCal, setManualCal, manualDesc, setManualDesc, manualProt, setManualProt,
@@ -2020,6 +2206,7 @@ function NutriLogPro({ session, onLogout }) {
     }
     try {
       const { dataUrl, base64, blob } = await compressImage(file, 1024, 0.75);
+      addAiBytesToday(blob.size);
       const prompt = type === "meal"
         ? `You are a careful nutrition estimator. Look at this food photo and identify each distinct visible component (e.g. chicken, mashed potato, egg, salad, sauce). For each component, estimate a realistic portion size based on what's visible on the plate (use standard serving sizes as a reference point — e.g. a typical chicken thigh is ~120-150g, a scoop of mashed potato is ~150g — do not assume oversized restaurant portions unless the plate clearly shows one). Estimate calories, macros, sugar, sodium, and fiber for each component based on that portion size. IMPORTANT: the overall "calories"/"protein"/"carbs"/"fat"/"sugar"/"sodium"/"fiber" fields MUST equal the exact sum of the "items" array values — do not estimate the total separately. Output ONLY raw JSON, no code fences: {"name":"overall meal name","calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number,"items":[{"item":"chicken","grams_estimate":number,"calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number}],"confidence":"high"}${geminiLangInstruction(lang)}`
         : `Apple Watch workout summary. Output ONLY raw JSON, no code fences: {"calories":number,"activity":"activity name","duration":"45 min","heartRate":null}${geminiLangInstruction(lang)}`;
@@ -2418,12 +2605,13 @@ function NutriLogPro({ session, onLogout }) {
     const prevMondayKey = localDateKey(prevMonday);
     const wt = targetsForWeek(prevMondayKey);
 
+    const blankDay = () => ({cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,sodium:0,fiber:0,water:0,workedOut:false});
     const byDate = {};
-    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,water:0,workedOut:false}); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); e.sugar += Number(m.sugar_g||0); });
-    histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,water:0,workedOut:false}); e.burn += Number(w.calories||0); e.workedOut = true; });
-    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,water:0,workedOut:false}); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.sugar += Number(d.sugar_g||0); e.water += Number(d.amount_ml||0); });
+    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= blankDay()); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); e.sugar += Number(m.sugar_g||0); e.sodium += Number(m.sodium_mg||0); e.fiber += Number(m.fiber_g||0); });
+    histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= blankDay()); e.burn += Number(w.calories||0); e.workedOut = true; });
+    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= blankDay()); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.sugar += Number(d.sugar_g||0); e.sodium += Number(d.sodium_mg||0); e.fiber += Number(d.fiber_g||0); e.water += Number(d.amount_ml||0); });
 
-    let hits = 0, tracked = 0, totalNet = 0, totalTarget = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalSugar = 0;
+    let hits = 0, tracked = 0, totalNet = 0, totalTarget = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalSugar = 0, totalSodium = 0, totalFiber = 0;
     let waterHitDays = 0, workoutDays = 0;
     const tierCounts = { green:0, yellow:0, red:0 };
     for (let d=0; d<7; d++) {
@@ -2435,8 +2623,8 @@ function NutriLogPro({ session, onLogout }) {
       const net = e.cons - e.burn;
       totalNet += net;
       totalTarget += wt.calories;
-      totalProtein += e.protein; totalCarbs += e.carbs; totalFat += e.fat; totalSugar += e.sugar;
-      if (e.water >= waterTarget) waterHitDays++;
+      totalProtein += e.protein; totalCarbs += e.carbs; totalFat += e.fat; totalSugar += e.sugar; totalSodium += e.sodium; totalFiber += e.fiber;
+      if (e.water >= waterTargetForDate(key, e.burn)) waterHitDays++;
       if (e.workedOut) workoutDays++;
       const hit = wt.goal === "gain" ? net >= wt.calories : net <= wt.calories;
       if (hit) hits++;
@@ -2457,13 +2645,19 @@ function NutriLogPro({ session, onLogout }) {
     const avgCalPct = totalTarget ? Math.round((totalNet/totalTarget)*100) : 100;
     const calOverPct = totalTarget ? ((totalNet - totalTarget)/totalTarget)*100 : 0;
     const calStatus = calOverPct > 20 ? "red" : calOverPct > 0 ? "yellow" : null;
+    // Weekly-aggregate version of the same goal-aware offPct used per-day above — feeds the
+    // calorie score curve (negative = achieved further in the healthy direction than required).
+    const avgOffPct = totalTarget ? (wt.goal === "gain" ? ((totalTarget-totalNet)/totalTarget)*100 : ((totalNet-totalTarget)/totalTarget)*100) : 0;
 
     const sugarLimit = baseTargets.sugar_limit_g || 50;
     const avgSugarPct = sugarLimit ? Math.round((totalSugar/(sugarLimit*tracked))*100) : null;
+    const sodiumLimit = baseTargets.sodium_limit_mg || 2300;
+    const avgSodiumPct = sodiumLimit ? Math.round((totalSodium/(sodiumLimit*tracked))*100) : null;
+    const fiberTarget = baseTargets.fiber_target_g || 25;
+    const avgFiberPct = fiberTarget ? Math.round((totalFiber/(fiberTarget*tracked))*100) : null;
 
-    // devPct is computed for all three macros now (not just the ones significantly off) since the
-    // report card grades every category — macroIssues (>20% off) is still kept separately for the
-    // "need to improve" bullet list.
+    // devPct is still tracked for protein/carbs/fat (used by "need to improve" and macroIssues),
+    // even though protein/fat now score via their own directional curves below.
     const RED_THRESHOLD = 20;
     const macroDev = {};
     const macroIssues = [];
@@ -2484,20 +2678,34 @@ function NutriLogPro({ session, onLogout }) {
       ? wt.delta
       : (tdeeInfo ? Math.round(wt.calories - tdeeInfo.tdee) : 0);
 
-    // Per-category 0-100 scores feeding the report card grade. Macro scores use a gentle linear
-    // falloff (never below 20) so even an off week still nets some credit — the whole point of
-    // moving to a C–SSS scale is to keep this feeling encouraging rather than punitive.
+    // Per-category 0-100 scores feeding the report card grade.
+    // - Calories: goal-aware curve on offPct — rewards achieving further in the healthy direction
+    //   (up to a cap), penalizes drifting the wrong way, hits C once 120%+ off (asks to recalibrate).
+    // - Protein & fiber: higher-is-better — exceeding generously maxes out at SSS.
+    // - Fat, sugar, sodium: lower-is-better — staying comfortably under caps at SSS.
+    // - Carbs: kept as the original "closer to target is better either direction" scoring, since
+    //   carbs isn't inherently "more/less is better" the way the others are.
     const macroScore = (devPct) => Math.max(20, Math.min(100, Math.round(100 - Math.abs(devPct)*1.5)));
+    const proteinTargetTotal = wt.protein * tracked;
+    const fatTargetTotal = wt.fat * tracked;
+    const proteinRatioPct = proteinTargetTotal ? (totalProtein/proteinTargetTotal)*100 : 100;
+    const fatRatioPct = fatTargetTotal ? (totalFat/fatTargetTotal)*100 : 100;
+    const fiberTargetTotal = fiberTarget * tracked;
+    const fiberRatioPct = fiberTargetTotal ? (totalFiber/fiberTargetTotal)*100 : 100;
+
     const categoryScores = {
-      calories: tracked ? Math.round(((tierCounts.green*100) + (tierCounts.yellow*50)) / tracked) : 0,
-      protein: macroScore(macroDev.protein),
+      calories: interpolateScore(avgOffPct, CAL_CURVE),
+      protein: interpolateScore(proteinRatioPct, HIGHER_BETTER_CURVE),
       carbs: macroScore(macroDev.carbs),
-      fat: macroScore(macroDev.fat),
+      fat: interpolateScore(fatRatioPct, LOWER_BETTER_CURVE),
+      sugar: avgSugarPct===null ? 100 : interpolateScore(avgSugarPct, LOWER_BETTER_CURVE),
+      sodium: avgSodiumPct===null ? 100 : interpolateScore(avgSodiumPct, LOWER_BETTER_CURVE),
+      fiber: interpolateScore(fiberRatioPct, HIGHER_BETTER_CURVE),
       water: tracked ? Math.round((waterHitDays/tracked)*100) : 0,
       workout: tracked ? Math.round((workoutDays/tracked)*100) : 0,
     };
 
-    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, macroIssues, macroDev, waterHitDays, workoutDays, tone, tierCounts, categoryScores };
+    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, avgSodiumPct, avgFiberPct, macroIssues, macroDev, waterHitDays, workoutDays, tone, tierCounts, categoryScores };
   })();
 
   // Coach's Note content — computed once here (rather than inside the report card's render) so it
@@ -2532,39 +2740,54 @@ function NutriLogPro({ session, onLogout }) {
   // Achievements: scans all available history to find the single best-graded week and best-graded
   // month (by the same composite score as the weekly report card), for a "personal best" showcase.
   const achievementsData = (() => {
+    const blankDay = () => ({cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,sodium:0,fiber:0,water:0,workedOut:false});
     const byDate = {};
-    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,water:0,workedOut:false}); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); });
-    histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,water:0,workedOut:false}); e.burn += Number(w.calories||0); e.workedOut = true; });
-    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,water:0,workedOut:false}); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.water += Number(d.amount_ml||0); });
+    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= blankDay()); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); e.sugar += Number(m.sugar_g||0); e.sodium += Number(m.sodium_mg||0); e.fiber += Number(m.fiber_g||0); });
+    histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= blankDay()); e.burn += Number(w.calories||0); e.workedOut = true; });
+    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= blankDay()); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.sugar += Number(d.sugar_g||0); e.sodium += Number(d.sodium_mg||0); e.fiber += Number(d.fiber_g||0); e.water += Number(d.amount_ml||0); });
+
+    const sugarLimit = baseTargets.sugar_limit_g || 50;
+    const sodiumLimit = baseTargets.sodium_limit_mg || 2300;
+    const fiberTarget = baseTargets.fiber_target_g || 25;
 
     const scoreDays = (dayKeys) => {
-      let tracked=0, totalProtein=0, totalProteinTarget=0, totalCarbs=0, totalCarbsTarget=0, totalFat=0, totalFatTarget=0, waterHitDays=0, workoutDays=0;
-      const tierCounts = { green:0, yellow:0, red:0 };
+      let tracked=0, totalNet=0, totalTarget=0, totalProtein=0, totalProteinTarget=0, totalCarbs=0, totalCarbsTarget=0, totalFat=0, totalFatTarget=0, totalSugar=0, totalSodium=0, totalFiber=0, waterHitDays=0, workoutDays=0;
+      let weekGoal = null;
       dayKeys.forEach(key => {
         const e = byDate[key];
         if (!e) return;
         tracked++;
         const wt = targetsForWeek(key); // each day scored against the plan active for ITS week
+        weekGoal = wt.goal;
         const net = e.cons - e.burn;
+        totalNet += net; totalTarget += wt.calories;
         totalProtein += e.protein; totalProteinTarget += wt.protein;
         totalCarbs += e.carbs; totalCarbsTarget += wt.carbs;
         totalFat += e.fat; totalFatTarget += wt.fat;
-        if (e.water >= waterTarget) waterHitDays++;
+        totalSugar += e.sugar; totalSodium += e.sodium; totalFiber += e.fiber;
+        if (e.water >= waterTargetForDate(key, e.burn)) waterHitDays++;
         if (e.workedOut) workoutDays++;
-        const offPct = wt.calories ? (wt.goal==="gain" ? ((wt.calories-net)/wt.calories)*100 : ((net-wt.calories)/wt.calories)*100) : 0;
-        if (offPct > 20) tierCounts.red++; else if (offPct > 0) tierCounts.yellow++; else tierCounts.green++;
       });
       if (tracked === 0) return null;
       const macroScore = (total, targetTotal) => { if (!targetTotal) return 100; const dev=((total-targetTotal)/targetTotal)*100; return Math.max(20, Math.min(100, Math.round(100-Math.abs(dev)*1.5))); };
+      const avgOffPct = totalTarget ? (weekGoal==="gain" ? ((totalTarget-totalNet)/totalTarget)*100 : ((totalNet-totalTarget)/totalTarget)*100) : 0;
+      const fatRatioPct = totalFatTarget ? (totalFat/totalFatTarget)*100 : 100;
+      const proteinRatioPct = totalProteinTarget ? (totalProtein/totalProteinTarget)*100 : 100;
+      const fiberRatioPct = fiberTarget ? (totalFiber/(fiberTarget*tracked))*100 : 100;
+      const sugarRatioPct = sugarLimit ? (totalSugar/(sugarLimit*tracked))*100 : 100;
+      const sodiumRatioPct = sodiumLimit ? (totalSodium/(sodiumLimit*tracked))*100 : 100;
       const categoryScores = {
-        calories: Math.round(((tierCounts.green*100)+(tierCounts.yellow*50))/tracked),
-        protein: macroScore(totalProtein, totalProteinTarget),
+        calories: interpolateScore(avgOffPct, CAL_CURVE),
+        protein: interpolateScore(proteinRatioPct, HIGHER_BETTER_CURVE),
         carbs: macroScore(totalCarbs, totalCarbsTarget),
-        fat: macroScore(totalFat, totalFatTarget),
+        fat: interpolateScore(fatRatioPct, LOWER_BETTER_CURVE),
+        sugar: interpolateScore(sugarRatioPct, LOWER_BETTER_CURVE),
+        sodium: interpolateScore(sodiumRatioPct, LOWER_BETTER_CURVE),
+        fiber: interpolateScore(fiberRatioPct, HIGHER_BETTER_CURVE),
         water: Math.round((waterHitDays/tracked)*100),
         workout: Math.round((workoutDays/tracked)*100),
       };
-      const compositeScore = Math.round((categoryScores.calories+categoryScores.protein+categoryScores.carbs+categoryScores.fat+categoryScores.water+categoryScores.workout)/6);
+      const compositeScore = Math.round((categoryScores.calories+categoryScores.protein+categoryScores.carbs+categoryScores.fat+categoryScores.sugar+categoryScores.sodium+categoryScores.fiber+categoryScores.water+categoryScores.workout)/9);
       return { tracked, categoryScores, compositeScore };
     };
 
@@ -2765,6 +2988,39 @@ function NutriLogPro({ session, onLogout }) {
                             2️⃣ {T("settings_get_key_step2")}<br/>
                             3️⃣ {T("settings_get_key_step3")}
                           </div>
+                        </div>
+
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, background:C.surface, borderRadius:12, padding:"10px 12px" }}>
+                          <span style={{ fontSize:11, color:C.textMuted }}>{T("settings_usage_today")}</span>
+                          <span style={{ fontSize:13, fontWeight:"800", color:C.pink, fontFamily:"'DM Sans',sans-serif" }}>{Math.min(getAiUsageToday(), aiDailyLimit)} / {aiDailyLimit}</span>
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6, background:C.surface, borderRadius:12, padding:"10px 12px" }}>
+                          <span style={{ fontSize:11, color:C.textMuted }}>{T("settings_mb_today")}</span>
+                          <span style={{ fontSize:13, fontWeight:"800", color:C.pink, fontFamily:"'DM Sans',sans-serif" }}>{(getAiBytesToday()/1024/1024).toFixed(2)} MB</span>
+                        </div>
+                        {anthropicKey.trim() && (
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6, background:C.surface, borderRadius:12, padding:"10px 12px" }}>
+                            <span style={{ fontSize:11, color:C.textMuted }}>{T("settings_claude_calls_today")}</span>
+                            <span style={{ fontSize:13, fontWeight:"800", color:C.pink, fontFamily:"'DM Sans',sans-serif" }}>{getClaudeUsageToday()}</span>
+                          </div>
+                        )}
+
+                        <div style={{ marginTop:10 }}>
+                          <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{T("settings_daily_limit_label")}</div>
+                          <input type="number" className="inp" min="1" value={aiDailyLimit} onChange={e => setAiDailyLimit(Math.max(1, parseInt(e.target.value)||1))} />
+                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{T("settings_daily_limit_hint")}</div>
+                        </div>
+
+                        <div style={{ marginTop:10 }}>
+                          <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{T("settings_fallback_key_label")}</div>
+                          <input type="password" className="inp" placeholder={T("settings_api_key_placeholder")} value={geminiFallbackKey} onChange={e => setGeminiFallbackKey(e.target.value)} />
+                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{T("settings_fallback_key_hint")}</div>
+                        </div>
+
+                        <div style={{ marginTop:10 }}>
+                          <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{T("settings_anthropic_label")}</div>
+                          <input type="password" className="inp" placeholder="sk-ant-..." value={anthropicKey} onChange={e => setAnthropicKey(e.target.value)} />
+                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{T("settings_anthropic_hint")}</div>
                         </div>
                       </div>
                     )}
@@ -3061,27 +3317,22 @@ function NutriLogPro({ session, onLogout }) {
               // when that subject is tapped in the grid below — keeps the card compact by default
               // while still making the "why" available on demand.
               const subjectComments = {
-                calories: !a.calStatus
+                calories: a.categoryScores.calories < 45
+                  ? L(`Averaged ${a.avgCalPct}% of target — that's a significant miss. Worth recalibrating your weekly plan if this keeps happening.`, `本周平均为目标的 ${a.avgCalPct}% —— 偏差较大，如持续如此，建议重新调整您的每周计划。`)
+                  : !a.calStatus
                   ? L(`Nice control — averaged ${a.avgCalPct}% of target across the week.`, `控制得宜 —— 本周平均为目标的 ${a.avgCalPct}%。`)
                   : L(`Ran ${Math.round(a.calOverPct)}% over target on average this week.`, `本周平均超出目标 ${Math.round(a.calOverPct)}%。`),
-                protein: (() => {
-                  const dev = a.macroDev.protein;
-                  return Math.abs(dev) <= 10
-                    ? L("Right on target across the week.","本周基本符合目标。")
-                    : L(`${dev>0?"Over":"Under"} target by ${Math.round(Math.abs(dev))}% on average.`, `平均${dev>0?"超出":"低于"}目标 ${Math.round(Math.abs(dev))}%。`);
-                })(),
+                protein: L(`Averaged ${Math.round((a.macroDev.protein||0)+100)}% of your protein target — the higher, the better.`, `蛋白质平均达标 ${Math.round((a.macroDev.protein||0)+100)}% —— 摄入越高越好。`),
                 carbs: (() => {
                   const dev = a.macroDev.carbs;
                   return Math.abs(dev) <= 10
                     ? L("Right on target across the week.","本周基本符合目标。")
                     : L(`${dev>0?"Over":"Under"} target by ${Math.round(Math.abs(dev))}% on average.`, `平均${dev>0?"超出":"低于"}目标 ${Math.round(Math.abs(dev))}%。`);
                 })(),
-                fat: (() => {
-                  const dev = a.macroDev.fat;
-                  return Math.abs(dev) <= 10
-                    ? L("Right on target across the week.","本周基本符合目标。")
-                    : L(`${dev>0?"Over":"Under"} target by ${Math.round(Math.abs(dev))}% on average.`, `平均${dev>0?"超出":"低于"}目标 ${Math.round(Math.abs(dev))}%。`);
-                })(),
+                fat: L(`Averaged ${Math.round((a.macroDev.fat||0)+100)}% of your fat limit — the lower, the better.`, `脂肪平均为限额的 ${Math.round((a.macroDev.fat||0)+100)}% —— 摄入越低越好。`),
+                sugar: a.avgSugarPct===null ? L("No sugar limit set.","未设定糖分限额。") : L(`Averaged ${a.avgSugarPct}% of your sugar limit — the lower, the better.`, `糖分平均为限额的 ${a.avgSugarPct}% —— 摄入越低越好。`),
+                sodium: a.avgSodiumPct===null ? L("No sodium limit set.","未设定钠限额。") : L(`Averaged ${a.avgSodiumPct}% of your sodium limit — staying under is best.`, `钠平均为限额的 ${a.avgSodiumPct}% —— 保持在限额以下最理想。`),
+                fiber: a.avgFiberPct===null ? L("No fiber target set.","未设定纤维目标。") : L(`Averaged ${a.avgFiberPct}% of your fiber target — the higher, the better.`, `纤维平均达标 ${a.avgFiberPct}% —— 摄入越高越好。`),
                 water: L(`Hit your water goal on ${a.waterHitDays} of ${a.tracked} tracked days.`, `本周 ${a.tracked} 天中有 ${a.waterHitDays} 天达成饮水目标。`),
                 workout: L(`Logged a workout on ${a.workoutDays} of ${a.tracked} tracked days.`, `本周 ${a.tracked} 天中有 ${a.workoutDays} 天记录了运动。`),
               };
@@ -3109,13 +3360,16 @@ function NutriLogPro({ session, onLogout }) {
               // and workout — a "report card" across the whole week, not just calories.
               const gradeFor = (score) => gradeForScore(score, C);
               const cs = a.categoryScores;
-              const compositeScore = Math.round((cs.calories + cs.protein + cs.carbs + cs.fat + cs.water + cs.workout) / 6);
+              const compositeScore = Math.round((cs.calories + cs.protein + cs.carbs + cs.fat + cs.sugar + cs.sodium + cs.fiber + cs.water + cs.workout) / 9);
               const { grade, color:gradeColor } = gradeFor(compositeScore);
               const subjects = [
                 { key:"calories", label:L("Calories","热量"), icon:"🔥", score:cs.calories },
                 { key:"protein", label:L("Protein","蛋白质"), icon:"🥩", score:cs.protein },
                 { key:"carbs", label:L("Carbs","碳水"), icon:"🍞", score:cs.carbs },
                 { key:"fat", label:L("Fat","脂肪"), icon:"🥑", score:cs.fat },
+                { key:"sugar", label:L("Sugar","糖分"), icon:"🍬", score:cs.sugar },
+                { key:"sodium", label:L("Sodium","钠"), icon:"🧂", score:cs.sodium },
+                { key:"fiber", label:L("Fiber","纤维"), icon:"🌾", score:cs.fiber },
                 { key:"water", label:L("Water","饮水"), icon:"💧", score:cs.water },
                 { key:"workout", label:L("Workout","运动"), icon:"🏃", score:cs.workout },
               ];
@@ -3137,16 +3391,25 @@ function NutriLogPro({ session, onLogout }) {
                   </div>
 
                   <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:16 }}>
-                    {/* No circle — bold marker-style grade, like it's been scrawled on with a pen. */}
-                    <div style={{ flexShrink:0, textAlign:"center", minWidth:80 }}>
+                    {/* Diamond "gem" badge with a gradient + glow, letter in white on top — closer
+                        to a mobile-game rank badge than a plain circled letter. */}
+                    <div style={{ position:"relative", width:80, height:80, flexShrink:0 }}>
                       <div style={{
-                        fontFamily:"'Permanent Marker',cursive",
-                        fontSize: grade.length>=4 ? 34 : grade.length===3 ? 40 : 52,
-                        color:gradeColor, lineHeight:1, transform:"rotate(-4deg)", display:"inline-block",
-                        WebkitTextStroke: `1.4px ${theme==="dark" ? "#ffffff" : "#000000"}`,
-                        textShadow:`2px 2px 0 rgba(0,0,0,0.15)`
-                      }}>{grade}</div>
-                      {grade.startsWith("SS") && <div style={{ fontSize:14, marginTop:2 }}>✨✨</div>}
+                        position:"absolute", inset:8, borderRadius:14,
+                        background:`linear-gradient(135deg, color-mix(in srgb, ${gradeColor} 100%, white 35%), ${gradeColor})`,
+                        transform:"rotate(45deg)",
+                        boxShadow:`0 0 18px ${gradeColor}80, inset 0 0 10px rgba(255,255,255,0.35)`
+                      }} />
+                      <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                        <span style={{
+                          fontFamily:"'Russo One',sans-serif",
+                          fontSize: grade.length>=4 ? 15 : grade.length===3 ? 19 : 26,
+                          color:"#fff", display:"inline-block", transform:"skewX(-8deg)",
+                          WebkitTextStroke: `1px ${theme==="dark" ? "#ffffff" : "#000000"}`,
+                          textShadow:"0 0 6px rgba(255,255,255,0.9), 0 1px 3px rgba(0,0,0,0.35)"
+                        }}>{grade}</span>
+                      </div>
+                      {grade.startsWith("SS") && <span style={{ position:"absolute", top:-2, left:0, fontSize:16 }}>⭐</span>}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:14, fontWeight:"800", color:C.text }}>{achieveLine}</div>
@@ -3606,6 +3869,16 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
               </div>
             )}
+            {(() => {
+              const used = getAiUsageToday();
+              const remaining = Math.max(0, aiDailyLimit - used);
+              const color = remaining === 0 ? C.red : remaining <= Math.max(1, Math.round(aiDailyLimit*0.2)) ? C.caution : C.textDim;
+              return (
+                <div style={{ fontSize:10.5, color, textAlign:"center", marginBottom:8, fontStyle:"italic" }}>
+                  {L(`🤖 ${remaining} of ${aiDailyLimit} AI calls left today (photo + Suggest share this budget)`, `🤖 今日剩余 AI 次数 ${remaining} / ${aiDailyLimit}（拍照分析与 AI建议 共用此额度）`)}
+                </div>
+              );
+            })()}
             <div className="upload-zone" style={{ marginBottom:10 }} onClick={() => !analyzing && foodRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();analyzeImage(e.dataTransfer.files[0],"meal")}}>
               <input ref={foodRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>analyzeImage(e.target.files[0],"meal")} />
               {analyzing && analysisType==="meal" ? (
@@ -4307,6 +4580,9 @@ function NutriLogPro({ session, onLogout }) {
                   { label:L("Protein","蛋白质"), icon:"🥩", score:data.categoryScores.protein },
                   { label:L("Carbs","碳水"), icon:"🍞", score:data.categoryScores.carbs },
                   { label:L("Fat","脂肪"), icon:"🥑", score:data.categoryScores.fat },
+                  { label:L("Sugar","糖分"), icon:"🍬", score:data.categoryScores.sugar },
+                  { label:L("Sodium","钠"), icon:"🧂", score:data.categoryScores.sodium },
+                  { label:L("Fiber","纤维"), icon:"🌾", score:data.categoryScores.fiber },
                   { label:L("Water","饮水"), icon:"💧", score:data.categoryScores.water },
                   { label:L("Workout","运动"), icon:"🏃", score:data.categoryScores.workout },
                 ];
@@ -4317,15 +4593,23 @@ function NutriLogPro({ session, onLogout }) {
                       <span style={{ fontSize:11, color:C.textMuted, fontWeight:"700" }}>{periodLabel}</span>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
-                      <div style={{ flexShrink:0, textAlign:"center", minWidth:70 }}>
+                      <div style={{ position:"relative", width:66, height:66, flexShrink:0 }}>
                         <div style={{
-                          fontFamily:"'Permanent Marker',cursive",
-                          fontSize: g.grade.length>=4 ? 28 : g.grade.length===3 ? 34 : 44,
-                          color:g.color, lineHeight:1, transform:"rotate(-4deg)", display:"inline-block",
-                          WebkitTextStroke: `1.3px ${theme==="dark" ? "#ffffff" : "#000000"}`,
-                          textShadow:`2px 2px 0 rgba(0,0,0,0.15)`
-                        }}>{g.grade}</div>
-                        {g.grade.startsWith("SS") && <div style={{ fontSize:12, marginTop:2 }}>✨✨</div>}
+                          position:"absolute", inset:6, borderRadius:12,
+                          background:`linear-gradient(135deg, color-mix(in srgb, ${g.color} 100%, white 35%), ${g.color})`,
+                          transform:"rotate(45deg)",
+                          boxShadow:`0 0 14px ${g.color}80, inset 0 0 8px rgba(255,255,255,0.35)`
+                        }} />
+                        <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                          <span style={{
+                            fontFamily:"'Russo One',sans-serif",
+                            fontSize: g.grade.length>=4 ? 12 : g.grade.length===3 ? 15 : 21,
+                            color:"#fff", display:"inline-block", transform:"skewX(-8deg)",
+                            WebkitTextStroke: `1px ${theme==="dark" ? "#ffffff" : "#000000"}`,
+                            textShadow:"0 0 5px rgba(255,255,255,0.9), 0 1px 3px rgba(0,0,0,0.35)"
+                          }}>{g.grade}</span>
+                        </div>
+                        {g.grade.startsWith("SS") && <span style={{ position:"absolute", top:-2, left:0, fontSize:13 }}>⭐</span>}
                       </div>
                       <div style={{ fontSize:12, color:C.textMuted }}>{L(`Scored ${data.compositeScore}% across ${data.tracked} tracked day(s).`, `共记录 ${data.tracked} 天，综合评分 ${data.compositeScore}%。`)}</div>
                     </div>
