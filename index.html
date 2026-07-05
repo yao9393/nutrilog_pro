@@ -15,7 +15,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=DM+Sans:opsz,wght@9..40,300..800&display=swap" rel="stylesheet">
     <style>
       body { margin:0; overflow-x:hidden; }
       html { overflow-x:hidden; }
@@ -160,7 +160,9 @@ const TAB_LABELS = { main:"Main", today:"Dashboard", meal:"Meal", water:"Water",
 const STRINGS = {
   en: {
     tab_main: "Main", tab_today: "Dashboard", tab_meal: "Meal", tab_water: "Water", tab_workout: "Workout", tab_history: "History", tab_social: "Social",
-    social_gallery: "📷 Gallery", social_leaderboard: "🏆 Leaderboard",
+    social_gallery: "📷 Gallery", social_leaderboard: "🏆 Leaderboard", social_achievements: "🎖️ Achievements",
+    achievements_best_week: "Best Week Ever", achievements_best_month: "Best Month Ever",
+    achievements_empty: "Keep logging — your best week and month will show up here once there's enough data.",
     gallery_empty: "No meal photos yet — snap a photo next time you log a meal and it'll show up here.",
     gallery_hint: "Browse past meal photos and tap ☆ to save any of them as a favorite. This is just browsing — it won't add anything to today's log.",
     leaderboard_optin_label: "Show me on the leaderboard",
@@ -227,7 +229,9 @@ const STRINGS = {
   },
   zh: {
     tab_main: "主页", tab_today: "仪表盘", tab_meal: "饮食", tab_water: "饮水", tab_workout: "运动", tab_history: "历史记录", tab_social: "社群",
-    social_gallery: "📷 相册", social_leaderboard: "🏆 排行榜",
+    social_gallery: "📷 相册", social_leaderboard: "🏆 排行榜", social_achievements: "🎖️ 成就",
+    achievements_best_week: "历史最佳周", achievements_best_month: "历史最佳月",
+    achievements_empty: "继续记录吧 —— 累积足够数据后，这里就会显示您的最佳周与最佳月表现。",
     gallery_empty: "还没有餐食照片 —— 下次记录时拍张照片，就会出现在这里。",
     gallery_hint: "浏览过往的餐食照片，点击 ☆ 即可收藏为最爱。这里只是浏览，不会加入今天的记录。",
     leaderboard_optin_label: "在排行榜显示我",
@@ -351,6 +355,23 @@ function localDateKey(dateObj) {
 }
 // Returns the Monday of the calendar week containing dateKey (as a "YYYY-MM-DD" string).
 // Used to look up which weekly plan snapshot was active for a given date.
+// Gamified C -> SSS grade scale (never drops to a failing grade) with +/- refinement within each
+// tier. Used by both the weekly report card and the Achievements best-week/best-month lookups.
+function gradeForScore(score, C) {
+  const bands = [95, 85, 75, 60, 45, 0];
+  const bases = ["SSS","SS","S","A","B","C"];
+  const idx = bands.findIndex(b => score >= b);
+  const ceiling = idx > 0 ? bands[idx-1] : 100;
+  const floor = bands[idx];
+  const span = ceiling - floor || 1;
+  const pos = (score - floor) / span;
+  const suffix = pos >= 0.67 ? "+" : pos >= 0.34 ? "" : "-";
+  // A single, theme-matching accent color for every grade (rather than a different color per
+  // tier) — the letter itself already communicates rank, and this way the badge always suits
+  // whichever mood palette is selected instead of mixing in colors that may clash with it.
+  return { grade: bases[idx] + suffix, color: C.pink, base: bases[idx] };
+}
+
 function getMondayKey(dateKey) {
   const d = new Date(dateKey+"T00:00:00");
   const dow = d.getDay(); // 0=Sun..6=Sat
@@ -1484,7 +1505,8 @@ function NutriLogPro({ session, onLogout }) {
   const T = (key) => translate(lang, key);
   const L = (en, zh) => lang === "zh" ? zh : en; // inline bilingual string for one-off dynamic sentences (not worth a STRINGS entry)
   const [activeTab, setActiveTab] = useState("main");
-  const [socialSubTab, setSocialSubTab] = useState("gallery");
+  const [socialSubTab, setSocialSubTab] = useState("leaderboard");
+  const [reportCardSubject, setReportCardSubject] = useState(null);
   const [leaderboardData, setLeaderboardData] = useState(null); // null = not loaded yet
   const [leaderboardError, setLeaderboardError] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
@@ -2475,12 +2497,98 @@ function NutriLogPro({ session, onLogout }) {
       workout: tracked ? Math.round((workoutDays/tracked)*100) : 0,
     };
 
-    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, macroIssues, tone, tierCounts, categoryScores };
+    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, macroIssues, macroDev, waterHitDays, workoutDays, tone, tierCounts, categoryScores };
+  })();
+
+  // Coach's Note content — computed once here (rather than inside the report card's render) so it
+  // can be shown right after "This Week's Plan" (where it's immediately useful when setting a new
+  // plan) as well as referenced by the report card section further down.
+  const weekCoaching = (() => {
+    if (!previousWeekAnalysis) return null;
+    const a = previousWeekAnalysis;
+    const macroLabel = { protein:L("protein","蛋白质"), carbs:L("carbs","碳水"), fat:L("fat","脂肪") };
+    const focusIssue = (() => {
+      const candidates = [];
+      if (a.calStatus) candidates.push({ label:L("calories","热量"), icon:"🔥", pct:a.calOverPct, over:true });
+      a.macroIssues.forEach(mi => candidates.push({ label:macroLabel[mi.name], icon: mi.name==="protein"?"🥩":mi.name==="carbs"?"🍞":"🥑", pct:Math.abs(mi.devPct), over:mi.devPct>0 }));
+      if (a.avgSugarPct !== null && a.avgSugarPct > 100) candidates.push({ label:L("sugar","糖分"), icon:"🍬", pct:a.avgSugarPct-100, over:true });
+      if (candidates.length === 0) return null;
+      candidates.sort((x,y) => y.pct - x.pct);
+      return candidates[0];
+    })();
+    const focusLine = focusIssue
+      ? L(`🎯 This week's focus: ${focusIssue.over ? "ease off" : "bring up"} ${focusIssue.label} ${focusIssue.icon}`,
+          `🎯 本周焦点：${focusIssue.over ? "稍微减少" : "提高"}${focusIssue.label}摄入 ${focusIssue.icon}`)
+      : L("🎯 Nothing to fix — just keep doing exactly this!","🎯 无需调整 —— 保持现在的状态就好！");
+    const closer = focusIssue
+      ? L("Let's improve again this week!!!","这周继续加油改善！！！")
+      : L("Keep up the great work!","继续保持这份出色的状态！");
+    return { focusLine, closer };
   })();
 
   // Plan Tracker: shows the fixed plan delta chosen for each of the last 6 weeks (e.g. Week 26:
   // -200, Week 27: -300) — not live performance. Just a readout of the plan itself over time,
   // for motivation ("look how much more committed the deficit has gotten").
+  // Achievements: scans all available history to find the single best-graded week and best-graded
+  // month (by the same composite score as the weekly report card), for a "personal best" showcase.
+  const achievementsData = (() => {
+    const byDate = {};
+    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,water:0,workedOut:false}); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); });
+    histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,water:0,workedOut:false}); e.burn += Number(w.calories||0); e.workedOut = true; });
+    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= {cons:0,burn:0,protein:0,carbs:0,fat:0,water:0,workedOut:false}); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.water += Number(d.amount_ml||0); });
+
+    const scoreDays = (dayKeys) => {
+      let tracked=0, totalProtein=0, totalProteinTarget=0, totalCarbs=0, totalCarbsTarget=0, totalFat=0, totalFatTarget=0, waterHitDays=0, workoutDays=0;
+      const tierCounts = { green:0, yellow:0, red:0 };
+      dayKeys.forEach(key => {
+        const e = byDate[key];
+        if (!e) return;
+        tracked++;
+        const wt = targetsForWeek(key); // each day scored against the plan active for ITS week
+        const net = e.cons - e.burn;
+        totalProtein += e.protein; totalProteinTarget += wt.protein;
+        totalCarbs += e.carbs; totalCarbsTarget += wt.carbs;
+        totalFat += e.fat; totalFatTarget += wt.fat;
+        if (e.water >= waterTarget) waterHitDays++;
+        if (e.workedOut) workoutDays++;
+        const offPct = wt.calories ? (wt.goal==="gain" ? ((wt.calories-net)/wt.calories)*100 : ((net-wt.calories)/wt.calories)*100) : 0;
+        if (offPct > 20) tierCounts.red++; else if (offPct > 0) tierCounts.yellow++; else tierCounts.green++;
+      });
+      if (tracked === 0) return null;
+      const macroScore = (total, targetTotal) => { if (!targetTotal) return 100; const dev=((total-targetTotal)/targetTotal)*100; return Math.max(20, Math.min(100, Math.round(100-Math.abs(dev)*1.5))); };
+      const categoryScores = {
+        calories: Math.round(((tierCounts.green*100)+(tierCounts.yellow*50))/tracked),
+        protein: macroScore(totalProtein, totalProteinTarget),
+        carbs: macroScore(totalCarbs, totalCarbsTarget),
+        fat: macroScore(totalFat, totalFatTarget),
+        water: Math.round((waterHitDays/tracked)*100),
+        workout: Math.round((workoutDays/tracked)*100),
+      };
+      const compositeScore = Math.round((categoryScores.calories+categoryScores.protein+categoryScores.carbs+categoryScores.fat+categoryScores.water+categoryScores.workout)/6);
+      return { tracked, categoryScores, compositeScore };
+    };
+
+    // Group logged days by week (Monday key) and by calendar month
+    const weekGroups = {}, monthGroups = {};
+    Object.keys(byDate).forEach(key => {
+      const monday = getMondayKey(key);
+      (weekGroups[monday] ||= []).push(key);
+      const month = key.slice(0,7); // "YYYY-MM"
+      (monthGroups[month] ||= []).push(key);
+    });
+
+    let bestWeek = null, bestMonth = null;
+    Object.entries(weekGroups).forEach(([monday, keys]) => {
+      const result = scoreDays(keys);
+      if (result && (!bestWeek || result.compositeScore > bestWeek.compositeScore)) bestWeek = { ...result, label: monday };
+    });
+    Object.entries(monthGroups).forEach(([month, keys]) => {
+      const result = scoreDays(keys);
+      if (result && (!bestMonth || result.compositeScore > bestMonth.compositeScore)) bestMonth = { ...result, label: month };
+    });
+    return { bestWeek, bestMonth };
+  })();
+
   const planTrend = (() => {
     const weeks = [];
     const now = new Date();
@@ -2932,40 +3040,13 @@ function NutriLogPro({ session, onLogout }) {
               </div>
             )}
 
-            {(() => {
-              const deltas = planTrend.filter(w => w.delta !== null).map(w => Math.abs(w.delta));
-              const maxAbs = Math.max(50, ...deltas, 1);
-              const anyData = deltas.length > 0;
-              return (
-                <div className="card" style={{ padding:"16px", marginBottom:14 }}>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:4 }}>📈 {L("Plan Tracker","计划追踪")}</div>
-                  <div style={{ fontSize:11, color:C.textMuted, marginBottom:14 }}>{L("Your chosen deficit/surplus, week by week.","您每周设定的热量缺口／盈余目标。")}</div>
-                  {!anyData ? (
-                    <div style={{ textAlign:"center", padding:"20px 0", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("Set a weekly plan to see it tracked here.","设定每周计划后，即可在此查看追踪记录。")}</div>
-                  ) : (
-                    <div style={{ display:"flex", gap:6 }}>
-                      {planTrend.map((w,i) => {
-                        const barColor = w.delta === null ? C.border : w.delta < 0 ? C.green : w.delta > 0 ? C.caution : C.textDim;
-                        const barPct = w.delta === null ? 0 : Math.min(100, (Math.abs(w.delta)/maxAbs)*100);
-                        return (
-                          <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center" }}>
-                            <div style={{ height:44, display:"flex", alignItems:"flex-end", justifyContent:"center", width:"100%" }}>
-                              {w.delta > 0 && <div style={{ width:14, height:`${barPct}%`, minHeight:3, background:barColor, borderRadius:"4px 4px 0 0" }} />}
-                            </div>
-                            <div style={{ width:"100%", height:1, background:C.border }} />
-                            <div style={{ height:44, display:"flex", alignItems:"flex-start", justifyContent:"center", width:"100%" }}>
-                              {w.delta < 0 && <div style={{ width:14, height:`${barPct}%`, minHeight:3, background:barColor, borderRadius:"0 0 4px 4px" }} />}
-                            </div>
-                            <div style={{ fontSize:9, fontWeight:"700", color:barColor, marginTop:5, whiteSpace:"nowrap" }}>{w.delta===null ? "–" : (w.delta>0?`+${w.delta}`:(w.delta===0?"±0":w.delta))}</div>
-                            <div style={{ fontSize:9, color:C.textDim, marginTop:2 }}>{w.label}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            {weekCoaching && (
+              <div className="card" style={{ padding:"14px 16px", marginBottom:14, background:C.pinkDeep, borderColor:C.pinkDim }}>
+                <div style={{ fontSize:12, fontWeight:"700", color:C.pink, marginBottom:6 }}>🧑‍🏫 {L("Coach's Note","教练笔记")}</div>
+                <div style={{ fontSize:13, color:C.text, fontWeight:"700", lineHeight:1.6 }}>{weekCoaching.focusLine}</div>
+                <div style={{ fontSize:12, color:C.textMuted, marginTop:8 }}>{weekCoaching.closer}</div>
+              </div>
+            )}
 
             {previousWeekAnalysis && (() => {
               const a = previousWeekAnalysis;
@@ -2976,44 +3057,34 @@ function NutriLogPro({ session, onLogout }) {
                 : L("Maintain","维持");
               const macroLabel = { protein:L("protein","蛋白质"), carbs:L("carbs","碳水"), fat:L("fat","脂肪") };
 
-              // Each line is built as an array of {text, bold} segments so the key terms (the
-              // nutrient name and the percentage) can be bolded within the sentence, making the
-              // actual number/problem jump out rather than reading as one flat block of text.
-              const didWell = [];
-              const needImprove = [];
-              if (!a.calStatus) {
-                didWell.push([
-                  { text: L("Calories","热量"), bold:true },
-                  { text: L(" consumption controlled at avg ","摄入控制得宜，平均为目标的 ") },
-                  { text: `${a.avgCalPct}%`, bold:true }
-                ]);
-              } else {
-                needImprove.push([
-                  { text: L("Calories","热量"), bold:true },
-                  { text: L(" over target by avg ","平均超出目标 ") },
-                  { text: `${Math.round(a.calOverPct)}%`, bold:true }
-                ]);
-              }
-              if (a.avgSugarPct !== null) {
-                if (a.avgSugarPct <= 70) {
-                  didWell.push([
-                    { text: L("Sugar","糖分"), bold:true },
-                    { text: L(" level is low at avg ","摄入偏低，平均为限额的 ") },
-                    { text: `${a.avgSugarPct}%`, bold:true }
-                  ]);
-                } else if (a.avgSugarPct > 100) {
-                  needImprove.push(lang==="zh"
-                    ? [ { text: "糖分", bold:true }, { text: "平均超出限额 " }, { text: `${a.avgSugarPct-100}%`, bold:true } ]
-                    : [ { text: "Sugar", bold:true }, { text: " is " }, { text: `${a.avgSugarPct-100}% over target`, bold:true } ]);
-                }
-              }
-              a.macroIssues.forEach(mi => {
-                const over = mi.devPct > 0;
-                const pct = Math.round(Math.abs(mi.devPct));
-                needImprove.push(lang==="zh"
-                  ? [ { text: "本周整体" }, { text: macroLabel[mi.name], bold:true }, { text: over?"超出目标 ":"低于目标 " }, { text: `${pct}%`, bold:true } ]
-                  : [ { text: "Overall weekly " }, { text: macroLabel[mi.name], bold:true }, { text: " is " }, { text: `${over?"over":"under"} target by ${pct}%`, bold:true } ]);
-              });
+              // One comment per subject (calories/protein/carbs/fat/water/workout), shown only
+              // when that subject is tapped in the grid below — keeps the card compact by default
+              // while still making the "why" available on demand.
+              const subjectComments = {
+                calories: !a.calStatus
+                  ? L(`Nice control — averaged ${a.avgCalPct}% of target across the week.`, `控制得宜 —— 本周平均为目标的 ${a.avgCalPct}%。`)
+                  : L(`Ran ${Math.round(a.calOverPct)}% over target on average this week.`, `本周平均超出目标 ${Math.round(a.calOverPct)}%。`),
+                protein: (() => {
+                  const dev = a.macroDev.protein;
+                  return Math.abs(dev) <= 10
+                    ? L("Right on target across the week.","本周基本符合目标。")
+                    : L(`${dev>0?"Over":"Under"} target by ${Math.round(Math.abs(dev))}% on average.`, `平均${dev>0?"超出":"低于"}目标 ${Math.round(Math.abs(dev))}%。`);
+                })(),
+                carbs: (() => {
+                  const dev = a.macroDev.carbs;
+                  return Math.abs(dev) <= 10
+                    ? L("Right on target across the week.","本周基本符合目标。")
+                    : L(`${dev>0?"Over":"Under"} target by ${Math.round(Math.abs(dev))}% on average.`, `平均${dev>0?"超出":"低于"}目标 ${Math.round(Math.abs(dev))}%。`);
+                })(),
+                fat: (() => {
+                  const dev = a.macroDev.fat;
+                  return Math.abs(dev) <= 10
+                    ? L("Right on target across the week.","本周基本符合目标。")
+                    : L(`${dev>0?"Over":"Under"} target by ${Math.round(Math.abs(dev))}% on average.`, `平均${dev>0?"超出":"低于"}目标 ${Math.round(Math.abs(dev))}%。`);
+                })(),
+                water: L(`Hit your water goal on ${a.waterHitDays} of ${a.tracked} tracked days.`, `本周 ${a.tracked} 天中有 ${a.waterHitDays} 天达成饮水目标。`),
+                workout: L(`Logged a workout on ${a.workoutDays} of ${a.tracked} tracked days.`, `本周 ${a.tracked} 天中有 ${a.workoutDays} 天记录了运动。`),
+              };
 
               const Dot = ({color}) => <span style={{ display:"inline-block", width:11, height:11, borderRadius:"50%", background:color, margin:"0 2px", verticalAlign:"middle" }} />;
 
@@ -3036,14 +3107,7 @@ function NutriLogPro({ session, onLogout }) {
               // week still lands on a grade that feels okay, not punishing — the floor is C, not F.
               // The composite averages all 6 tracked categories: calories, the 3 macros, water,
               // and workout — a "report card" across the whole week, not just calories.
-              const gradeFor = (score) => {
-                if (score >= 95) return { grade:"SSS", color:C.pink };
-                if (score >= 85) return { grade:"SS", color:C.gold };
-                if (score >= 75) return { grade:"S", color:C.water };
-                if (score >= 60) return { grade:"A", color:C.green };
-                if (score >= 45) return { grade:"B", color:C.caution };
-                return { grade:"C", color:C.textMuted };
-              };
+              const gradeFor = (score) => gradeForScore(score, C);
               const cs = a.categoryScores;
               const compositeScore = Math.round((cs.calories + cs.protein + cs.carbs + cs.fat + cs.water + cs.workout) / 6);
               const { grade, color:gradeColor } = gradeFor(compositeScore);
@@ -3056,23 +3120,6 @@ function NutriLogPro({ session, onLogout }) {
                 { key:"workout", label:L("Workout","运动"), icon:"🏃", score:cs.workout },
               ];
 
-              // A single, clearest-priority takeaway for the coming week — picks whichever issue
-              // deviated furthest from target, so there's one obvious thing to focus on instead of
-              // a list to weigh. Falls back to pure encouragement when nothing needs fixing.
-              const focusIssue = (() => {
-                const candidates = [];
-                if (a.calStatus) candidates.push({ label:L("calories","热量"), icon:"🔥", pct:a.calOverPct, over:true });
-                a.macroIssues.forEach(mi => candidates.push({ label:macroLabel[mi.name], icon: mi.name==="protein"?"🥩":mi.name==="carbs"?"🍞":"🥑", pct:Math.abs(mi.devPct), over:mi.devPct>0 }));
-                if (a.avgSugarPct !== null && a.avgSugarPct > 100) candidates.push({ label:L("sugar","糖分"), icon:"🍬", pct:a.avgSugarPct-100, over:true });
-                if (candidates.length === 0) return null;
-                candidates.sort((x,y) => y.pct - x.pct);
-                return candidates[0];
-              })();
-              const focusLine = focusIssue
-                ? L(`🎯 This week's focus: ${focusIssue.over ? "ease off" : "bring up"} ${focusIssue.label} ${focusIssue.icon}`,
-                    `🎯 本周焦点：${focusIssue.over ? "稍微减少" : "提高"}${focusIssue.label}摄入 ${focusIssue.icon}`)
-                : L("🎯 Nothing to fix — just keep doing exactly this!","🎯 无需调整 —— 保持现在的状态就好！");
-
               let comment;
               if (a.tone === "perfect" || a.tone === "good") {
                 comment = L("Great job staying consistent this week.", "这周保持得非常稳定，做得很好。");
@@ -3081,9 +3128,6 @@ function NutriLogPro({ session, onLogout }) {
               } else {
                 comment = L("This was a tough week, but every week is a fresh start. Here's a closer look:", "这周比较艰难，但每周都是新的开始 —— 一起来看看细节：");
               }
-              const closer = needImprove.length > 0
-                ? L("Let's improve again this week!!!","这周继续加油改善！！！")
-                : L("Keep up the great work!","继续保持这份出色的状态！");
 
               return (
                 <div className="card" style={{ padding:"16px", marginBottom:14, overflow:"hidden" }}>
@@ -3092,13 +3136,17 @@ function NutriLogPro({ session, onLogout }) {
                     <span style={{ fontSize:11, color:C.textMuted, fontWeight:"700" }}>{L("Week","第")} {a.weekNum}{lang==="zh"?"周":""}: {planLabel}</span>
                   </div>
 
-                  <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
-                    <div style={{ position:"relative", width:74, height:74, borderRadius:"50%", flexShrink:0,
-                      background:`radial-gradient(circle at 35% 30%, color-mix(in srgb, ${gradeColor} 100%, white 45%), ${gradeColor})`,
-                      boxShadow:`0 0 0 3px ${gradeColor}33, 0 4px 16px ${gradeColor}66`,
-                      display:"flex", alignItems:"center", justifyContent:"center" }}>
-                      <span style={{ fontSize: grade.length>2 ? 19 : 26, fontWeight:"800", color:"#fff", fontFamily:"'DM Sans',sans-serif", textShadow:"0 1px 3px rgba(0,0,0,0.25)" }}>{grade}</span>
-                      {(grade==="SS"||grade==="SSS") && <span style={{ position:"absolute", top:-4, right:-2, fontSize:16 }}>✨</span>}
+                  <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:16 }}>
+                    {/* No circle — bold marker-style grade, like it's been scrawled on with a pen. */}
+                    <div style={{ flexShrink:0, textAlign:"center", minWidth:80 }}>
+                      <div style={{
+                        fontFamily:"'Permanent Marker',cursive",
+                        fontSize: grade.length>=4 ? 34 : grade.length===3 ? 40 : 52,
+                        color:gradeColor, lineHeight:1, transform:"rotate(-4deg)", display:"inline-block",
+                        WebkitTextStroke: `1.4px ${theme==="dark" ? "#ffffff" : "#000000"}`,
+                        textShadow:`2px 2px 0 rgba(0,0,0,0.15)`
+                      }}>{grade}</div>
+                      {grade.startsWith("SS") && <div style={{ fontSize:14, marginTop:2 }}>✨✨</div>}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:14, fontWeight:"800", color:C.text }}>{achieveLine}</div>
@@ -3106,11 +3154,14 @@ function NutriLogPro({ session, onLogout }) {
                     </div>
                   </div>
 
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8, marginBottom:16 }}>
+                  <div style={{ fontSize:13, color:C.textMuted, lineHeight:1.6, marginBottom:14 }}>{comment}</div>
+
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8 }}>
                     {subjects.map(s => {
                       const sub = gradeFor(s.score);
+                      const isOpen = reportCardSubject === s.key;
                       return (
-                        <div key={s.key} style={{ background:C.surface, borderRadius:12, padding:"8px 6px", textAlign:"center" }}>
+                        <div key={s.key} onClick={() => setReportCardSubject(isOpen ? null : s.key)} style={{ background:C.surface, borderRadius:12, padding:"8px 6px", textAlign:"center", cursor:"pointer", border:`1px solid ${isOpen ? sub.color : "transparent"}`, transition:"all .15s" }}>
                           <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700" }}>{s.icon} {s.label}</div>
                           <div style={{ fontSize:15, fontWeight:"800", color:sub.color, fontFamily:"'DM Sans',sans-serif", marginTop:2 }}>{sub.grade}</div>
                         </div>
@@ -3118,39 +3169,11 @@ function NutriLogPro({ session, onLogout }) {
                     })}
                   </div>
 
-                  <div style={{ fontSize:13, color:C.textMuted, lineHeight:1.7, marginBottom:16 }}>{comment}</div>
-
-                  {didWell.length > 0 && (
-                    <div style={{ marginBottom:16 }}>
-                      <div style={{ fontSize:13, fontWeight:"700", color:C.green, marginBottom:8 }}>{L("Here is what you did well!!:","以下是您做得好的地方！！：")}</div>
-                      <div style={{ fontSize:13, lineHeight:2.1 }}>
-                        {didWell.map((segments,i) => (
-                          <div key={i} style={{ color:C.textMuted }}>
-                            • {segments.map((seg,j) => seg.bold ? <strong key={j} style={{ fontWeight:"800", color:C.text }}>{seg.text}</strong> : <React.Fragment key={j}>{seg.text}</React.Fragment>)}
-                          </div>
-                        ))}
-                      </div>
+                  {reportCardSubject && (
+                    <div className="fade" style={{ marginTop:10, fontSize:12, color:C.textMuted, background:C.surface, borderRadius:12, padding:"10px 12px", lineHeight:1.6 }}>
+                      {subjects.find(s=>s.key===reportCardSubject)?.icon} {subjectComments[reportCardSubject]}
                     </div>
                   )}
-
-                  {needImprove.length > 0 && (
-                    <div style={{ marginBottom:16 }}>
-                      <div style={{ fontSize:13, fontWeight:"700", color:C.red, marginBottom:8 }}>{L("Here is what you need to improve:","以下是需要改善的地方：")}</div>
-                      <div style={{ fontSize:13, lineHeight:2.1 }}>
-                        {needImprove.map((segments,i) => (
-                          <div key={i} style={{ color:C.textMuted }}>
-                            • {segments.map((seg,j) => seg.bold ? <strong key={j} style={{ fontWeight:"800", color:C.text }}>{seg.text}</strong> : <React.Fragment key={j}>{seg.text}</React.Fragment>)}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="card" style={{ padding:"10px 12px", marginBottom:12, background:C.pinkDeep, borderColor:C.pinkDim }}>
-                    <div style={{ fontSize:13, fontWeight:"700", color:C.pink }}>{focusLine}</div>
-                  </div>
-
-                  <div style={{ fontSize:13, color:C.text, fontWeight:"700" }}>{closer}</div>
                 </div>
               );
             })()}
@@ -3518,6 +3541,41 @@ function NutriLogPro({ session, onLogout }) {
               </div>
               <TrendChart days={last7Days} target={targets.calories} theme={theme} C={C} />
             </div>
+
+            {(() => {
+              const deltas = planTrend.filter(w => w.delta !== null).map(w => Math.abs(w.delta));
+              const maxAbs = Math.max(50, ...deltas, 1);
+              const anyData = deltas.length > 0;
+              return (
+                <div className="card" style={{ padding:"16px", marginBottom:14 }}>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:4 }}>📈 {L("Plan Tracker","计划追踪")}</div>
+                  <div style={{ fontSize:11, color:C.textMuted, marginBottom:14 }}>{L("Your chosen deficit/surplus, week by week.","您每周设定的热量缺口／盈余目标。")}</div>
+                  {!anyData ? (
+                    <div style={{ textAlign:"center", padding:"20px 0", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("Set a weekly plan to see it tracked here.","设定每周计划后，即可在此查看追踪记录。")}</div>
+                  ) : (
+                    <div style={{ display:"flex", gap:6 }}>
+                      {planTrend.map((w,i) => {
+                        const barColor = w.delta === null ? C.border : w.delta < 0 ? C.green : w.delta > 0 ? C.caution : C.textDim;
+                        const barPct = w.delta === null ? 0 : Math.min(100, (Math.abs(w.delta)/maxAbs)*100);
+                        return (
+                          <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center" }}>
+                            <div style={{ height:44, display:"flex", alignItems:"flex-end", justifyContent:"center", width:"100%" }}>
+                              {w.delta > 0 && <div style={{ width:14, height:`${barPct}%`, minHeight:3, background:barColor, borderRadius:"4px 4px 0 0" }} />}
+                            </div>
+                            <div style={{ width:"100%", height:1, background:C.border }} />
+                            <div style={{ height:44, display:"flex", alignItems:"flex-start", justifyContent:"center", width:"100%" }}>
+                              {w.delta < 0 && <div style={{ width:14, height:`${barPct}%`, minHeight:3, background:barColor, borderRadius:"0 0 4px 4px" }} />}
+                            </div>
+                            <div style={{ fontSize:9, fontWeight:"700", color:barColor, marginTop:5, whiteSpace:"nowrap" }}>{w.delta===null ? "–" : (w.delta>0?`+${w.delta}`:(w.delta===0?"±0":w.delta))}</div>
+                            <div style={{ fontSize:9, color:C.textDim, marginTop:2 }}>{w.label}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -4114,8 +4172,9 @@ function NutriLogPro({ session, onLogout }) {
         {activeTab==="social" && (
           <div className="fade">
             <div style={{ display:"flex", gap:8, marginBottom:14 }}>
-              <button className={socialSubTab==="gallery"?"":"ghost-btn"} onClick={()=>setSocialSubTab("gallery")} style={{ flex:1, padding:"9px", fontSize:12.5, fontWeight:"700", ...(socialSubTab==="gallery"?{ background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, cursor:"pointer" }:{}) }}>{T("social_gallery")}</button>
               <button className={socialSubTab==="leaderboard"?"":"ghost-btn"} onClick={()=>setSocialSubTab("leaderboard")} style={{ flex:1, padding:"9px", fontSize:12.5, fontWeight:"700", ...(socialSubTab==="leaderboard"?{ background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, cursor:"pointer" }:{}) }}>{T("social_leaderboard")}</button>
+              <button className={socialSubTab==="gallery"?"":"ghost-btn"} onClick={()=>setSocialSubTab("gallery")} style={{ flex:1, padding:"9px", fontSize:12.5, fontWeight:"700", ...(socialSubTab==="gallery"?{ background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, cursor:"pointer" }:{}) }}>{T("social_gallery")}</button>
+              <button className={socialSubTab==="achievements"?"":"ghost-btn"} onClick={()=>setSocialSubTab("achievements")} style={{ flex:1, padding:"9px", fontSize:12.5, fontWeight:"700", ...(socialSubTab==="achievements"?{ background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, cursor:"pointer" }:{}) }}>{T("social_achievements")}</button>
             </div>
 
             {socialSubTab === "gallery" && (() => {
@@ -4214,7 +4273,12 @@ function NutriLogPro({ session, onLogout }) {
                                 <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                                   {row.display_name}{isMe ? ` (${T("leaderboard_you")})` : ""}
                                 </div>
-                                <div style={{ fontSize:10, color:C.textDim, marginTop:2 }}>{row.days_tracked} {L("days tracked","天记录")}</div>
+                                <div style={{ fontSize:10, color:C.textDim, marginTop:2 }}>
+                                  {row.days_tracked} {L("days tracked","天记录")}
+                                  {(row.plan_delta !== null && row.plan_delta !== undefined) && (
+                                    <React.Fragment> · {row.plan_delta < 0 ? L(`Deficit ${row.plan_delta}`,`缺口 ${row.plan_delta}`) : row.plan_delta > 0 ? L(`Surplus +${row.plan_delta}`,`盈余 +${row.plan_delta}`) : L("Maintain","维持")}</React.Fragment>
+                                  )}
+                                </div>
                               </div>
                               <div style={{ display:"flex", gap:5, flexShrink:0 }}>
                                 {[["green",C.green,row.green_count],["yellow",C.caution,row.yellow_count],["red",C.red,row.red_count]].map(([tier,color,count]) => (
@@ -4226,6 +4290,63 @@ function NutriLogPro({ session, onLogout }) {
                         })}
                     </div>
                   )}
+                </div>
+              );
+            })()}
+
+            {socialSubTab === "achievements" && (() => {
+              const { bestWeek, bestMonth } = achievementsData;
+              if (!bestWeek && !bestMonth) {
+                return <div style={{ textAlign:"center", padding:"40px 20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{T("achievements_empty")}</div>;
+              }
+              const AchievementCard = ({ title, data, periodLabel }) => {
+                if (!data) return null;
+                const g = gradeForScore(data.compositeScore, C);
+                const subjects = [
+                  { label:L("Calories","热量"), icon:"🔥", score:data.categoryScores.calories },
+                  { label:L("Protein","蛋白质"), icon:"🥩", score:data.categoryScores.protein },
+                  { label:L("Carbs","碳水"), icon:"🍞", score:data.categoryScores.carbs },
+                  { label:L("Fat","脂肪"), icon:"🥑", score:data.categoryScores.fat },
+                  { label:L("Water","饮水"), icon:"💧", score:data.categoryScores.water },
+                  { label:L("Workout","运动"), icon:"🏃", score:data.categoryScores.workout },
+                ];
+                return (
+                  <div className="card" style={{ padding:"16px", marginBottom:14 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                      <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"800", color:C.pink }}>🎖️ {title}</span>
+                      <span style={{ fontSize:11, color:C.textMuted, fontWeight:"700" }}>{periodLabel}</span>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
+                      <div style={{ flexShrink:0, textAlign:"center", minWidth:70 }}>
+                        <div style={{
+                          fontFamily:"'Permanent Marker',cursive",
+                          fontSize: g.grade.length>=4 ? 28 : g.grade.length===3 ? 34 : 44,
+                          color:g.color, lineHeight:1, transform:"rotate(-4deg)", display:"inline-block",
+                          WebkitTextStroke: `1.3px ${theme==="dark" ? "#ffffff" : "#000000"}`,
+                          textShadow:`2px 2px 0 rgba(0,0,0,0.15)`
+                        }}>{g.grade}</div>
+                        {g.grade.startsWith("SS") && <div style={{ fontSize:12, marginTop:2 }}>✨✨</div>}
+                      </div>
+                      <div style={{ fontSize:12, color:C.textMuted }}>{L(`Scored ${data.compositeScore}% across ${data.tracked} tracked day(s).`, `共记录 ${data.tracked} 天，综合评分 ${data.compositeScore}%。`)}</div>
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8 }}>
+                      {subjects.map(s => {
+                        const sub = gradeForScore(s.score, C);
+                        return (
+                          <div key={s.label} style={{ background:C.surface, borderRadius:12, padding:"8px 6px", textAlign:"center" }}>
+                            <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700" }}>{s.icon} {s.label}</div>
+                            <div style={{ fontSize:14, fontWeight:"800", color:sub.color, fontFamily:"'DM Sans',sans-serif", marginTop:2 }}>{sub.grade}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              };
+              return (
+                <div>
+                  <AchievementCard title={T("achievements_best_week")} data={bestWeek} periodLabel={bestWeek ? getWeekRangeString(new Date(bestWeek.label+"T00:00:00")) : ""} />
+                  <AchievementCard title={T("achievements_best_month")} data={bestMonth} periodLabel={bestMonth ? new Date(bestMonth.label+"-01T00:00:00").toLocaleDateString(lang==="zh"?"zh-CN":"en-US",{month:"long",year:"numeric"}) : ""} />
                 </div>
               );
             })()}
