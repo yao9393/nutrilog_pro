@@ -861,7 +861,7 @@ const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme,
   );
 });
 
-const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly, theme, C, onSlotChange, onSaveFavorite, isFavorited }) {
+const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly, theme, C, onSlotChange, onSaveFavorite, isFavorited, onRerunAI, rerunning }) {
   const cardBg = C.card;
   const cardBgDragging = C.cardHover;
   const textColor = C.text;
@@ -947,7 +947,10 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
         </div>
         {/* Calories + a single overflow menu, stacked vertically so they don't crowd the name row */}
         <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4, flexShrink:0, position:"relative" }}>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:pinkColor, fontWeight:"800" }}>{Math.round(meal.calories)}</div>
+          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+            {rerunning && <div className="spin" style={{ width:12, height:12, border:`2px solid ${C.border}`, borderTopColor:pinkColor, borderRadius:"50%" }} />}
+            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:pinkColor, fontWeight:"800" }}>{Math.round(meal.calories)}</div>
+          </div>
           {!readonly && (
             <React.Fragment>
               <button onClick={() => setMenuOpen(!menuOpen)} style={{ background:"none", border:"none", color:btnColor, fontSize:16, cursor:"pointer", padding:"2px 4px", lineHeight:1 }}>⋯</button>
@@ -963,6 +966,11 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
                     <button onClick={() => { onEdit(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
                       <span style={{ fontSize:13 }}>✏️</span> Edit
                     </button>
+                    {meal.image_url && onRerunAI && (
+                      <button onClick={() => { onRerunAI(); setMenuOpen(false); }} disabled={rerunning} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:textColor, cursor:"pointer", whiteSpace:"nowrap", opacity:rerunning?0.5:1 }}>
+                        <span style={{ fontSize:13 }}>🔄</span> {rerunning ? "Analyzing..." : "Re-run AI"}
+                      </button>
+                    )}
                     <button onClick={() => { onRemove(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:C.red, cursor:"pointer", whiteSpace:"nowrap" }}>
                       <span style={{ fontSize:13 }}>×</span> Remove
                     </button>
@@ -1005,7 +1013,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
   );
 });
 
-const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel, slot, theme, C, saving, lang }) {
+const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel, onUpdate, onRetryAI, analyzeStatusMsg, slot, theme, C, saving, lang }) {
   const isWorkout = entry.type === "workout";
   const isDark = theme !== "light";
   const bg = C.surface;
@@ -1023,24 +1031,54 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
   const fatColor = C.fat;
   const hasItems = !isWorkout && Array.isArray(entry.items) && entry.items.length > 0;
   const [itemsExpanded, setItemsExpanded] = useState(true);
+  const isLoading = entry.aiStatus === "loading";
+  const isError = entry.aiStatus === "error";
+  const numInputStyle = { width:"100%", background:"transparent", border:"none", outline:"none", textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontWeight:"700", color:textColor, fontSize:17 };
   return (
     <div className="fade" style={{ background:bg, border:`1px solid ${border}`, borderRadius:18, padding:16, marginTop:12 }}>
       <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:titleColor, marginBottom:12 }}>
         {isWorkout ? "⌚ Workout Detected" : `🍽 ${slotLabel(slot, lang)} Detected`}
       </div>
       <div style={{ display:"flex", gap:12, marginBottom:14 }}>
-        {entry.image && <img src={entry.image} alt="entry" style={{ width:64, height:64, borderRadius:12, objectFit:"cover" }} />}
-        <div style={{ flex:1 }}>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", marginBottom:4, color:textColor }}>{entry.name||entry.activity}</div>
-          {isWorkout && entry.duration && <div style={{ fontSize:12, color:textMuted }}>Duration: {entry.duration}{entry.heartRate?` · ♥ ${entry.heartRate}`:""}</div>}
-          <div style={{ marginTop:6 }}>
-            <span style={{ fontSize:14, color:isWorkout?workoutAccent:mealAccent, fontFamily:"'DM Sans',sans-serif", fontWeight:"800" }}>
-              {isWorkout?`−${entry.calories}`:entry.calories} kcal
-            </span>
-            {entry.confidence && <span style={{ fontSize:11, color:textDim, marginLeft:8, fontStyle:"italic" }}>({entry.confidence} confidence)</span>}
+        {entry.image && <img src={entry.image} alt="entry" style={{ width:64, height:64, borderRadius:12, objectFit:"cover", flexShrink:0 }} />}
+        <div style={{ flex:1, minWidth:0 }}>
+          <input
+            value={isWorkout ? (entry.activity||"") : (entry.name||"")}
+            onChange={e => onUpdate({ [isWorkout?"activity":"name"]: e.target.value })}
+            placeholder={isWorkout ? "Workout name" : "Meal name"}
+            style={{ width:"100%", background:"transparent", border:"none", outline:"none", borderBottom:`1px dashed ${C.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", marginBottom:4, color:textColor, padding:"2px 0" }}
+          />
+          {isWorkout && entry.duration && <div style={{ fontSize:12, color:textMuted, marginTop:4 }}>Duration: {entry.duration}{entry.heartRate?` · ♥ ${entry.heartRate}`:""}</div>}
+          <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6 }}>
+            {isWorkout && <span style={{ fontSize:14, color:workoutAccent, fontWeight:"800" }}>−</span>}
+            <input
+              type="number" value={entry.calories||0}
+              onChange={e => onUpdate({ calories: Number(e.target.value)||0 })}
+              style={{ width:70, background:"transparent", border:"none", outline:"none", borderBottom:`1px dashed ${C.border}`, fontSize:14, color:isWorkout?workoutAccent:mealAccent, fontFamily:"'DM Sans',sans-serif", fontWeight:"800", padding:"2px 0" }}
+            />
+            <span style={{ fontSize:13, color:textMuted }}>kcal</span>
+            {entry.confidence && <span style={{ fontSize:11, color:textDim, marginLeft:4, fontStyle:"italic" }}>({entry.confidence} confidence)</span>}
           </div>
         </div>
       </div>
+
+      {isLoading && (
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, background:subCardBg, borderRadius:12, padding:"10px 12px" }}>
+          <div className="spin" style={{ width:16, height:16, border:`2px solid ${C.border}`, borderTopColor:mealAccent, borderRadius:"50%", flexShrink:0 }} />
+          <span style={{ fontSize:12.5, fontStyle:"italic", color:textMuted }}>{analyzeStatusMsg || L("AI is analyzing your photo...","AI 正在分析您的照片...")}</span>
+        </div>
+      )}
+
+      {isError && (
+        <div style={{ marginBottom:14, background:`${C.red}14`, border:`1px solid ${C.red}40`, borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ fontSize:12.5, color:C.red, lineHeight:1.5, marginBottom:8 }}>⚠️ {entry.aiError}</div>
+          <div style={{ fontSize:11.5, color:textMuted, marginBottom:8 }}>{L("The photo is saved — fill in values by hand below, or try AI again.","照片已保留 —— 可在下方手动填写数值，或重试 AI 分析。")}</div>
+          <button className="ghost-btn" style={{ width:"100%", padding:"7px", fontSize:12, borderColor:C.red, color:C.red }} onClick={onRetryAI}>
+            🔄 {L("Retry AI","重试 AI")}
+          </button>
+        </div>
+      )}
+
       {hasItems && (
         <div style={{ marginBottom:14, background:subCardBg, borderRadius:12, padding:"10px 12px", border:isDark?"none":`1px solid ${C.border}` }}>
           <div onClick={() => setItemsExpanded(!itemsExpanded)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", marginBottom: itemsExpanded ? 8 : 0 }}>
@@ -1057,10 +1095,13 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
       )}
       {!isWorkout && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
-          {[["Protein",entry.protein,proteinColor],["Carbs",entry.carbs,carbsColor],["Fat",entry.fat,fatColor]].map(([l,v,c]) => (
+          {[["Protein","protein",entry.protein,proteinColor],["Carbs","carbs",entry.carbs,carbsColor],["Fat","fat",entry.fat,fatColor]].map(([l,key,v,c]) => (
             <div key={l} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
               <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:17, color:c, fontWeight:"700" }}>{Math.round(v)}g</div>
+              <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:2 }}>
+                <input type="number" value={v||0} onChange={e => onUpdate({ [key]: Number(e.target.value)||0 })} style={numInputStyle} />
+                <span style={{ fontSize:11, color:c }}>g</span>
+              </div>
             </div>
           ))}
         </div>
@@ -1339,12 +1380,23 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
     const model = "gemini-2.5-flash-lite"; // higher free-tier RPM/RPD than 2.5-flash, plenty capable for this use case
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
-    const maxRetries = 2; // reduced from 3 — if it's actually a daily-quota block, extra in-process
-    // retries just burn more of that same exhausted quota for nothing.
+    const maxRetries = 1; // reduced further — each attempt now has its own timeout below, so total
+    // worst-case wait time stays bounded (roughly 2×15s + one short backoff) instead of open-ended.
     let lastErr = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const res = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+        // Hard timeout per attempt, tuned short on purpose: Gemini normally responds quickly when
+        // things are working, so if a request is still hanging past 5s, it's very unlikely to
+        // suddenly recover — better to fail fast and let the user immediately retry (re-snap the
+        // photo) than leave them staring at a spinner for 15-30+ seconds only to fail anyway.
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        let res;
+        try {
+          res = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body), signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
         if (res.ok) {
           const data = await res.json();
           window.__geminiRateLimitStreak = 0; // a success means we're not actually stuck — reset
@@ -1372,9 +1424,11 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
           // really a "brief burst" — the message below escalates once this streak builds up.
           window.__geminiRateLimitStreak = (window.__geminiRateLimitStreak||0) + 1;
 
+          // This is a genuinely different situation from a timeout above — the server responded
+          // quickly, it's just asking us to wait briefly, so one short retry is still worthwhile.
           if (attempt < maxRetries) {
-            const backoff = retrySecondsFromApi ? retrySecondsFromApi*1000 : 2000 * Math.pow(2, attempt);
-            await new Promise(r => setTimeout(r, Math.min(backoff, 8000)));
+            const backoff = retrySecondsFromApi ? retrySecondsFromApi*1000 : 1500;
+            await new Promise(r => setTimeout(r, Math.min(backoff, 3000)));
             lastErr = new Error("RATE_LIMITED");
             lastErr.retrySeconds = retrySecondsFromApi;
             continue;
@@ -1386,6 +1440,7 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
         throw new Error(msg);
       } catch (err) {
         if (err.message === "KEY_RESTRICTED" || err.message === "QUOTA_EXHAUSTED") throw err;
+        if (err.name === "AbortError") throw new Error("TIMED_OUT"); // fail immediately, no retry
         lastErr = err;
         if (attempt >= maxRetries) throw err;
       }
@@ -1404,20 +1459,31 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
     if (imagePart) content.push({ type:"image", source:{ type:"base64", media_type: imagePart.mimeType || "image/jpeg", data: imagePart.data } });
     content.push({ type:"text", text: promptText });
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
-        messages: [{ role:"user", content }]
-      })
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    let res;
+    try {
+      res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          messages: [{ role:"user", content }]
+        }),
+        signal: controller.signal
+      });
+    } catch (err) {
+      if (err.name === "AbortError") throw new Error("Claude request timed out — your connection may be slow or unstable right now.");
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
       const msg = errBody?.error?.message || `HTTP ${res.status}`;
@@ -1483,6 +1549,7 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
 
   const friendlyGeminiError = (err) => {
     if (err.message === "KEY_RESTRICTED") return "⚠️ Your key has domain restrictions. See Settings for a fix.";
+    if (err.message === "TIMED_OUT") return "AI didn't respond in time — your connection might be slow right now. Try snapping the photo again, or use manual entry.";
     if (err.message === "LOCAL_LIMIT_REACHED") return `You've hit your daily AI limit (${err.used}/${err.limit}) — this is a limit set in this app's Settings to protect your free quota, not Google's own cutoff. Raise it in Settings > AI Settings if you have headroom left, add a Claude key as a second provider, or use manual entry for now.`;
     if (err.message === "QUOTA_EXHAUSTED") {
       const { countdownText, clockText } = pacificResetCountdown();
@@ -1718,7 +1785,6 @@ function NutriLogPro({ session, onLogout }) {
 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeStatusMsg, setAnalyzeStatusMsg] = useState("Reading your photo...");
-  const [analysisType, setAnalysisType] = useState(null);
   const [pendingEntry, setPendingEntry] = useState(null);
   const [savingEntry, setSavingEntry] = useState(false);
   const [error, setError] = useState(null);
@@ -2261,22 +2327,47 @@ function NutriLogPro({ session, onLogout }) {
 
   const analyzeImage = useCallback(async (file, type) => {
     if (!file) return;
-    setError(null); setAnalysisType(type); setAnalyzing(true);
+    setError(null);
+    try {
+      const { dataUrl, base64, blob } = await compressImage(file, 1024, 0.75);
+      // The card appears now, with the photo attached, BEFORE AI even runs — capturing the photo
+      // should never be blocked by or lost to an AI failure. Values start blank/zero and the user
+      // can log as-is, edit them by hand, or wait/retry for AI to fill them in.
+      const baseEntry = {
+        name: "", activity: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0,
+        sugar: 0, sodium: 0, fiber: 0, items: null, confidence: null, duration: null, heartRate: null,
+        type, image: dataUrl, _blob: blob, _base64: base64,
+        aiStatus: "loading", aiError: null
+      };
+      setPendingEntry(baseEntry);
+      runAIAnalysis(baseEntry);
+    } catch (err) {
+      // Compression itself failing is rare (corrupt file, etc.) — this is the one case where
+      // there's genuinely nothing to show yet.
+      setError(L("Couldn't process that photo — please try again.","无法处理该照片，请重试。"));
+    }
+  }, []);
+
+  // Runs (or re-runs, on retry) the AI analysis against an already-captured photo, updating the
+  // existing pending entry in place rather than creating/gating it — so a failure here never
+  // removes the photo or blocks logging, and retrying doesn't require re-taking the picture.
+  const runAIAnalysis = useCallback(async (entry) => {
+    if (!entry) return;
+    setAnalyzing(true);
+    setPendingEntry(prev => (prev && prev.image === entry.image) ? { ...prev, aiStatus:"loading", aiError:null } : prev);
     let statusTimer = null;
-    if (type === "meal") {
+    if (entry.type === "meal") {
       const messages = ["Reading your photo...", "Identifying ingredients...", "Estimating portion sizes...", "Calculating calories & macros...", "Almost done..."];
       let idx = 0;
       setAnalyzeStatusMsg(messages[0]);
       statusTimer = setInterval(() => { idx = Math.min(idx+1, messages.length-1); setAnalyzeStatusMsg(messages[idx]); }, 2200);
     }
     try {
-      const { dataUrl, base64, blob } = await compressImage(file, 1024, 0.75);
-      addAiBytesToday(blob.size);
-      const prompt = type === "meal"
+      const prompt = entry.type === "meal"
         ? `You are a careful nutrition estimator. Look at this food photo and identify each distinct visible component (e.g. chicken, mashed potato, egg, salad, sauce). For each component, estimate a realistic portion size based on what's visible on the plate (use standard serving sizes as a reference point — e.g. a typical chicken thigh is ~120-150g, a scoop of mashed potato is ~150g — do not assume oversized restaurant portions unless the plate clearly shows one). Estimate calories, macros, sugar, sodium, and fiber for each component based on that portion size. IMPORTANT: the overall "calories"/"protein"/"carbs"/"fat"/"sugar"/"sodium"/"fiber" fields MUST equal the exact sum of the "items" array values — do not estimate the total separately. Output ONLY raw JSON, no code fences: {"name":"overall meal name","calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number,"items":[{"item":"chicken","grams_estimate":number,"calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number}],"confidence":"high"}${geminiLangInstruction(lang)}`
         : `Apple Watch workout summary. Output ONLY raw JSON, no code fences: {"calories":number,"activity":"activity name","duration":"45 min","heartRate":null}${geminiLangInstruction(lang)}`;
       const raw = await callGemini({
-        contents:[{ role:"user", parts:[{ text:prompt },{ inlineData:{ mimeType:"image/jpeg", data:base64 } }] }]
+        contents:[{ role:"user", parts:[{ text:prompt },{ inlineData:{ mimeType:"image/jpeg", data:entry._base64 } }] }]
       });
       const parsed = JSON.parse(raw.replace(/```json|```/gi,"").trim());
       // Safety net: if itemized breakdown exists, the displayed/saved total is ALWAYS
@@ -2290,14 +2381,63 @@ function NutriLogPro({ session, onLogout }) {
         parsed.sodium   = parsed.items.reduce((s,it)=>s+Number(it.sodium||0),0);
         parsed.fiber    = parsed.items.reduce((s,it)=>s+Number(it.fiber||0),0);
       }
-      setPendingEntry({ ...parsed, type, image: dataUrl, _blob: blob });
-    } catch(err) {
-      setError(friendlyGeminiError(err));
+      addAiBytesToday(entry._blob.size);
+      setPendingEntry(prev => (prev && prev.image === entry.image) ? { ...prev, ...parsed, aiStatus:"success", aiError:null } : prev);
+    } catch (err) {
+      setPendingEntry(prev => (prev && prev.image === entry.image) ? { ...prev, aiStatus:"error", aiError: friendlyGeminiError(err) } : prev);
     } finally {
       if (statusTimer) clearInterval(statusTimer);
       setAnalyzing(false);
     }
   }, [geminiKey, lang]);
+
+  const [rerunningMealId, setRerunningMealId] = useState(null);
+  const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+  const rerunMealAI = useCallback(async (meal) => {
+    if (!meal.image_url) return;
+    setRerunningMealId(meal.id);
+    setError(null);
+    try {
+      const imgRes = await fetch(meal.image_url);
+      if (!imgRes.ok) throw new Error("Couldn't re-fetch the saved photo.");
+      const blob = await imgRes.blob();
+      const base64 = await blobToBase64(blob);
+      const prompt = `You are a careful nutrition estimator. Look at this food photo and identify each distinct visible component (e.g. chicken, mashed potato, egg, salad, sauce). For each component, estimate a realistic portion size based on what's visible on the plate (use standard serving sizes as a reference point — e.g. a typical chicken thigh is ~120-150g, a scoop of mashed potato is ~150g — do not assume oversized restaurant portions unless the plate clearly shows one). Estimate calories, macros, sugar, sodium, and fiber for each component based on that portion size. IMPORTANT: the overall "calories"/"protein"/"carbs"/"fat"/"sugar"/"sodium"/"fiber" fields MUST equal the exact sum of the "items" array values — do not estimate the total separately. Output ONLY raw JSON, no code fences: {"name":"overall meal name","calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number,"items":[{"item":"chicken","grams_estimate":number,"calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number}],"confidence":"high"}${geminiLangInstruction(lang)}`;
+      const raw = await callGemini({
+        contents:[{ role:"user", parts:[{ text:prompt },{ inlineData:{ mimeType:"image/jpeg", data:base64 } }] }]
+      });
+      const parsed = JSON.parse(raw.replace(/```json|```/gi,"").trim());
+      if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+        parsed.calories = parsed.items.reduce((s,it)=>s+Number(it.calories||0),0);
+        parsed.protein  = parsed.items.reduce((s,it)=>s+Number(it.protein||0),0);
+        parsed.carbs    = parsed.items.reduce((s,it)=>s+Number(it.carbs||0),0);
+        parsed.fat      = parsed.items.reduce((s,it)=>s+Number(it.fat||0),0);
+        parsed.sugar    = parsed.items.reduce((s,it)=>s+Number(it.sugar||0),0);
+        parsed.sodium   = parsed.items.reduce((s,it)=>s+Number(it.sodium||0),0);
+        parsed.fiber    = parsed.items.reduce((s,it)=>s+Number(it.fiber||0),0);
+      }
+      const patch = {
+        name: parsed.name || meal.name, calories: parsed.calories||0, protein: parsed.protein||0, carbs: parsed.carbs||0, fat: parsed.fat||0,
+        sugar_g: parsed.sugar||0, sodium_mg: parsed.sodium||0, fiber_g: parsed.fiber||0,
+        confidence: parsed.confidence||"high", items: Array.isArray(parsed.items) ? parsed.items : null
+      };
+      await DataAPI.updateMeal(meal.id, patch);
+      setDayData(d => ({ ...d, meals: d.meals.map(m => m.id===meal.id ? { ...m, ...patch } : m) }));
+    } catch (err) {
+      setError(friendlyGeminiError(err));
+    } finally {
+      setRerunningMealId(null);
+    }
+  }, [geminiKey, lang]);
+
+  const updatePendingEntry = useCallback((patch) => {
+    setPendingEntry(prev => prev ? { ...prev, ...patch } : prev);
+  }, []);
 
   const confirmEntry = async () => {
     if (!pendingEntry) return;
@@ -3957,20 +4097,11 @@ function NutriLogPro({ session, onLogout }) {
             })()}
             <div className="upload-zone" style={{ marginBottom:10 }} onClick={() => !analyzing && foodRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();analyzeImage(e.dataTransfer.files[0],"meal")}}>
               <input ref={foodRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>analyzeImage(e.target.files[0],"meal")} />
-              {analyzing && analysisType==="meal" ? (
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10, width:"100%" }}>
-                  <div style={{ width:"70%", maxWidth:200, height:6, background:C.border, borderRadius:6, overflow:"hidden" }}>
-                    <div style={{ height:"100%", width:"40%", background:`linear-gradient(90deg, transparent, ${C.pink}, transparent)`, borderRadius:6, animation:"progressSlide 1.3s ease-in-out infinite" }} />
-                  </div>
-                  <span style={{ fontStyle:"italic", color:C.textMuted, fontSize:13 }}>{analyzeStatusMsg}</span>
-                </div>
-              ) : (
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
-                  <div style={{ fontSize:28 }}>📸</div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"700", color:C.text }}>{L("Add a photo of your","添加")} {slotLabel(activeSlot, lang)}{L("","照片")}</div>
-                  <div style={{ fontSize:12, fontStyle:"italic", color:C.textMuted }}>{L("Take a photo or choose from your library — AI estimates calories & macros","拍照或从相册选择 —— AI 将自动估算热量与营养素")}</div>
-                </div>
-              )}
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+                <div style={{ fontSize:28 }}>📸</div>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"700", color:C.text }}>{L("Add a photo of your","添加")} {slotLabel(activeSlot, lang)}{L("","照片")}</div>
+                <div style={{ fontSize:12, fontStyle:"italic", color:C.textMuted }}>{L("Take a photo or choose from your library — AI estimates calories & macros","拍照或从相册选择 —— AI 将自动估算热量与营养素")}</div>
+              </div>
             </div>
             <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
               <div style={{ display:"flex", gap:8, marginBottom:8 }}>
@@ -4006,7 +4137,7 @@ function NutriLogPro({ session, onLogout }) {
                   }}>☆</button>
               </div>
             </div>
-            {pendingEntry && pendingEntry.type==="meal" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => setPendingEntry(null)} slot={activeSlot} theme={theme} C={C} saving={savingEntry} lang={lang} />}
+            {pendingEntry && pendingEntry.type==="meal" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => setPendingEntry(null)} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} slot={activeSlot} theme={theme} C={C} saving={savingEntry} lang={lang} />}
             <div style={{ marginTop:20 }}>
               <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:10 }}>📝 {L("Food Intake Feed","饮食记录动态")}</div>
               {SLOTS.map(slot => {
@@ -4019,7 +4150,7 @@ function NutriLogPro({ session, onLogout }) {
                     </div>
                     {slotMeals.length===0
                       ? <div style={{ fontSize:12, fontStyle:"italic", color:C.textDim, paddingLeft:10, marginBottom:8 }}>{L(`Nothing logged for ${slotLabel(slot, lang)}`, `${slotLabel(slot, lang)}还没有记录`)}</div>
-                      : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={() => removeMeal(m.id)} onEdit={() => setEditingItem({...m,type:"meal"})} onSlotChange={(dir) => changeMealSlot(m.id, dir)} theme={theme} C={C} onSaveFavorite={() => saveFavorite("meal", { name:m.name, calories:m.calories, protein:m.protein, carbs:m.carbs, fat:m.fat, sugar_g:m.sugar_g, sodium_mg:m.sodium_mg, fiber_g:m.fiber_g, default_slot:m.slot })} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} />)
+                      : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={() => removeMeal(m.id)} onEdit={() => setEditingItem({...m,type:"meal"})} onSlotChange={(dir) => changeMealSlot(m.id, dir)} theme={theme} C={C} onSaveFavorite={() => saveFavorite("meal", { name:m.name, calories:m.calories, protein:m.protein, carbs:m.carbs, fat:m.fat, sugar_g:m.sugar_g, sodium_mg:m.sodium_mg, fiber_g:m.fiber_g, default_slot:m.slot })} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} onRerunAI={() => rerunMealAI(m)} rerunning={rerunningMealId===m.id} />)
                     }
                   </div>
                 );
@@ -4250,7 +4381,7 @@ function NutriLogPro({ session, onLogout }) {
                   }}>☆</button>
               </div>
             </div>
-            {pendingEntry && pendingEntry.type==="workout" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => setPendingEntry(null)} theme={theme} C={C} saving={savingEntry} />}
+            {pendingEntry && pendingEntry.type==="workout" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => setPendingEntry(null)} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} theme={theme} C={C} saving={savingEntry} />}
             <div style={{ marginTop:20 }}>
               <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent, marginBottom:10 }}>🏃 {L("Active Workouts Logged","已记录运动")}</div>
               {(dayData.workouts||[]).length===0 ? (
