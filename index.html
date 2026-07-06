@@ -1391,12 +1391,14 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
     let lastErr = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        // Hard timeout per attempt, tuned short on purpose: Gemini normally responds quickly when
-        // things are working, so if a request is still hanging past 5s, it's very unlikely to
-        // suddenly recover — better to fail fast and let the user immediately retry (re-snap the
-        // photo) than leave them staring at a spinner for 15-30+ seconds only to fail anyway.
+        // Photo analysis (image + a detailed itemized JSON breakdown) genuinely takes longer than
+        // a simple text prompt — 5s was cutting off plenty of requests that would have succeeded
+        // fine given a bit more room. That aggressive timeout made sense when a stuck request left
+        // the whole screen looking frozen; now the card shows the photo immediately with a visible,
+        // honest "AI is analyzing..." indicator, so there's no need to race to fail — 12s gives
+        // real analysis time to complete while still catching a genuinely hung connection.
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
         let res;
         try {
           res = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body), signal: controller.signal });
@@ -1466,7 +1468,7 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
     content.push({ type:"text", text: promptText });
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
     let res;
     try {
       res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1555,7 +1557,7 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
 
   const friendlyGeminiError = (err) => {
     if (err.message === "KEY_RESTRICTED") return "⚠️ Your key has domain restrictions. See Settings for a fix.";
-    if (err.message === "TIMED_OUT") return "AI didn't respond in time — your connection might be slow right now. Try snapping the photo again, or use manual entry.";
+    if (err.message === "TIMED_OUT") return "AI is taking longer than usual to respond right now — this can happen when it's busy, not necessarily your connection. Tap 🔄 Retry AI in a moment, or fill in values by hand.";
     if (err.message === "LOCAL_LIMIT_REACHED") return `You've hit your daily AI limit (${err.used}/${err.limit}) — this is a limit set in this app's Settings to protect your free quota, not Google's own cutoff. Raise it in Settings > AI Settings if you have headroom left, add a Claude key as a second provider, or use manual entry for now.`;
     if (err.message === "QUOTA_EXHAUSTED") {
       const { countdownText, clockText } = pacificResetCountdown();
