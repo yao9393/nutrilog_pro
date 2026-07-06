@@ -422,6 +422,12 @@ const HIGHER_BETTER_CURVE = [[0,10],[80,64],[100,80],[125,100]];
 // less) maxes out at SSS; drifting over climbs down through the grades, reaching C around 120%.
 const LOWER_BETTER_CURVE = [[0,100],[80,100],[100,75],[120,45],[140,10]];
 
+// Workout: scored on average daily calories burned (not just "did you log anything"). 0-250kcal
+// (roughly just daily steps/incidental movement) is locked to the C-B range — still counts for
+// something, since rest days are a legitimate part of training, not a failure — then scales up
+// smoothly through the grades, reaching SSS at 700kcal+.
+const WORKOUT_CURVE = [[0,25],[250,58],[400,75],[550,88],[700,100]];
+
 function getMondayKey(dateKey) {
   const d = new Date(dateKey+"T00:00:00");
   const dow = d.getDay(); // 0=Sun..6=Sat
@@ -1065,16 +1071,16 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
       {isLoading && (
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, background:subCardBg, borderRadius:12, padding:"10px 12px" }}>
           <div className="spin" style={{ width:16, height:16, border:`2px solid ${C.border}`, borderTopColor:mealAccent, borderRadius:"50%", flexShrink:0 }} />
-          <span style={{ fontSize:12.5, fontStyle:"italic", color:textMuted }}>{analyzeStatusMsg || L("AI is analyzing your photo...","AI 正在分析您的照片...")}</span>
+          <span style={{ fontSize:12.5, fontStyle:"italic", color:textMuted }}>{analyzeStatusMsg || (lang==="zh" ? "AI 正在分析您的照片..." : "AI is analyzing your photo...")}</span>
         </div>
       )}
 
       {isError && (
         <div style={{ marginBottom:14, background:`${C.red}14`, border:`1px solid ${C.red}40`, borderRadius:12, padding:"10px 12px" }}>
           <div style={{ fontSize:12.5, color:C.red, lineHeight:1.5, marginBottom:8 }}>⚠️ {entry.aiError}</div>
-          <div style={{ fontSize:11.5, color:textMuted, marginBottom:8 }}>{L("The photo is saved — fill in values by hand below, or try AI again.","照片已保留 —— 可在下方手动填写数值，或重试 AI 分析。")}</div>
+          <div style={{ fontSize:11.5, color:textMuted, marginBottom:8 }}>{lang==="zh" ? "照片已保留 —— 可在下方手动填写数值，或重试 AI 分析。" : "The photo is saved — fill in values by hand below, or try AI again."}</div>
           <button className="ghost-btn" style={{ width:"100%", padding:"7px", fontSize:12, borderColor:C.red, color:C.red }} onClick={onRetryAI}>
-            🔄 {L("Retry AI","重试 AI")}
+            🔄 {lang==="zh" ? "重试 AI" : "Retry AI"}
           </button>
         </div>
       )}
@@ -2817,7 +2823,7 @@ function NutriLogPro({ session, onLogout }) {
     (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= blankDay()); e.cons += Number(d.calories||0); e.protein += Number(d.protein||0); e.carbs += Number(d.carbs||0); e.fat += Number(d.fat||0); e.sugar += Number(d.sugar_g||0); e.sodium += Number(d.sodium_mg||0); e.fiber += Number(d.fiber_g||0); e.water += Number(d.amount_ml||0); });
 
     let hits = 0, tracked = 0, totalNet = 0, totalTarget = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalSugar = 0, totalSodium = 0, totalFiber = 0;
-    let waterHitDays = 0, workoutDays = 0;
+    let waterHitDays = 0, workoutDays = 0, totalWater = 0, totalWaterTarget = 0, totalWorkoutBurn = 0;
     const tierCounts = { green:0, yellow:0, red:0 };
     for (let d=0; d<7; d++) {
       const day = new Date(prevMonday); day.setDate(prevMonday.getDate()+d);
@@ -2829,7 +2835,10 @@ function NutriLogPro({ session, onLogout }) {
       totalNet += net;
       totalTarget += wt.calories;
       totalProtein += e.protein; totalCarbs += e.carbs; totalFat += e.fat; totalSugar += e.sugar; totalSodium += e.sodium; totalFiber += e.fiber;
-      if (e.water >= waterTargetForDate(key, e.burn)) waterHitDays++;
+      const dayWaterTarget = waterTargetForDate(key, e.burn);
+      totalWater += e.water; totalWaterTarget += dayWaterTarget;
+      totalWorkoutBurn += e.burn;
+      if (e.water >= dayWaterTarget) waterHitDays++;
       if (e.workedOut) workoutDays++;
       const hit = wt.goal === "gain" ? net >= wt.calories : net <= wt.calories;
       if (hit) hits++;
@@ -2902,6 +2911,9 @@ function NutriLogPro({ session, onLogout }) {
     const fiberTargetTotal = fiberTarget * tracked;
     const fiberRatioPct = fiberTargetTotal ? (totalFiber/fiberTargetTotal)*100 : 100;
 
+    const waterRatioPct = totalWaterTarget ? (totalWater/totalWaterTarget)*100 : 100;
+    const avgWorkoutBurn = tracked ? totalWorkoutBurn/tracked : 0;
+
     const categoryScores = {
       calories: interpolateScore(avgOffPct, CAL_CURVE),
       protein: interpolateScore(proteinRatioPct, HIGHER_BETTER_CURVE),
@@ -2910,11 +2922,15 @@ function NutriLogPro({ session, onLogout }) {
       sugar: avgSugarPct===null ? 100 : interpolateScore(avgSugarPct, LOWER_BETTER_CURVE),
       sodium: avgSodiumPct===null ? 100 : interpolateScore(avgSodiumPct, LOWER_BETTER_CURVE),
       fiber: interpolateScore(fiberRatioPct, HIGHER_BETTER_CURVE),
-      water: tracked ? Math.round((waterHitDays/tracked)*100) : 0,
-      workout: tracked ? Math.round((workoutDays/tracked)*100) : 0,
+      // Water: weekly aggregate (total drunk / total target) run through the same "higher is
+      // better" curve as protein/fiber — so 50%/75%/etc. of target now earns partial credit
+      // instead of only a flat pass/fail on hitting 100% each day.
+      water: interpolateScore(waterRatioPct, HIGHER_BETTER_CURVE),
+      // Workout: average daily calories burned, not just "did you log anything" — see WORKOUT_CURVE.
+      workout: interpolateScore(avgWorkoutBurn, WORKOUT_CURVE),
     };
 
-    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, avgSodiumPct, avgFiberPct, macroIssues, macroDev, waterHitDays, workoutDays, tone, tierCounts, categoryScores };
+    return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, avgSodiumPct, avgFiberPct, macroIssues, macroDev, waterHitDays, workoutDays, waterRatioPct, avgWorkoutBurn, tone, tierCounts, categoryScores };
   })();
 
   // Coach's Note content — computed once here (rather than inside the report card's render) so it
@@ -2958,7 +2974,7 @@ function NutriLogPro({ session, onLogout }) {
     const sodiumLimit = baseTargets.sodium_limit_mg || 2300;
 
     const scoreDays = (dayKeys) => {
-      let tracked=0, totalNet=0, totalTarget=0, totalProtein=0, totalProteinTarget=0, totalCarbs=0, totalCarbsTarget=0, totalFat=0, totalFatTarget=0, totalSugar=0, totalSugarTarget=0, totalSodium=0, totalFiber=0, totalFiberTarget=0, waterHitDays=0, workoutDays=0;
+      let tracked=0, totalNet=0, totalTarget=0, totalProtein=0, totalProteinTarget=0, totalCarbs=0, totalCarbsTarget=0, totalFat=0, totalFatTarget=0, totalSugar=0, totalSugarTarget=0, totalSodium=0, totalFiber=0, totalFiberTarget=0, totalWater=0, totalWaterTarget=0, totalWorkoutBurn=0;
       let weekGoal = null;
       dayKeys.forEach(key => {
         const e = byDate[key];
@@ -2976,8 +2992,8 @@ function NutriLogPro({ session, onLogout }) {
         totalSugar += e.sugar; totalSugarTarget += wt.calories ? (wt.calories*0.10)/4 : 50;
         totalSodium += e.sodium;
         totalFiber += e.fiber; totalFiberTarget += wt.calories ? (wt.calories/1000)*14 : 25;
-        if (e.water >= waterTargetForDate(key, e.burn)) waterHitDays++;
-        if (e.workedOut) workoutDays++;
+        totalWater += e.water; totalWaterTarget += waterTargetForDate(key, e.burn);
+        totalWorkoutBurn += e.burn;
       });
       if (tracked === 0) return null;
       const macroScore = (total, targetTotal) => { if (!targetTotal) return 100; const dev=((total-targetTotal)/targetTotal)*100; return Math.max(20, Math.min(100, Math.round(100-Math.abs(dev)*1.5))); };
@@ -2987,6 +3003,8 @@ function NutriLogPro({ session, onLogout }) {
       const fiberRatioPct = totalFiberTarget ? (totalFiber/totalFiberTarget)*100 : 100;
       const sugarRatioPct = totalSugarTarget ? (totalSugar/totalSugarTarget)*100 : 100;
       const sodiumRatioPct = sodiumLimit ? (totalSodium/(sodiumLimit*tracked))*100 : 100;
+      const waterRatioPct = totalWaterTarget ? (totalWater/totalWaterTarget)*100 : 100;
+      const avgWorkoutBurn = tracked ? totalWorkoutBurn/tracked : 0;
       const categoryScores = {
         calories: interpolateScore(avgOffPct, CAL_CURVE),
         protein: interpolateScore(proteinRatioPct, HIGHER_BETTER_CURVE),
@@ -2995,8 +3013,8 @@ function NutriLogPro({ session, onLogout }) {
         sugar: interpolateScore(sugarRatioPct, LOWER_BETTER_CURVE),
         sodium: interpolateScore(sodiumRatioPct, LOWER_BETTER_CURVE),
         fiber: interpolateScore(fiberRatioPct, HIGHER_BETTER_CURVE),
-        water: Math.round((waterHitDays/tracked)*100),
-        workout: Math.round((workoutDays/tracked)*100),
+        water: interpolateScore(waterRatioPct, HIGHER_BETTER_CURVE),
+        workout: interpolateScore(avgWorkoutBurn, WORKOUT_CURVE),
       };
       const compositeScore = Math.round((categoryScores.calories+categoryScores.protein+categoryScores.carbs+categoryScores.fat+categoryScores.sugar+categoryScores.sodium+categoryScores.fiber+categoryScores.water+categoryScores.workout)/9);
       return { tracked, categoryScores, compositeScore };
@@ -3548,8 +3566,8 @@ function NutriLogPro({ session, onLogout }) {
                 sugar: a.avgSugarPct===null ? L("No sugar limit set.","未设定糖分限额。") : L(`Averaged ${a.avgSugarPct}% of your sugar limit — the lower, the better.`, `糖分平均为限额的 ${a.avgSugarPct}% —— 摄入越低越好。`),
                 sodium: a.avgSodiumPct===null ? L("No sodium limit set.","未设定钠限额。") : L(`Averaged ${a.avgSodiumPct}% of your sodium limit — staying under is best.`, `钠平均为限额的 ${a.avgSodiumPct}% —— 保持在限额以下最理想。`),
                 fiber: a.avgFiberPct===null ? L("No fiber target set.","未设定纤维目标。") : L(`Averaged ${a.avgFiberPct}% of your fiber target — the higher, the better.`, `纤维平均达标 ${a.avgFiberPct}% —— 摄入越高越好。`),
-                water: L(`Hit your water goal on ${a.waterHitDays} of ${a.tracked} tracked days.`, `本周 ${a.tracked} 天中有 ${a.waterHitDays} 天达成饮水目标。`),
-                workout: L(`Logged a workout on ${a.workoutDays} of ${a.tracked} tracked days.`, `本周 ${a.tracked} 天中有 ${a.workoutDays} 天记录了运动。`),
+                water: L(`Averaged ${Math.round(a.waterRatioPct)}% of your water goal (hit it fully on ${a.waterHitDays} of ${a.tracked} days).`, `平均达成饮水目标的 ${Math.round(a.waterRatioPct)}%（完全达标 ${a.waterHitDays}/${a.tracked} 天）。`),
+                workout: L(`Averaged ${Math.round(a.avgWorkoutBurn)} kcal burned per day (logged a workout on ${a.workoutDays} of ${a.tracked} days).`, `平均每天燃烧 ${Math.round(a.avgWorkoutBurn)} 千卡（${a.workoutDays}/${a.tracked} 天记录了运动）。`),
               };
 
               const Dot = ({color}) => <span style={{ display:"inline-block", width:11, height:11, borderRadius:"50%", background:color, margin:"0 2px", verticalAlign:"middle" }} />;
@@ -4381,7 +4399,7 @@ function NutriLogPro({ session, onLogout }) {
                   }}>☆</button>
               </div>
             </div>
-            {pendingEntry && pendingEntry.type==="workout" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => setPendingEntry(null)} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} theme={theme} C={C} saving={savingEntry} />}
+            {pendingEntry && pendingEntry.type==="workout" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => setPendingEntry(null)} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} theme={theme} C={C} saving={savingEntry} lang={lang} />}
             <div style={{ marginTop:20 }}>
               <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent, marginBottom:10 }}>🏃 {L("Active Workouts Logged","已记录运动")}</div>
               {(dayData.workouts||[]).length===0 ? (
