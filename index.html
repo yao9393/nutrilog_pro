@@ -165,7 +165,7 @@ const STRINGS = {
     gallery_empty: "No meal photos yet — snap a photo next time you log a meal and it'll show up here.",
     gallery_hint: "Browse past meal photos and tap ☆ to save any of them as a favorite. This is just browsing — it won't add anything to today's log.",
     leaderboard_optin_label: "Show me on the leaderboard",
-    leaderboard_optin_hint: "Off by default. When on, other opted-in users can see your display name and how many days you hit target each week — nothing else (no food logs, weight, or photos are ever shared).",
+    leaderboard_optin_hint: "Off by default. When on, other opted-in users can see your display name and how many days you hit target each week, and you can post one Best Meal photo per week for others to see and like (see below) — nothing else is ever shared (no food logs, weight, etc.).",
     leaderboard_need_name: "Set a display name in your Profile (👤 on Main) to join the leaderboard.",
     leaderboard_empty: "No one's opted in yet for this week. Be the first!",
     leaderboard_not_set_up: "Leaderboard isn't set up yet — this needs a one-time database migration. Ask your developer to run it.",
@@ -243,7 +243,7 @@ const STRINGS = {
     gallery_empty: "还没有餐食照片 —— 下次记录时拍张照片，就会出现在这里。",
     gallery_hint: "浏览过往的餐食照片，点击 ☆ 即可收藏为最爱。这里只是浏览，不会加入今天的记录。",
     leaderboard_optin_label: "在排行榜显示我",
-    leaderboard_optin_hint: "默认关闭。开启后，其他已开启此设置的用户可以看到您的显示名称，以及您每周达标的天数 —— 仅此而已（不会分享任何饮食记录、体重或照片）。",
+    leaderboard_optin_hint: "默认关闭。开启后，其他已开启此设置的用户可以看到您的显示名称与每周达标天数，并且您每周可以发布一张「本周最佳美食」照片供他人查看和点赞（见下方）—— 不会分享其他任何内容（饮食记录、体重等）。",
     leaderboard_need_name: "请先在个人资料 (主页的 👤) 中设置显示名称，才能加入排行榜。",
     leaderboard_empty: "本周还没有人开启排行榜，快来当第一个吧！",
     leaderboard_not_set_up: "排行榜尚未设置 —— 需要一次性的数据库迁移，请联系开发者执行。",
@@ -966,6 +966,124 @@ const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme,
 // inside the meal edit modal (flag any meal directly) and inside the daily-login streak's red
 // circle picker (pick which meal caused a missed day, then fill in the same fields). One
 // component so the two entry points can never visually or behaviorally drift apart.
+// Lets the person crop out background clutter (plate edge, table, hands) from a just-taken
+// photo before it becomes the entry's photo — a tighter frame around just the food noticeably
+// helps "AI Photo Search" focus on what matters. Pointer events (not separate mouse/touch
+// handlers) so drag-to-move and drag-corner-to-resize both work on desktop and mobile alike.
+function PhotoCropModal({ imageDataUrl, onConfirm, onSkip, onCancel, C, lang }) {
+  const imgRef = useRef();
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [natural, setNatural] = useState({ w:0, h:0 });
+  const [display, setDisplay] = useState({ w:0, h:0 });
+  const [box, setBox] = useState(null); // {x,y,w,h} in CSS px, relative to the image's own top-left
+  const dragRef = useRef(null);
+
+  const clampBox = (b, dispW, dispH) => {
+    let { x, y, w, h } = b;
+    const minSize = 40;
+    w = Math.max(minSize, Math.min(w, dispW));
+    h = Math.max(minSize, Math.min(h, dispH));
+    x = Math.max(0, Math.min(x, dispW - w));
+    y = Math.max(0, Math.min(y, dispH - h));
+    return { x, y, w, h };
+  };
+
+  const onImgLoad = (e) => {
+    const img = e.target;
+    const rect = img.getBoundingClientRect();
+    setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+    setDisplay({ w: rect.width, h: rect.height });
+    const inset = 0.08;
+    setBox({ x: rect.width*inset, y: rect.height*inset, w: rect.width*(1-2*inset), h: rect.height*(1-2*inset) });
+    setImgLoaded(true);
+  };
+
+  const handlePointerDown = (mode) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try { e.target.setPointerCapture(e.pointerId); } catch(_) {}
+    dragRef.current = { mode, startX: e.clientX, startY: e.clientY, startBox: { ...box } };
+  };
+  const handlePointerMove = (e) => {
+    if (!dragRef.current || !box) return;
+    const { mode, startX, startY, startBox } = dragRef.current;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    let next = { ...startBox };
+    if (mode === "move") {
+      next.x = startBox.x + dx;
+      next.y = startBox.y + dy;
+    } else {
+      if (mode.includes("w")) { next.x = startBox.x + dx; next.w = startBox.w - dx; }
+      if (mode.includes("e")) { next.w = startBox.w + dx; }
+      if (mode.includes("n")) { next.y = startBox.y + dy; next.h = startBox.h - dy; }
+      if (mode.includes("s")) { next.h = startBox.h + dy; }
+    }
+    setBox(clampBox(next, display.w, display.h));
+  };
+  const handlePointerUp = () => { dragRef.current = null; };
+
+  const performCrop = () => {
+    if (!box || !imgRef.current) return;
+    const scaleX = natural.w / display.w;
+    const scaleY = natural.h / display.h;
+    const sx = box.x*scaleX, sy = box.y*scaleY, sw = box.w*scaleX, sh = box.h*scaleY;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sw));
+    canvas.height = Math.max(1, Math.round(sh));
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(imgRef.current, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      const reader = new FileReader();
+      reader.onload = () => onConfirm({ blob, dataUrl: reader.result, base64: reader.result.split(",")[1] });
+      reader.readAsDataURL(blob);
+    }, "image/jpeg", 0.85);
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:2000, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div style={{ fontSize:15, fontWeight:"700", color:"#fff", marginBottom:14, fontFamily:"'DM Sans',sans-serif" }}>{lang==="zh" ? "裁剪照片" : "Crop your photo"}</div>
+      <div
+        style={{ position:"relative", maxWidth:"92vw", maxHeight:"58vh", touchAction:"none", lineHeight:0 }}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <img
+          ref={imgRef} src={imageDataUrl} alt="" onLoad={onImgLoad} draggable={false}
+          style={{ display:"block", maxWidth:"92vw", maxHeight:"58vh", userSelect:"none", pointerEvents:"none" }}
+        />
+        {imgLoaded && box && (
+          <React.Fragment>
+            <div style={{ position:"absolute", left:0, top:0, width:"100%", height:box.y, background:"rgba(0,0,0,0.6)" }} />
+            <div style={{ position:"absolute", left:0, top:box.y+box.h, width:"100%", height: Math.max(0, display.h-box.y-box.h), background:"rgba(0,0,0,0.6)" }} />
+            <div style={{ position:"absolute", left:0, top:box.y, width:box.x, height:box.h, background:"rgba(0,0,0,0.6)" }} />
+            <div style={{ position:"absolute", left:box.x+box.w, top:box.y, width:Math.max(0, display.w-box.x-box.w), height:box.h, background:"rgba(0,0,0,0.6)" }} />
+            <div
+              onPointerDown={handlePointerDown("move")}
+              style={{ position:"absolute", left:box.x, top:box.y, width:box.w, height:box.h, border:`2px solid ${C.pink}`, boxSizing:"border-box", cursor:"move", touchAction:"none" }}
+            />
+            {[["nw",box.x,box.y],["ne",box.x+box.w,box.y],["sw",box.x,box.y+box.h],["se",box.x+box.w,box.y+box.h]].map(([mode,hx,hy]) => (
+              <div
+                key={mode}
+                onPointerDown={handlePointerDown(mode)}
+                style={{ position:"absolute", left:hx-11, top:hy-11, width:22, height:22, borderRadius:"50%", background:C.pink, border:"2.5px solid #fff", cursor:`${mode}-resize`, touchAction:"none", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}
+              />
+            ))}
+          </React.Fragment>
+        )}
+      </div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", marginTop:12, textAlign:"center", maxWidth:300 }}>
+        {lang==="zh" ? "拖动边角调整范围，拖动中间移动位置 —— 裁掉多余背景可提升识别准确度" : "Drag the corners to resize, drag the middle to move — cropping out background helps AI accuracy"}
+      </div>
+      <div style={{ display:"flex", gap:8, marginTop:16, width:"100%", maxWidth:360 }}>
+        <button className="ghost-btn" style={{ flex:1, color:"#fff", borderColor:"rgba(255,255,255,0.35)", padding:"10px", fontSize:12.5 }} onClick={onCancel}>{lang==="zh"?"取消":"Cancel"}</button>
+        <button className="ghost-btn" style={{ flex:1, color:"#fff", borderColor:"rgba(255,255,255,0.35)", padding:"10px", fontSize:12.5 }} onClick={onSkip}>{lang==="zh"?"使用原图":"Use Full Photo"}</button>
+        <button className="pink-btn" style={{ flex:1.2, padding:"10px", fontSize:12.5 }} disabled={!imgLoaded} onClick={performCrop}>✂️ {lang==="zh"?"裁剪":"Crop"}</button>
+      </div>
+    </div>
+  );
+}
+
 function MealFlagEditor({ flagged, occasion, location, comment, onToggle, onOccasion, onLocation, onComment, C, L }) {
   return (
     <div style={{ background:`${C.red}11`, borderRadius:12, padding:"10px 12px" }}>
@@ -1809,18 +1927,28 @@ function useManualMealForm({ userId, today, activeSlot, setDayData, setError, ca
   // along for the Gallery.
   const [entryPhoto, setEntryPhoto] = useState(null); // { blob, previewUrl, base64 } | null
   const [entryPhotoUploading, setEntryPhotoUploading] = useState(false);
+  // A photo, once compressed, goes here FIRST so it can be cropped before becoming the actual
+  // entryPhoto — cropping out background clutter (plate edge, table, hands) noticeably helps
+  // "AI Photo Search" focus on the food itself. { dataUrl, blob, base64 } | null
+  const [cropSource, setCropSource] = useState(null);
 
   const attachEntryPhoto = async (file) => {
     if (!file) return;
     setError(null);
     try {
       const { dataUrl, blob, base64 } = await compressImage(file, 1024, 0.75);
-      setEntryPhoto({ blob, previewUrl: dataUrl, base64 });
+      setCropSource({ dataUrl, blob, base64 });
     } catch (err) {
       setError(L("Couldn't process that photo — please try again.","无法处理该照片，请重试。"));
     }
   };
   const clearEntryPhoto = () => setEntryPhoto(null);
+  // Called when the crop modal's "Crop" button produces a result.
+  const confirmCrop = (result) => { setEntryPhoto(result); setCropSource(null); };
+  // "Use Full Photo" — keep the compressed original, uncropped.
+  const skipCrop = () => { setEntryPhoto({ blob: cropSource.blob, previewUrl: cropSource.dataUrl, base64: cropSource.base64 }); setCropSource(null); };
+  // Cancel — abandon the photo entirely, back to no-photo state.
+  const cancelCrop = () => setCropSource(null);
 
   const suggestManualDiet = async () => {
     setError(null);
@@ -1877,7 +2005,8 @@ function useManualMealForm({ userId, today, activeSlot, setDayData, setError, ca
     manualCarb, setManualCarb, manualFat, setManualFat, manualSugar, setManualSugar,
     manualSodium, setManualSodium, manualFiber, setManualFiber,
     isSuggesting, suggestManualDiet, addManualMeal,
-    entryPhoto, attachEntryPhoto, clearEntryPhoto, entryPhotoUploading, setEntryPhoto
+    entryPhoto, attachEntryPhoto, clearEntryPhoto, entryPhotoUploading, setEntryPhoto,
+    cropSource, confirmCrop, skipCrop, cancelCrop
   };
 }
 
@@ -2312,6 +2441,16 @@ function NutriLogPro({ session, onLogout }) {
     }
   }, [userId]);
 
+  const deleteMyMealPost = useCallback(async () => {
+    if (!myMealPost) return;
+    try {
+      await DataAPI.deleteMealPost(myMealPost.post_id);
+      setMealPosts(prev => (prev||[]).filter(p => p.user_id !== userId));
+    } catch (err) {
+      setError(L("Failed to delete post: ","删除帖子失败：") + err.message);
+    }
+  }, [myMealPost, userId]);
+
   const mealTotals = dayData.meals.reduce((a,m) => ({ calories:a.calories+Number(m.calories), protein:a.protein+Number(m.protein), carbs:a.carbs+Number(m.carbs), fat:a.fat+Number(m.fat), sugar:a.sugar+Number(m.sugar_g||0), sodium:a.sodium+Number(m.sodium_mg||0), fiber:a.fiber+Number(m.fiber_g||0) }), { calories:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
   const drinkTotals = (dayData.drinks||[]).reduce((a,d) => ({ calories:a.calories+Number(d.calories||0), protein:a.protein+Number(d.protein||0), carbs:a.carbs+Number(d.carbs||0), fat:a.fat+Number(d.fat||0), sugar:a.sugar+Number(d.sugar_g||0), sodium:a.sodium+Number(d.sodium_mg||0), fiber:a.fiber+Number(d.fiber_g||0) }), { calories:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
   const consumed = { calories: mealTotals.calories+drinkTotals.calories, protein: mealTotals.protein+drinkTotals.protein, carbs: mealTotals.carbs+drinkTotals.carbs, fat: mealTotals.fat+drinkTotals.fat, sugar: mealTotals.sugar+drinkTotals.sugar, sodium: mealTotals.sodium+drinkTotals.sodium, fiber: mealTotals.fiber+drinkTotals.fiber };
@@ -2691,7 +2830,8 @@ function NutriLogPro({ session, onLogout }) {
     manualCarb, setManualCarb, manualFat, setManualFat, manualSugar, setManualSugar,
     manualSodium, setManualSodium, manualFiber, setManualFiber,
     isSuggesting, suggestManualDiet, addManualMeal,
-    entryPhoto, attachEntryPhoto, clearEntryPhoto, entryPhotoUploading, setEntryPhoto
+    entryPhoto, attachEntryPhoto, clearEntryPhoto, entryPhotoUploading, setEntryPhoto,
+    cropSource, confirmCrop, skipCrop, cancelCrop
   } = useManualMealForm({ userId, today, activeSlot, setDayData, setError, callGemini, friendlyGeminiError, L });
 
   const {
@@ -4093,9 +4233,9 @@ function NutriLogPro({ session, onLogout }) {
 
               return (
                 <div className="card" style={{ padding:"16px", marginBottom:14, overflow:"hidden" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                    <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>📋 {L("Last Week Report Card","上周成绩单")}</span>
-                    <span style={{ fontSize:11, color:C.textMuted, fontWeight:"700" }}>{L("Week","第")} {a.weekNum}{lang==="zh"?"周":""}: {planLabel}</span>
+                  <div style={{ marginBottom:14 }}>
+                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:4 }}>📋 {L("Last Week Report Card","上周成绩单")}</div>
+                    <div style={{ fontSize:11, color:C.textMuted, fontWeight:"700" }}>{L("Week","第")} {a.weekNum}{lang==="zh"?"周":""}: {planLabel}</div>
                   </div>
 
                   <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:16 }}>
@@ -4336,9 +4476,9 @@ function NutriLogPro({ session, onLogout }) {
               })()}
             </div>
             <div className="card-primary" style={{ padding:"20px 18px", marginBottom:14 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink }}>⚖️ {L("Macro Nutrients","宏量营养素")}</span>
-                <span style={{ fontSize:11, fontStyle:"italic", color:C.textMuted, fontWeight:"500" }}>{L("Fat: stay under · Protein & Carbs: aim to reach","脂肪：控制在目标以下 · 蛋白质与碳水：争取达到目标")}</span>
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink, marginBottom:4 }}>⚖️ {L("Macro Nutrients","宏量营养素")}</div>
+                <div style={{ fontSize:11, fontStyle:"italic", color:C.textMuted, fontWeight:"500" }}>{L("Fat: stay under · Protein & Carbs: aim to reach","脂肪：控制在目标以下 · 蛋白质与碳水：争取达到目标")}</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
                 {[{label:T("common_protein"),key:"protein",color:C.protein,target:targets.protein,icon:"🥩",isCap:false},{label:T("common_carbs"),key:"carbs",color:C.carbs,target:targets.carbs,icon:"🍞",isCap:false},{label:T("common_fat"),key:"fat",color:C.fat,target:targets.fat,icon:"🥑",isCap:true}].map(({label,key,color,target,icon,isCap}) => {
@@ -4373,9 +4513,9 @@ function NutriLogPro({ session, onLogout }) {
             </div>
 
             <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>🧪 {L("Secondary nutrients","次要营养素")}</span>
-                <span style={{ fontSize:11, fontStyle:"italic", color:C.textMuted }}>{L("Sugar & sodium: stay under · Fiber: aim to reach","糖与钠：控制在目标以下 · 纤维：争取达到目标")}</span>
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:4 }}>🧪 {L("Secondary nutrients","次要营养素")}</div>
+                <div style={{ fontSize:11, fontStyle:"italic", color:C.textMuted }}>{L("Sugar & sodium: stay under · Fiber: aim to reach","糖与钠：控制在目标以下 · 纤维：争取达到目标")}</div>
               </div>
               {[
                 { label:L("Sugar","糖"), icon:"🍬", val:consumed.sugar, target:baseTargets.sugar_limit_g||50, unit:"g", isCap:true },
@@ -5224,7 +5364,7 @@ function NutriLogPro({ session, onLogout }) {
                               <button
                                 onClick={() => saveFavorite("meal", { name:m.name, calories:m.calories, protein:m.protein, carbs:m.carbs, fat:m.fat, sugar_g:m.sugar_g, sodium_mg:m.sodium_mg, fiber_g:m.fiber_g, default_slot:m.slot })}
                                 title={L("Save as favorite","收藏为最爱")}
-                                style={{ position:"absolute", top:6, right:6, background:"rgba(0,0,0,0.5)", border:"none", borderRadius:8, width:28, height:28, fontSize:15, color: isFav?C.pink:"#fff", cursor:"pointer" }}
+                                style={{ position:"absolute", top:6, right:6, background: theme==="light" ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.5)", border:"none", borderRadius:8, width:28, height:28, fontSize:15, color: isFav?C.pink:(theme==="light"?"#4a4a4a":"#fff"), cursor:"pointer", boxShadow: theme==="light" ? "0 1px 5px rgba(0,0,0,0.2)" : "none" }}
                               >
                                 {isFav ? "★" : "☆"}
                               </button>
@@ -5255,8 +5395,15 @@ function NutriLogPro({ session, onLogout }) {
                       <div
                         onClick={async () => {
                           const optIn = !baseTargets.leaderboard_opt_in;
-                          setBaseTargets(prev => ({ ...prev, leaderboard_opt_in: optIn }));
-                          try { await DataAPI.setLeaderboardOptIn(userId, optIn); } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
+                          // Leaderboard opt-in now also controls Best Meal photo-sharing — one
+                          // toggle instead of two, since anyone can already view/like the photo
+                          // feed regardless of their own opt-in status; this just means opting
+                          // into the leaderboard also makes posting a photo available immediately.
+                          setBaseTargets(prev => ({ ...prev, leaderboard_opt_in: optIn, meal_post_opt_in: optIn }));
+                          try {
+                            await DataAPI.setLeaderboardOptIn(userId, optIn);
+                            await DataAPI.setMealPostOptIn(userId, optIn);
+                          } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
                         }}
                         role="switch"
                         aria-checked={!!baseTargets.leaderboard_opt_in}
@@ -5321,34 +5468,26 @@ function NutriLogPro({ session, onLogout }) {
                   <div style={{ marginTop:20 }}>
                     <div style={{ fontSize:13, fontWeight:"800", color:C.pink, marginBottom:10 }}>{L("🍽️ Best Meal of the Week","🍽️ 本周最佳美食")}</div>
 
-                    <div className="card" style={{ padding:"14px 16px", marginBottom:14 }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
-                        <div style={{ fontSize:12.5, fontWeight:"700", color:C.text }}>{L("Share your best meal photo","分享你的最佳美食照片")}</div>
-                        <div
-                          onClick={async () => {
-                            const optIn = !baseTargets.meal_post_opt_in;
-                            setBaseTargets(prev => ({ ...prev, meal_post_opt_in: optIn }));
-                            try { await DataAPI.setMealPostOptIn(userId, optIn); } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
-                          }}
-                          role="switch"
-                          aria-checked={!!baseTargets.meal_post_opt_in}
-                          style={{ position:"relative", width:42, height:24, flexShrink:0, background: baseTargets.meal_post_opt_in ? C.pink : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
-                        >
-                          <span style={{ position:"absolute", top:3, left: baseTargets.meal_post_opt_in ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
-                        </div>
+                    {!baseTargets.leaderboard_opt_in && (
+                      <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic", textAlign:"center", padding:"10px 0" }}>
+                        {L("Turn on Leaderboard opt-in above to post your own photo — you can still view and like everyone else's below either way.","开启上方的排行榜设置即可发布自己的照片 —— 无论是否开启，您都可以查看并点赞他人的分享。")}
                       </div>
-                      <div style={{ fontSize:10.5, color:C.textDim, lineHeight:1.5, marginTop:8 }}>{L("Opt in to post one photo from last week and see others' — anyone can like posted photos.","开启后可发布上周一张美食照片，并查看他人分享 —— 任何人都可以点赞。")}</div>
-                    </div>
+                    )}
 
-                    {baseTargets.meal_post_opt_in && (
+                    {baseTargets.leaderboard_opt_in && (
                       <div className="card" style={{ padding:"14px 16px", marginBottom:14 }}>
                         {myMealPost && !mealPostPickerOpen ? (
-                          <div>
-                            <img src={myMealPost.image_url} alt={myMealPost.meal_name} style={{ width:"100%", height:140, objectFit:"cover", borderRadius:12, marginBottom:8 }} />
-                            <div style={{ fontSize:13, fontWeight:"700", color:C.text }}>{myMealPost.meal_name}</div>
-                            {myMealPost.comment && <div style={{ fontSize:12, color:C.textMuted, marginTop:4, fontStyle:"italic" }}>"{myMealPost.comment}"</div>}
-                            <button className="ghost-btn" style={{ width:"100%", marginTop:10, padding:"7px", fontSize:12 }} onClick={() => { setMealPostPickerOpen(true); setMealPostSelectedId(myMealPost.meal_id||null); setMealPostComment(myMealPost.comment||""); }}>
-                              {L("Edit your post","编辑你的帖子")}
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <img src={myMealPost.image_url} alt={myMealPost.meal_name} style={{ width:44, height:44, borderRadius:10, objectFit:"cover", flexShrink:0 }} />
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{myMealPost.meal_name}</div>
+                              <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{myMealPost.liked_by_me ? "❤️" : "🤍"} {myMealPost.like_count} {L("likes","个赞")}</div>
+                            </div>
+                            <button className="ghost-btn" style={{ padding:"7px 12px", fontSize:11.5, flexShrink:0 }} onClick={() => { setMealPostPickerOpen(true); setMealPostSelectedId(myMealPost.meal_id||null); setMealPostComment(myMealPost.comment||""); }}>
+                              {L("Edit","编辑")}
+                            </button>
+                            <button className="ghost-btn" style={{ padding:"7px 12px", fontSize:11.5, color:C.red, borderColor:C.red, flexShrink:0 }} onClick={deleteMyMealPost}>
+                              {L("Delete","删除")}
                             </button>
                           </div>
                         ) : mealPostPickerOpen ? (
@@ -5710,6 +5849,16 @@ function NutriLogPro({ session, onLogout }) {
             </div>
           </div>
         </div>
+      )}
+
+      {cropSource && (
+        <PhotoCropModal
+          imageDataUrl={cropSource.dataUrl}
+          onConfirm={confirmCrop}
+          onSkip={skipCrop}
+          onCancel={cancelCrop}
+          C={C} lang={lang}
+        />
       )}
 
       {showTargetModal && (
