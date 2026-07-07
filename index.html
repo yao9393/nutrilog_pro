@@ -332,6 +332,30 @@ function geminiLangInstruction(lang) {
   return lang === "zh" ? " Respond in Simplified Chinese." : "";
 }
 
+// Shared meal-photo analysis prompt — used for the initial photo capture, the pending-entry
+// "Retry AI" button, and the edit-modal "AI Retry" button, so the estimation logic can't drift
+// out of sync between the three entry points.
+function buildMealAnalysisPrompt(lang) {
+  return `You are a careful nutrition estimator. Look at this food photo and identify each distinct visible component (e.g. chicken, mashed potato, egg, salad, sauce). For each component, estimate a realistic portion size based on what's visible on the plate (use standard serving sizes as a reference point — e.g. a typical chicken thigh is ~120-150g, a scoop of mashed potato is ~150g — do not assume oversized restaurant portions unless the plate clearly shows one). Estimate calories, macros, sugar, sodium, and fiber for each component based on that portion size. IMPORTANT: the overall "calories"/"protein"/"carbs"/"fat"/"sugar"/"sodium"/"fiber" fields MUST equal the exact sum of the "items" array values — do not estimate the total separately. Output ONLY raw JSON, no code fences: {"name":"overall meal name","calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number,"items":[{"item":"chicken","grams_estimate":number,"calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number}],"confidence":"high"}${geminiLangInstruction(lang)}`;
+}
+
+// Parses a raw Gemini meal-analysis response and, when an itemized breakdown is present, always
+// recomputes the totals as the exact sum of items — never trusts two independently-estimated
+// numbers to already agree.
+function parseMealAnalysis(raw) {
+  const parsed = JSON.parse(raw.replace(/```json|```/gi,"").trim());
+  if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+    parsed.calories = parsed.items.reduce((s,it)=>s+Number(it.calories||0),0);
+    parsed.protein  = parsed.items.reduce((s,it)=>s+Number(it.protein||0),0);
+    parsed.carbs    = parsed.items.reduce((s,it)=>s+Number(it.carbs||0),0);
+    parsed.fat      = parsed.items.reduce((s,it)=>s+Number(it.fat||0),0);
+    parsed.sugar    = parsed.items.reduce((s,it)=>s+Number(it.sugar||0),0);
+    parsed.sodium   = parsed.items.reduce((s,it)=>s+Number(it.sodium||0),0);
+    parsed.fiber    = parsed.items.reduce((s,it)=>s+Number(it.fiber||0),0);
+  }
+  return parsed;
+}
+
 
 const DRINK_PRESETS = [
   { drink_type:"Tea", icon:"🍵", amount_ml:250, calories:10, protein:0, carbs:2, fat:0, sugar_g:1, sodium_mg:5 },
@@ -434,6 +458,34 @@ function getMondayKey(dateKey) {
   const offset = dow === 0 ? -6 : 1 - dow;
   d.setDate(d.getDate() + offset);
   return localDateKey(d);
+}
+// Blank daily accumulator used when bucketing meals/workouts/drinks by log_date across the
+// weekly/monthly analytics blocks (previously redefined identically in two places).
+function blankDayStats() {
+  return { cons:0, burn:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0, water:0, workedOut:false };
+}
+// ISO-ish week number for a given Monday-anchored date — used by the streak widget, workout
+// trend, previous-week analysis, and plan trend blocks (previously the same IIFE copy-pasted
+// four times).
+function getWeekNumOf(monday) {
+  const onejan = new Date(monday.getFullYear(),0,1);
+  return Math.ceil((((monday - onejan) / 86400000) + onejan.getDay()+1) / 7);
+}
+// Simple 20-100 "closer to target is better, either direction" score from a deviation
+// percentage — used for the carbs category score (previously duplicated in two places).
+function deviationScore(devPct) {
+  return Math.max(20, Math.min(100, Math.round(100 - Math.abs(devPct)*1.5)));
+}
+// Renders a flagged meal's structured occasion/location/comment into one short display line —
+// shared by MealCard and the Gallery cards so the format can't drift between the two.
+function formatMealFlag(meal, lang) {
+  if (!meal.flagged) return null;
+  const parts = [];
+  if (meal.flag_occasion) parts.push(meal.flag_occasion === "work" ? (lang==="zh"?"工作":"Work") : (lang==="zh"?"个人":"Personal"));
+  if (meal.flag_location) parts.push(meal.flag_location);
+  const head = parts.join(" · ");
+  if (meal.flag_comment) return head ? `${head} — ${meal.flag_comment}` : meal.flag_comment;
+  return head || (lang==="zh" ? "已标记" : "Flagged");
 }
 function getGreeting(lang) {
   const h = new Date().getHours();
@@ -729,7 +781,7 @@ const DataAPI = {
   async getTargets(userId) {
     const { data, error } = await supabase.from('user_targets').select('*').eq('user_id', userId).maybeSingle();
     if (error) throw error;
-    if (!data) return { ...DEFAULT_TARGETS, gender:null, height_cm:null, birth_year:null, activity_level:'moderate', auto_calc:false, goal:'maintain', display_name:null, avatar_url:null, day_cutoff_hour:0, plan_active:false, plan_goal_kg:null, plan_weeks:null, plan_daily_exercise_kcal:0, sugar_limit_g:50, sodium_limit_mg:2300, fiber_target_g:25, water_target_ml:null };
+    if (!data) return { ...DEFAULT_TARGETS, gender:null, height_cm:null, birth_year:null, activity_level:'moderate', auto_calc:false, goal:'maintain', display_name:null, avatar_url:null, day_cutoff_hour:0, plan_active:false, plan_goal_kg:null, plan_weeks:null, plan_daily_exercise_kcal:0, sugar_limit_g:50, sodium_limit_mg:2300, fiber_target_g:25, water_target_ml:null, leaderboard_opt_in:false, meal_post_opt_in:false };
     return {
       calories: data.calories, protein: data.protein, carbs: data.carbs, fat: data.fat,
       gender: data.gender, height_cm: data.height_cm, birth_year: data.birth_year,
@@ -740,7 +792,8 @@ const DataAPI = {
       plan_daily_exercise_kcal: data.plan_daily_exercise_kcal||0,
       sugar_limit_g: data.sugar_limit_g||50, sodium_limit_mg: data.sodium_limit_mg||2300, fiber_target_g: data.fiber_target_g||25,
       water_target_ml: data.water_target_ml||null,
-      leaderboard_opt_in: !!data.leaderboard_opt_in
+      leaderboard_opt_in: !!data.leaderboard_opt_in,
+      meal_post_opt_in: !!data.meal_post_opt_in
     };
   },
   async setTargets(userId, targets) {
@@ -754,6 +807,39 @@ const DataAPI = {
   },
   async setLeaderboardOptIn(userId, optIn) {
     const { error } = await supabase.from('user_targets').update({ leaderboard_opt_in: optIn }).eq('user_id', userId);
+    if (error) throw error;
+  },
+
+  // ── Best Meal of the Week: one opt-in photo post per user per (completed) week, visible to
+  // other opted-in users, likeable by anyone. See the meal_posts/meal_post_likes migration. ──
+  async setMealPostOptIn(userId, optIn) {
+    const { error } = await supabase.from('user_targets').update({ meal_post_opt_in: optIn }).eq('user_id', userId);
+    if (error) throw error;
+  },
+  async getWeeklyMealPosts(weekStartKey, viewerId) {
+    const { data, error } = await supabase.rpc('get_weekly_meal_posts', { p_week_start: weekStartKey, p_viewer_id: viewerId });
+    if (error) throw error;
+    return data || [];
+  },
+  // Upserts on (user_id, week_start) so posting again for the same week edits the existing post
+  // rather than creating a second one.
+  async upsertMealPost(userId, weekStart, payload) {
+    const { data, error } = await supabase.from('meal_posts')
+      .upsert({ user_id: userId, week_start: weekStart, ...payload, updated_at: new Date().toISOString() }, { onConflict: 'user_id,week_start' })
+      .select().single();
+    if (error) throw error;
+    return data;
+  },
+  async deleteMealPost(id) {
+    const { error } = await supabase.from('meal_posts').delete().eq('id', id);
+    if (error) throw error;
+  },
+  async likeMealPost(postId, userId) {
+    const { error } = await supabase.from('meal_post_likes').insert({ post_id: postId, user_id: userId });
+    if (error) throw error;
+  },
+  async unlikeMealPost(postId, userId) {
+    const { error } = await supabase.from('meal_post_likes').delete().eq('post_id', postId).eq('user_id', userId);
     if (error) throw error;
   },
 
@@ -867,7 +953,7 @@ const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme,
   );
 });
 
-const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly, theme, C, onSlotChange, onSaveFavorite, isFavorited, onRerunAI, rerunning }) {
+const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly, theme, C, onSlotChange, onSaveFavorite, isFavorited, lang }) {
   const cardBg = C.card;
   const cardBgDragging = C.cardHover;
   const textColor = C.text;
@@ -950,11 +1036,11 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
             {meal.name}{hasItems && <span style={{ fontSize:10, color:btnColor, marginLeft:6 }}>{expanded ? "▲" : "▼"}</span>}
           </div>
           <div style={{ fontSize:11, color:textMuted }}>{meal.logged_at ? new Date(meal.logged_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : ""}{meal.confidence==="manual"?" · manual entry":meal.confidence?` · ${meal.confidence} confidence`:""}</div>
+          {meal.flagged && <div style={{ fontSize:11, color:C.red, marginTop:3, fontStyle:"italic" }}>🚩 {formatMealFlag(meal, lang)}</div>}
         </div>
         {/* Calories + a single overflow menu, stacked vertically so they don't crowd the name row */}
         <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4, flexShrink:0, position:"relative" }}>
           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-            {rerunning && <div className="spin" style={{ width:12, height:12, border:`2px solid ${C.border}`, borderTopColor:pinkColor, borderRadius:"50%" }} />}
             <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:pinkColor, fontWeight:"800" }}>{Math.round(meal.calories)}</div>
           </div>
           {!readonly && (
@@ -969,12 +1055,9 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
                         <span style={{ fontSize:14 }}>{isFavorited?"★":"☆"}</span> {isFavorited?"Saved":"Save favorite"}
                       </button>
                     )}
-                    <button onClick={() => { onEdit(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
-                      <span style={{ fontSize:13 }}>✏️</span> Edit
-                    </button>
-                    {meal.image_url && onRerunAI && (
-                      <button onClick={() => { onRerunAI(); setMenuOpen(false); }} disabled={rerunning} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:textColor, cursor:"pointer", whiteSpace:"nowrap", opacity:rerunning?0.5:1 }}>
-                        <span style={{ fontSize:13 }}>🔄</span> {rerunning ? "Analyzing..." : "Re-run AI"}
+                    {onEdit && (
+                      <button onClick={() => { onEdit(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
+                        <span style={{ fontSize:13 }}>✏️</span> Edit
                       </button>
                     )}
                     <button onClick={() => { onRemove(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:C.red, cursor:"pointer", whiteSpace:"nowrap" }}>
@@ -1784,6 +1867,14 @@ function NutriLogPro({ session, onLogout }) {
   const [leaderboardData, setLeaderboardData] = useState(null); // null = not loaded yet
   const [leaderboardError, setLeaderboardError] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [mealPosts, setMealPosts] = useState(null); // null = not loaded yet
+  const [mealPostsError, setMealPostsError] = useState(null);
+  const [mealPostsLoading, setMealPostsLoading] = useState(false);
+  const [mealPostPickerOpen, setMealPostPickerOpen] = useState(false);
+  const [mealPostSelectedId, setMealPostSelectedId] = useState(null);
+  const [mealPostComment, setMealPostComment] = useState("");
+  const [mealPostSaving, setMealPostSaving] = useState(false);
+  const [mealPostSaveError, setMealPostSaveError] = useState(null);
   const [activeSlot, setActiveSlot] = useState("Breakfast");
 
   const [loading, setLoading] = useState(true);
@@ -1937,6 +2028,87 @@ function NutriLogPro({ session, onLogout }) {
       }
     })();
   }, [activeTab, socialSubTab]);
+
+  // The Monday of the most recently COMPLETED week — "Best Meal of the Week" always highlights
+  // a finished week (same completed-week convention as the Previous Week Review card), not the
+  // current in-progress one.
+  const prevWeekMondayKey = useMemo(() => {
+    const now = new Date();
+    const dow = now.getDay();
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const thisMonday = new Date(now); thisMonday.setDate(now.getDate() + mondayOffset);
+    const prevMonday = new Date(thisMonday); prevMonday.setDate(thisMonday.getDate() - 7);
+    return localDateKey(prevMonday);
+  }, []);
+
+  // Lazily load last week's meal posts feed the first time Social > Leaderboard is opened,
+  // same pattern as the leaderboard fetch above.
+  useEffect(() => {
+    if (activeTab !== "social" || socialSubTab !== "leaderboard" || mealPosts !== null || mealPostsLoading) return;
+    (async () => {
+      setMealPostsLoading(true);
+      setMealPostsError(null);
+      try {
+        const rows = await DataAPI.getWeeklyMealPosts(prevWeekMondayKey, userId);
+        setMealPosts(rows);
+      } catch (err) {
+        setMealPostsError(err.message || "not_set_up");
+        setMealPosts([]);
+      } finally {
+        setMealPostsLoading(false);
+      }
+    })();
+  }, [activeTab, socialSubTab, prevWeekMondayKey, userId]);
+
+  // Candidate photos for "Best Meal of the Week": the user's own logged meals from last week
+  // that have a saved photo — reusing the already-uploaded image rather than a fresh upload.
+  const lastWeekPhotoMeals = useMemo(() => {
+    const prevSunday = new Date(prevWeekMondayKey+"T00:00:00"); prevSunday.setDate(prevSunday.getDate()+6);
+    const prevSundayKey = localDateKey(prevSunday);
+    return histRangeData.meals
+      .filter(m => m.image_url && m.log_date >= prevWeekMondayKey && m.log_date <= prevSundayKey)
+      .slice()
+      .sort((a,b) => new Date(b.logged_at||b.log_date) - new Date(a.logged_at||a.log_date));
+  }, [histRangeData, prevWeekMondayKey]);
+
+  const myMealPost = mealPosts ? mealPosts.find(p => p.user_id === userId) || null : null;
+
+  const submitMealPost = useCallback(async () => {
+    const meal = lastWeekPhotoMeals.find(m => m.id === mealPostSelectedId);
+    if (!meal) return;
+    setMealPostSaving(true);
+    setMealPostSaveError(null);
+    try {
+      const saved = await DataAPI.upsertMealPost(userId, prevWeekMondayKey, {
+        meal_id: meal.id, image_url: meal.image_url, meal_name: meal.name, calories: meal.calories,
+        comment: mealPostComment.trim() || null
+      });
+      setMealPosts(prev => {
+        const withoutMine = (prev||[]).filter(p => p.user_id !== userId);
+        return [...withoutMine, { post_id:saved.id, user_id:userId, display_name:baseTargets.display_name, avatar_url:baseTargets.avatar_url, gender:baseTargets.gender, image_url:saved.image_url, meal_name:saved.meal_name, calories:saved.calories, comment:saved.comment, created_at:saved.created_at, like_count: myMealPost?.like_count||0, liked_by_me: myMealPost?.liked_by_me||false }];
+      });
+      setMealPostPickerOpen(false);
+      setMealPostSelectedId(null);
+      setMealPostComment("");
+    } catch (err) {
+      setMealPostSaveError(err.message);
+    } finally {
+      setMealPostSaving(false);
+    }
+  }, [lastWeekPhotoMeals, mealPostSelectedId, mealPostComment, userId, prevWeekMondayKey, baseTargets, myMealPost]);
+
+  const toggleMealPostLike = useCallback(async (post) => {
+    const wasLiked = post.liked_by_me;
+    // Optimistic update — feels instant; reverted below if the request fails.
+    setMealPosts(prev => (prev||[]).map(p => p.post_id===post.post_id ? { ...p, liked_by_me: !wasLiked, like_count: p.like_count + (wasLiked ? -1 : 1) } : p));
+    try {
+      if (wasLiked) await DataAPI.unlikeMealPost(post.post_id, userId);
+      else await DataAPI.likeMealPost(post.post_id, userId);
+    } catch (err) {
+      setMealPosts(prev => (prev||[]).map(p => p.post_id===post.post_id ? { ...p, liked_by_me: wasLiked, like_count: p.like_count + (wasLiked ? 1 : -1) } : p));
+      setError(L("Failed to save like: ","保存点赞失败：") + err.message);
+    }
+  }, [userId]);
 
   const mealTotals = dayData.meals.reduce((a,m) => ({ calories:a.calories+Number(m.calories), protein:a.protein+Number(m.protein), carbs:a.carbs+Number(m.carbs), fat:a.fat+Number(m.fat), sugar:a.sugar+Number(m.sugar_g||0), sodium:a.sodium+Number(m.sodium_mg||0), fiber:a.fiber+Number(m.fiber_g||0) }), { calories:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
   const drinkTotals = (dayData.drinks||[]).reduce((a,d) => ({ calories:a.calories+Number(d.calories||0), protein:a.protein+Number(d.protein||0), carbs:a.carbs+Number(d.carbs||0), fat:a.fat+Number(d.fat||0), sugar:a.sugar+Number(d.sugar_g||0), sodium:a.sodium+Number(d.sodium_mg||0), fiber:a.fiber+Number(d.fiber_g||0) }), { calories:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
@@ -2372,23 +2544,12 @@ function NutriLogPro({ session, onLogout }) {
     }
     try {
       const prompt = entry.type === "meal"
-        ? `You are a careful nutrition estimator. Look at this food photo and identify each distinct visible component (e.g. chicken, mashed potato, egg, salad, sauce). For each component, estimate a realistic portion size based on what's visible on the plate (use standard serving sizes as a reference point — e.g. a typical chicken thigh is ~120-150g, a scoop of mashed potato is ~150g — do not assume oversized restaurant portions unless the plate clearly shows one). Estimate calories, macros, sugar, sodium, and fiber for each component based on that portion size. IMPORTANT: the overall "calories"/"protein"/"carbs"/"fat"/"sugar"/"sodium"/"fiber" fields MUST equal the exact sum of the "items" array values — do not estimate the total separately. Output ONLY raw JSON, no code fences: {"name":"overall meal name","calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number,"items":[{"item":"chicken","grams_estimate":number,"calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number}],"confidence":"high"}${geminiLangInstruction(lang)}`
+        ? buildMealAnalysisPrompt(lang)
         : `Apple Watch workout summary. Output ONLY raw JSON, no code fences: {"calories":number,"activity":"activity name","duration":"45 min","heartRate":null}${geminiLangInstruction(lang)}`;
       const raw = await callGemini({
         contents:[{ role:"user", parts:[{ text:prompt },{ inlineData:{ mimeType:"image/jpeg", data:entry._base64 } }] }]
       });
-      const parsed = JSON.parse(raw.replace(/```json|```/gi,"").trim());
-      // Safety net: if itemized breakdown exists, the displayed/saved total is ALWAYS
-      // recomputed as the exact sum of items — never trust two independently-estimated numbers.
-      if (Array.isArray(parsed.items) && parsed.items.length > 0) {
-        parsed.calories = parsed.items.reduce((s,it)=>s+Number(it.calories||0),0);
-        parsed.protein  = parsed.items.reduce((s,it)=>s+Number(it.protein||0),0);
-        parsed.carbs    = parsed.items.reduce((s,it)=>s+Number(it.carbs||0),0);
-        parsed.fat      = parsed.items.reduce((s,it)=>s+Number(it.fat||0),0);
-        parsed.sugar    = parsed.items.reduce((s,it)=>s+Number(it.sugar||0),0);
-        parsed.sodium   = parsed.items.reduce((s,it)=>s+Number(it.sodium||0),0);
-        parsed.fiber    = parsed.items.reduce((s,it)=>s+Number(it.fiber||0),0);
-      }
+      const parsed = entry.type === "meal" ? parseMealAnalysis(raw) : JSON.parse(raw.replace(/```json|```/gi,"").trim());
       addAiBytesToday(entry._blob.size);
       setPendingEntry(prev => (prev && prev.image === entry.image) ? { ...prev, ...parsed, aiStatus:"success", aiError:null } : prev);
     } catch (err) {
@@ -2399,49 +2560,46 @@ function NutriLogPro({ session, onLogout }) {
     }
   }, [geminiKey, lang]);
 
-  const [rerunningMealId, setRerunningMealId] = useState(null);
   const blobToBase64 = (blob) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result.split(",")[1]);
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
-  const rerunMealAI = useCallback(async (meal) => {
-    if (!meal.image_url) return;
-    setRerunningMealId(meal.id);
-    setError(null);
+
+
+  // AI Retry inside the edit modal: re-analyzes the entry's saved photo and refreshes the edit
+  // form's fields in place — nothing is written to the server here, so a bad re-analysis is just
+  // as easy to tweak or discard as any other edit, and only "Save Changes" actually persists it.
+  const [editAiStatus, setEditAiStatus] = useState("idle"); // idle | loading | error
+  const [editAiError, setEditAiError] = useState(null);
+  useEffect(() => { setEditAiStatus("idle"); setEditAiError(null); }, [editingItem?.id]);
+  const retryEditAI = useCallback(async () => {
+    if (!editingItem || !editingItem.image_url) return;
+    setEditAiStatus("loading");
+    setEditAiError(null);
     try {
-      const imgRes = await fetch(meal.image_url);
+      const imgRes = await fetch(editingItem.image_url);
       if (!imgRes.ok) throw new Error("Couldn't re-fetch the saved photo.");
       const blob = await imgRes.blob();
       const base64 = await blobToBase64(blob);
-      const prompt = `You are a careful nutrition estimator. Look at this food photo and identify each distinct visible component (e.g. chicken, mashed potato, egg, salad, sauce). For each component, estimate a realistic portion size based on what's visible on the plate (use standard serving sizes as a reference point — e.g. a typical chicken thigh is ~120-150g, a scoop of mashed potato is ~150g — do not assume oversized restaurant portions unless the plate clearly shows one). Estimate calories, macros, sugar, sodium, and fiber for each component based on that portion size. IMPORTANT: the overall "calories"/"protein"/"carbs"/"fat"/"sugar"/"sodium"/"fiber" fields MUST equal the exact sum of the "items" array values — do not estimate the total separately. Output ONLY raw JSON, no code fences: {"name":"overall meal name","calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number,"items":[{"item":"chicken","grams_estimate":number,"calories":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number}],"confidence":"high"}${geminiLangInstruction(lang)}`;
       const raw = await callGemini({
-        contents:[{ role:"user", parts:[{ text:prompt },{ inlineData:{ mimeType:"image/jpeg", data:base64 } }] }]
+        contents:[{ role:"user", parts:[{ text:buildMealAnalysisPrompt(lang) },{ inlineData:{ mimeType:"image/jpeg", data:base64 } }] }]
       });
-      const parsed = JSON.parse(raw.replace(/```json|```/gi,"").trim());
-      if (Array.isArray(parsed.items) && parsed.items.length > 0) {
-        parsed.calories = parsed.items.reduce((s,it)=>s+Number(it.calories||0),0);
-        parsed.protein  = parsed.items.reduce((s,it)=>s+Number(it.protein||0),0);
-        parsed.carbs    = parsed.items.reduce((s,it)=>s+Number(it.carbs||0),0);
-        parsed.fat      = parsed.items.reduce((s,it)=>s+Number(it.fat||0),0);
-        parsed.sugar    = parsed.items.reduce((s,it)=>s+Number(it.sugar||0),0);
-        parsed.sodium   = parsed.items.reduce((s,it)=>s+Number(it.sodium||0),0);
-        parsed.fiber    = parsed.items.reduce((s,it)=>s+Number(it.fiber||0),0);
-      }
-      const patch = {
-        name: parsed.name || meal.name, calories: parsed.calories||0, protein: parsed.protein||0, carbs: parsed.carbs||0, fat: parsed.fat||0,
+      const parsed = parseMealAnalysis(raw);
+      setEditingItem(prev => prev ? {
+        ...prev,
+        name: parsed.name || prev.name,
+        calories: parsed.calories||0, protein: parsed.protein||0, carbs: parsed.carbs||0, fat: parsed.fat||0,
         sugar_g: parsed.sugar||0, sodium_mg: parsed.sodium||0, fiber_g: parsed.fiber||0,
-        confidence: parsed.confidence||"high", items: Array.isArray(parsed.items) ? parsed.items : null
-      };
-      await DataAPI.updateMeal(meal.id, patch);
-      setDayData(d => ({ ...d, meals: d.meals.map(m => m.id===meal.id ? { ...m, ...patch } : m) }));
+        confidence: parsed.confidence || prev.confidence, items: Array.isArray(parsed.items) ? parsed.items : prev.items
+      } : prev);
+      setEditAiStatus("idle");
     } catch (err) {
-      setError(friendlyGeminiError(err));
-    } finally {
-      setRerunningMealId(null);
+      setEditAiStatus("error");
+      setEditAiError(friendlyGeminiError(err));
     }
-  }, [geminiKey, lang]);
+  }, [editingItem, callGemini, lang]);
 
   const updatePendingEntry = useCallback((patch) => {
     setPendingEntry(prev => prev ? { ...prev, ...patch } : prev);
@@ -2574,11 +2732,19 @@ function NutriLogPro({ session, onLogout }) {
     if (!editingItem) return;
     try {
       if (editingItem.type === "meal") {
-        await DataAPI.updateMeal(editingItem.id, { name: editingItem.name, calories: editingItem.calories, protein: editingItem.protein, carbs: editingItem.carbs, fat: editingItem.fat, sugar_g: editingItem.sugar_g, sodium_mg: editingItem.sodium_mg, fiber_g: editingItem.fiber_g });
+        await DataAPI.updateMeal(editingItem.id, { name: editingItem.name, calories: editingItem.calories, protein: editingItem.protein, carbs: editingItem.carbs, fat: editingItem.fat, sugar_g: editingItem.sugar_g, sodium_mg: editingItem.sodium_mg, fiber_g: editingItem.fiber_g, flagged: !!editingItem.flagged, flag_occasion: editingItem.flagged ? (editingItem.flag_occasion||null) : null, flag_location: editingItem.flagged ? (editingItem.flag_location||null) : null, flag_comment: editingItem.flagged ? (editingItem.flag_comment||null) : null });
+        // Kept in sync across all three local copies of meal data (today's live day, the day
+        // currently open in History, and the rolling 180-day range used by Gallery/analytics) —
+        // otherwise an edit made from History would only land in the DB and silently not show
+        // up until the next full reload.
         setDayData(d => ({ ...d, meals: d.meals.map(m => m.id===editingItem.id ? {...m,...editingItem} : m) }));
+        setHistDayData(d => ({ ...d, meals: d.meals.map(m => m.id===editingItem.id ? {...m,...editingItem} : m) }));
+        setHistRangeData(d => ({ ...d, meals: d.meals.map(m => m.id===editingItem.id ? {...m,...editingItem} : m) }));
       } else {
         await DataAPI.updateWorkout(editingItem.id, { activity: editingItem.activity, calories: editingItem.calories, duration: editingItem.duration, heart_rate: editingItem.heartRate, description: editingItem.description });
         setDayData(d => ({ ...d, workouts: (d.workouts||[]).map(w => w.id===editingItem.id ? {...w,...editingItem} : w) }));
+        setHistDayData(d => ({ ...d, workouts: (d.workouts||[]).map(w => w.id===editingItem.id ? {...w,...editingItem} : w) }));
+        setHistRangeData(d => ({ ...d, workouts: (d.workouts||[]).map(w => w.id===editingItem.id ? {...w,...editingItem} : w) }));
       }
       setEditingItem(null);
     } catch (err) { setError("Failed to update: " + err.message); }
@@ -2609,7 +2775,7 @@ function NutriLogPro({ session, onLogout }) {
   })();
   const histTargets = computeTargetsLocal(histBurned, historyDate);
 
-  const last7Days = (() => {
+  const last7Days = useMemo(() => {
     const byDate = {};
     histRangeData.meals.forEach(m => { (byDate[m.log_date] ||= {cons:0,burn:0,water:0}).cons += Number(m.calories||0); });
     histRangeData.workouts.forEach(w => { (byDate[w.log_date] ||= {cons:0,burn:0,water:0}).burn += Number(w.calories||0); });
@@ -2622,10 +2788,10 @@ function NutriLogPro({ session, onLogout }) {
       out.push({ label: d.toLocaleDateString("en-US",{weekday:"short"}).slice(0,1), consumed: entry.cons, burned: entry.burn, water: entry.water, key });
     }
     return out;
-  })();
+  }, [histRangeData]);
 
   // ── This calendar week (Mon–Sun) calorie target hit/miss, for the streak dots on Main ──
-  const streakWeek = (() => {
+  const streakWeek = useMemo(() => {
     const byDate = {};
     histRangeData.meals.forEach(m => { byDate[m.log_date] = (byDate[m.log_date]||0) + Number(m.calories||0); });
     histRangeData.workouts.forEach(w => { byDate[w.log_date] = (byDate[w.log_date]||0) - Number(w.calories||0); });
@@ -2661,10 +2827,7 @@ function NutriLogPro({ session, onLogout }) {
       });
     }
 
-    const weekNum = (() => {
-      const onejan = new Date(monday.getFullYear(),0,1);
-      return Math.ceil((((monday - onejan) / 86400000) + onejan.getDay()+1) / 7);
-    })();
+    const weekNum = getWeekNumOf(monday);
     const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
     const dateRangeLabel = (() => {
       const sameMonth = monday.getMonth() === sunday.getMonth();
@@ -2725,8 +2888,8 @@ function NutriLogPro({ session, onLogout }) {
     }
 
     return { days, weekNum, dateRangeLabel, hits, tracked: tracked.length, message };
-  })();
-  const streakCount = (() => {
+  }, [histRangeData, baseTargets.day_cutoff_hour, baseTargets.calories, baseTargets.goal, net, lang]);
+  const streakCount = useMemo(() => {
     const byDate = {};
     histRangeData.meals.forEach(m => { byDate[m.log_date] = (byDate[m.log_date]||0) + Number(m.calories||0); });
     histRangeData.workouts.forEach(w => { byDate[w.log_date] = (byDate[w.log_date]||0) - Number(w.calories||0); });
@@ -2747,7 +2910,7 @@ function NutriLogPro({ session, onLogout }) {
       else break;
     }
     return streak;
-  })();
+  }, [histRangeData, targetsForWeek]);
 
   const hydrationMessage = (() => {
     if (achievedMilestone) return achievedMilestone.comment;
@@ -2756,7 +2919,7 @@ function NutriLogPro({ session, onLogout }) {
     return L(`Log your first drink to start tracking today's hydration (goal: ${waterTarget}ml).`, `记录第一杯水，开始追踪今天的饮水量吧（目标：${waterTarget}ml）。`);
   })();
 
-  const weeksData = (() => {
+  const weeksData = useMemo(() => {
     const groups = {};
     const byDate = {};
     histRangeData.meals.forEach(m => { (byDate[m.log_date] ||= {meals:[],workouts:[],water:0,drinkCal:0}).meals.push(m); });
@@ -2774,10 +2937,10 @@ function NutriLogPro({ session, onLogout }) {
       groups[range].totalTarget += targetsForWeek(k).calories;
     });
     return groups;
-  })();
+  }, [histRangeData, targetsForWeek]);
 
   // ── Workout weekly trend: last 6 calendar weeks, chronological, for the dashboard chart ──
-  const workoutWeeklyTrend = (() => {
+  const workoutWeeklyTrend = useMemo(() => {
     const byDate = {};
     histRangeData.workouts.forEach(w => { byDate[w.log_date] = (byDate[w.log_date]||0) + Number(w.calories||0); });
     const weeks = [];
@@ -2793,14 +2956,11 @@ function NutriLogPro({ session, onLogout }) {
         if (day > now) continue;
         total += byDate[localDateKey(day)] || 0;
       }
-      const weekNum = (() => {
-        const onejan = new Date(monday.getFullYear(),0,1);
-        return Math.ceil((((monday - onejan) / 86400000) + onejan.getDay()+1) / 7);
-      })();
+      const weekNum = getWeekNumOf(monday);
       weeks.push({ label: lang==="zh" ? `第${weekNum}周` : `Week ${weekNum}`, burned: Math.round(total) });
     }
     return weeks;
-  })();
+  }, [histRangeData, lang]);
 
   // ── Weekly calorie balance: last 6 calendar weeks, each measured against the plan that was
   // actually active THAT week (via targetsForWeek), for the "Weekly Balance" motivation chart ──
@@ -2809,7 +2969,7 @@ function NutriLogPro({ session, onLogout }) {
   // Calories get a yellow/red tier when over target; macros are only called out when they're
   // significantly (>20%) off — sugar/water/sodium/fiber are left out since they don't drive
   // the calorie balance the way protein/carbs/fat do.
-  const previousWeekAnalysis = (() => {
+  const previousWeekAnalysis = useMemo(() => {
     const now = new Date();
     const dow = now.getDay();
     const mondayOffset = dow === 0 ? -6 : 1 - dow;
@@ -2818,7 +2978,7 @@ function NutriLogPro({ session, onLogout }) {
     const prevMondayKey = localDateKey(prevMonday);
     const wt = targetsForWeek(prevMondayKey);
 
-    const blankDay = () => ({cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,sodium:0,fiber:0,water:0,workedOut:false});
+    const blankDay = blankDayStats;
     const byDate = {};
     histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= blankDay()); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); e.sugar += Number(m.sugar_g||0); e.sodium += Number(m.sodium_mg||0); e.fiber += Number(m.fiber_g||0); });
     histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= blankDay()); e.burn += Number(w.calories||0); e.workedOut = true; });
@@ -2853,10 +3013,7 @@ function NutriLogPro({ session, onLogout }) {
     }
     if (tracked === 0) return null;
 
-    const weekNum = (() => {
-      const onejan = new Date(prevMonday.getFullYear(),0,1);
-      return Math.ceil((((prevMonday - onejan) / 86400000) + onejan.getDay()+1) / 7);
-    })();
+    const weekNum = getWeekNumOf(prevMonday);
 
     const avgCalPct = totalTarget ? Math.round((totalNet/totalTarget)*100) : 100;
     const calOverPct = totalTarget ? ((totalNet - totalTarget)/totalTarget)*100 : 0;
@@ -2905,7 +3062,7 @@ function NutriLogPro({ session, onLogout }) {
     // - Fat, sugar, sodium: lower-is-better — staying comfortably under caps at SSS.
     // - Carbs: kept as the original "closer to target is better either direction" scoring, since
     //   carbs isn't inherently "more/less is better" the way the others are.
-    const macroScore = (devPct) => Math.max(20, Math.min(100, Math.round(100 - Math.abs(devPct)*1.5)));
+    const macroScore = deviationScore;
     const proteinTargetTotal = wt.protein * tracked;
     const fatTargetTotal = wt.fat * tracked;
     const proteinRatioPct = proteinTargetTotal ? (totalProtein/proteinTargetTotal)*100 : 100;
@@ -2933,12 +3090,12 @@ function NutriLogPro({ session, onLogout }) {
     };
 
     return { weekNum, wt, planDelta, hits, tracked, avgCalPct, calOverPct, calStatus, avgSugarPct, avgSodiumPct, avgFiberPct, macroIssues, macroDev, waterHitDays, workoutDays, waterRatioPct, avgWorkoutBurn, tone, tierCounts, categoryScores };
-  })();
+  }, [histRangeData, targetsForWeek, waterTargetForDate, baseTargets.sodium_limit_mg, tdeeInfo]);
 
   // Coach's Note content — computed once here (rather than inside the report card's render) so it
   // can be shown right after "This Week's Plan" (where it's immediately useful when setting a new
   // plan) as well as referenced by the report card section further down.
-  const weekCoaching = (() => {
+  const weekCoaching = useMemo(() => {
     if (!previousWeekAnalysis) return null;
     const a = previousWeekAnalysis;
     const macroLabel = { protein:L("protein","蛋白质"), carbs:L("carbs","碳水"), fat:L("fat","脂肪") };
@@ -2959,15 +3116,15 @@ function NutriLogPro({ session, onLogout }) {
       ? L("Let's improve again this week!!!","这周继续加油改善！！！")
       : L("Keep up the great work!","继续保持这份出色的状态！");
     return { focusLine, closer };
-  })();
+  }, [previousWeekAnalysis, lang]);
 
   // Plan Tracker: shows the fixed plan delta chosen for each of the last 6 weeks (e.g. Week 26:
   // -200, Week 27: -300) — not live performance. Just a readout of the plan itself over time,
   // for motivation ("look how much more committed the deficit has gotten").
   // Achievements: scans all available history to find the single best-graded week and best-graded
   // month (by the same composite score as the weekly report card), for a "personal best" showcase.
-  const achievementsData = (() => {
-    const blankDay = () => ({cons:0,burn:0,protein:0,carbs:0,fat:0,sugar:0,sodium:0,fiber:0,water:0,workedOut:false});
+  const achievementsData = useMemo(() => {
+    const blankDay = blankDayStats;
     const byDate = {};
     histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= blankDay()); e.cons += Number(m.calories||0); e.protein += Number(m.protein||0); e.carbs += Number(m.carbs||0); e.fat += Number(m.fat||0); e.sugar += Number(m.sugar_g||0); e.sodium += Number(m.sodium_mg||0); e.fiber += Number(m.fiber_g||0); });
     histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= blankDay()); e.burn += Number(w.calories||0); e.workedOut = true; });
@@ -2998,7 +3155,7 @@ function NutriLogPro({ session, onLogout }) {
         totalWorkoutBurn += e.burn;
       });
       if (tracked === 0) return null;
-      const macroScore = (total, targetTotal) => { if (!targetTotal) return 100; const dev=((total-targetTotal)/targetTotal)*100; return Math.max(20, Math.min(100, Math.round(100-Math.abs(dev)*1.5))); };
+      const macroScore = (total, targetTotal) => targetTotal ? deviationScore(((total-targetTotal)/targetTotal)*100) : 100;
       const avgOffPct = totalTarget ? (weekGoal==="gain" ? ((totalTarget-totalNet)/totalTarget)*100 : ((totalNet-totalTarget)/totalTarget)*100) : 0;
       const fatRatioPct = totalFatTarget ? (totalFat/totalFatTarget)*100 : 100;
       const proteinRatioPct = totalProteinTarget ? (totalProtein/totalProteinTarget)*100 : 100;
@@ -3041,9 +3198,9 @@ function NutriLogPro({ session, onLogout }) {
       if (result && (!bestMonth || result.compositeScore > bestMonth.compositeScore)) bestMonth = { ...result, label: month };
     });
     return { bestWeek, bestMonth };
-  })();
+  }, [histRangeData, targetsForWeek, waterTargetForDate, baseTargets.sodium_limit_mg]);
 
-  const planTrend = (() => {
+  const planTrend = useMemo(() => {
     const weeks = [];
     const now = new Date();
     const curDay = now.getDay();
@@ -3053,16 +3210,13 @@ function NutriLogPro({ session, onLogout }) {
       monday.setDate(now.getDate() + mondayOffset - (w*7));
       const mondayKeyStr = localDateKey(monday);
       const wt = targetsForWeek(mondayKeyStr);
-      const weekNum = (() => {
-        const onejan = new Date(monday.getFullYear(),0,1);
-        return Math.ceil((((monday - onejan) / 86400000) + onejan.getDay()+1) / 7);
-      })();
+      const weekNum = getWeekNumOf(monday);
       weeks.push({ label: lang==="zh" ? `第${weekNum}周` : `W${weekNum}`, delta: (wt.delta === null || wt.delta === undefined) ? null : Math.round(wt.delta) });
     }
     return weeks;
-  })();
+  }, [targetsForWeek, lang]);
 
-  const monthsData = (() => {
+  const monthsData = useMemo(() => {
     const groups = {};
     const byDate = {};
     histRangeData.meals.forEach(m => { (byDate[m.log_date] ||= {meals:[],workouts:[],water:0,drinkCal:0,drinkProt:0,drinkCarb:0,drinkFat:0}).meals.push(m); });
@@ -3085,7 +3239,7 @@ function NutriLogPro({ session, onLogout }) {
       groups[label].totalWorkouts += dData.workouts.length;
     });
     return groups;
-  })();
+  }, [histRangeData]);
 
   // Every palette is now a "mono family" theme — shared components read all accent
   // colors from palette keys instead of hardcoded hexes (the _pink flag gates this).
@@ -4170,7 +4324,7 @@ function NutriLogPro({ session, onLogout }) {
                     </div>
                     {slotMeals.length===0
                       ? <div style={{ fontSize:12, fontStyle:"italic", color:C.textDim, paddingLeft:10, marginBottom:8 }}>{L(`Nothing logged for ${slotLabel(slot, lang)}`, `${slotLabel(slot, lang)}还没有记录`)}</div>
-                      : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={() => removeMeal(m.id)} onEdit={() => setEditingItem({...m,type:"meal"})} onSlotChange={(dir) => changeMealSlot(m.id, dir)} theme={theme} C={C} onSaveFavorite={() => saveFavorite("meal", { name:m.name, calories:m.calories, protein:m.protein, carbs:m.carbs, fat:m.fat, sugar_g:m.sugar_g, sodium_mg:m.sodium_mg, fiber_g:m.fiber_g, default_slot:m.slot })} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} onRerunAI={() => rerunMealAI(m)} rerunning={rerunningMealId===m.id} />)
+                      : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={() => removeMeal(m.id)} onEdit={() => setEditingItem({...m,type:"meal"})} onSlotChange={(dir) => changeMealSlot(m.id, dir)} theme={theme} C={C} lang={lang} onSaveFavorite={() => saveFavorite("meal", { name:m.name, calories:m.calories, protein:m.protein, carbs:m.carbs, fat:m.fat, sugar_g:m.sugar_g, sodium_mg:m.sodium_mg, fiber_g:m.fiber_g, default_slot:m.slot })} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} />)
                     }
                   </div>
                 );
@@ -4511,7 +4665,7 @@ function NutriLogPro({ session, onLogout }) {
                       return (
                         <div key={slot} style={{ marginBottom:14 }}>
                           <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"800", color:C.textMuted, marginBottom:6 }}>{SLOT_ICONS[slot]} {slotLabel(slot, lang)}</div>
-                          {sm.map(m => <MealCard key={m.id} meal={m} onRemove={() => removeMealFromHistory(m.id)} theme={theme} C={C} />)}
+                          {sm.map(m => <MealCard key={m.id} meal={m} onRemove={() => removeMealFromHistory(m.id)} onEdit={() => setEditingItem({...m,type:"meal"})} theme={theme} C={C} lang={lang} />)}
                         </div>
                       );
                     })}
@@ -4708,6 +4862,7 @@ function NutriLogPro({ session, onLogout }) {
                               <div style={{ fontSize:10, color:C.textMuted, marginTop:2 }}>
                                 {new Date(m.log_date+"T00:00:00").toLocaleDateString(lang==="zh"?"zh-CN":"en-US",{month:"short",day:"numeric"})} · {Math.round(m.calories)} kcal
                               </div>
+                              {m.flagged && <div style={{ fontSize:10, color:C.red, marginTop:4, fontStyle:"italic" }}>🚩 {formatMealFlag(m, lang)}</div>}
                             </div>
                           </div>
                         );
@@ -4790,9 +4945,121 @@ function NutriLogPro({ session, onLogout }) {
                         })}
                     </div>
                   )}
+
+                  <div style={{ marginTop:20 }}>
+                    <div style={{ fontSize:13, fontWeight:"800", color:C.pink, marginBottom:10 }}>{L("🍽️ Best Meal of the Week","🍽️ 本周最佳美食")}</div>
+
+                    <div className="card" style={{ padding:"14px 16px", marginBottom:14 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+                        <div style={{ fontSize:12.5, fontWeight:"700", color:C.text }}>{L("Share your best meal photo","分享你的最佳美食照片")}</div>
+                        <div
+                          onClick={async () => {
+                            const optIn = !baseTargets.meal_post_opt_in;
+                            setBaseTargets(prev => ({ ...prev, meal_post_opt_in: optIn }));
+                            try { await DataAPI.setMealPostOptIn(userId, optIn); } catch (err) { setError(L("Failed to save: ","保存失败：") + err.message); }
+                          }}
+                          role="switch"
+                          aria-checked={!!baseTargets.meal_post_opt_in}
+                          style={{ position:"relative", width:42, height:24, flexShrink:0, background: baseTargets.meal_post_opt_in ? C.pink : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
+                        >
+                          <span style={{ position:"absolute", top:3, left: baseTargets.meal_post_opt_in ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                        </div>
+                      </div>
+                      <div style={{ fontSize:10.5, color:C.textDim, lineHeight:1.5, marginTop:8 }}>{L("Opt in to post one photo from last week and see others' — anyone can like posted photos.","开启后可发布上周一张美食照片，并查看他人分享 —— 任何人都可以点赞。")}</div>
+                    </div>
+
+                    {baseTargets.meal_post_opt_in && (
+                      <div className="card" style={{ padding:"14px 16px", marginBottom:14 }}>
+                        {myMealPost && !mealPostPickerOpen ? (
+                          <div>
+                            <img src={myMealPost.image_url} alt={myMealPost.meal_name} style={{ width:"100%", height:140, objectFit:"cover", borderRadius:12, marginBottom:8 }} />
+                            <div style={{ fontSize:13, fontWeight:"700", color:C.text }}>{myMealPost.meal_name}</div>
+                            {myMealPost.comment && <div style={{ fontSize:12, color:C.textMuted, marginTop:4, fontStyle:"italic" }}>"{myMealPost.comment}"</div>}
+                            <button className="ghost-btn" style={{ width:"100%", marginTop:10, padding:"7px", fontSize:12 }} onClick={() => { setMealPostPickerOpen(true); setMealPostSelectedId(myMealPost.meal_id||null); setMealPostComment(myMealPost.comment||""); }}>
+                              {L("Edit your post","编辑你的帖子")}
+                            </button>
+                          </div>
+                        ) : mealPostPickerOpen ? (
+                          <div>
+                            <div style={{ fontSize:12.5, fontWeight:"700", color:C.text, marginBottom:8 }}>{L("Pick your best meal from last week","选择上周你的最佳美食")}</div>
+                            {lastWeekPhotoMeals.length === 0 ? (
+                              <div style={{ fontSize:12, color:C.textDim, fontStyle:"italic", padding:"14px 0", textAlign:"center" }}>{L("No photos logged last week.","上周没有拍照记录的美食。")}</div>
+                            ) : (
+                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
+                                {lastWeekPhotoMeals.map(m => (
+                                  <div key={m.id} onClick={() => setMealPostSelectedId(m.id)} style={{ position:"relative", borderRadius:10, overflow:"hidden", cursor:"pointer", border: mealPostSelectedId===m.id ? `2px solid ${C.pink}` : "2px solid transparent" }}>
+                                    <img src={m.image_url} alt={m.name} style={{ width:"100%", height:70, objectFit:"cover", display:"block" }} />
+                                    {mealPostSelectedId===m.id && <div style={{ position:"absolute", top:4, right:4, background:C.pink, color:"#fff", borderRadius:"50%", width:18, height:18, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>✓</div>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <textarea
+                              className="inp"
+                              placeholder={L("Add a comment (optional)","添加评论（可选）")}
+                              value={mealPostComment}
+                              onChange={e => setMealPostComment(e.target.value)}
+                              style={{ width:"100%", minHeight:60, resize:"vertical", padding:"8px 10px", fontSize:12.5, marginBottom:10 }}
+                            />
+                            {mealPostSaveError && <div style={{ fontSize:11.5, color:C.red, marginBottom:8 }}>⚠️ {mealPostSaveError}</div>}
+                            <div style={{ display:"flex", gap:8 }}>
+                              <button className="ghost-btn" style={{ flex:1 }} onClick={() => { setMealPostPickerOpen(false); setMealPostSaveError(null); }}>{T("common_cancel")}</button>
+                              <button className="pink-btn" style={{ flex:1.5, opacity: (!mealPostSelectedId || mealPostSaving)?0.6:1 }} disabled={!mealPostSelectedId || mealPostSaving} onClick={submitMealPost}>
+                                {mealPostSaving ? L("Posting...","发布中...") : L("Post","发布")}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button className="pink-btn" style={{ width:"100%", padding:"10px" }} onClick={() => setMealPostPickerOpen(true)}>
+                            {L("📸 Post your best meal","📸 发布你的最佳美食")}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {mealPostsLoading ? (
+                      <div style={{ textAlign:"center", padding:"20px 0", color:C.textDim, fontSize:12 }}>{L("Loading posts…","正在加载帖子…")}</div>
+                    ) : mealPostsError ? (
+                      <div style={{ textAlign:"center", padding:"20px", color:C.textDim, fontSize:12 }}>
+                        <div style={{ fontStyle:"italic", marginBottom:8 }}>{L("Best Meal isn't set up yet — this needs a one-time database migration. Ask your developer to run it.","「本周最佳美食」尚未启用 —— 需要进行一次数据库迁移，请联系开发者。")}</div>
+                        <div style={{ fontSize:10, color:C.red, fontFamily:"monospace", wordBreak:"break-word" }}>{mealPostsError}</div>
+                      </div>
+                    ) : mealPosts && mealPosts.length === 0 ? (
+                      <div style={{ textAlign:"center", padding:"20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("No one has posted yet — be the first!","还没有人发布 —— 快来做第一个吧！")}</div>
+                    ) : mealPosts && (
+                      <div>
+                        {mealPosts.slice().sort((a,b) => b.like_count - a.like_count).map(post => (
+                          <div key={post.post_id} className="card" style={{ padding:0, overflow:"hidden", marginBottom:12 }}>
+                            <img src={post.image_url} alt={post.meal_name} style={{ width:"100%", height:160, objectFit:"cover", display:"block" }} />
+                            <div style={{ padding:"10px 12px" }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                                {post.avatar_url ? (
+                                  <img src={post.avatar_url} alt={post.display_name} style={{ width:24, height:24, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+                                ) : (
+                                  <div style={{ width:24, height:24, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, flexShrink:0 }}>
+                                    {post.gender === "female" ? "👩" : post.gender === "male" ? "👨" : "🙂"}
+                                  </div>
+                                )}
+                                <div style={{ fontSize:12, fontWeight:"700", color:C.text }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
+                              </div>
+                              <div style={{ fontSize:13, fontWeight:"700", color:C.text }}>{post.meal_name} · {Math.round(post.calories)} kcal</div>
+                              {post.comment && <div style={{ fontSize:12, color:C.textMuted, marginTop:4, fontStyle:"italic" }}>"{post.comment}"</div>}
+                              <button
+                                onClick={() => toggleMealPostLike(post)}
+                                style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", marginTop:8, padding:0, color: post.liked_by_me ? C.pink : C.textMuted, fontSize:13, fontWeight:"700" }}
+                              >
+                                <span style={{ fontSize:16 }}>{post.liked_by_me ? "❤️" : "🤍"}</span> {post.like_count}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })()}
+
 
             {socialSubTab === "achievements" && (() => {
               const { bestWeek, bestMonth } = achievementsData;
@@ -4869,6 +5136,29 @@ function NutriLogPro({ session, onLogout }) {
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(10,10,13,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"16px", backdropFilter:"blur(6px)" }}>
           <div className="card fade" style={{ width:"100%", maxWidth:"420px", padding:"20px", background:C.surface, borderColor:C.border }}>
             <div style={{ fontSize:18, fontWeight:"800", color:C.pink, marginBottom:16, fontFamily:"'DM Sans',sans-serif" }}>{L("Modify Entry Data","修改记录")}</div>
+            {editingItem.type==="meal" && editingItem.image_url && (
+              <div style={{ background:`${C.border}22`, borderRadius:12, padding:"10px 12px", marginBottom:16 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                  <img src={editingItem.image_url} alt="" style={{ width:36, height:36, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
+                  <div style={{ flex:1, fontSize:11.5, color:C.textMuted, lineHeight:1.4 }}>
+                    {L("Numbers off? Re-analyze the saved photo — it updates the fields below, nothing saves until you tap Save Changes.","数值不准？重新分析已保存的照片 —— 下方数值会更新，点击保存后才会生效。")}
+                  </div>
+                </div>
+                {editAiStatus === "error" && (
+                  <div style={{ fontSize:11.5, color:C.red, marginBottom:8 }}>⚠️ {editAiError}</div>
+                )}
+                <button
+                  className="ghost-btn"
+                  style={{ width:"100%", padding:"7px", fontSize:12, borderColor:C.pinkDim, color:C.pink, opacity:editAiStatus==="loading"?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                  disabled={editAiStatus==="loading"}
+                  onClick={retryEditAI}
+                >
+                  {editAiStatus==="loading"
+                    ? <React.Fragment><span className="spin" style={{ width:10, height:10, border:`2px solid ${C.border}`, borderTopColor:C.pink, borderRadius:"50%" }} />{L("Analyzing...","分析中...")}</React.Fragment>
+                    : <React.Fragment>🔄 {L("AI Retry","AI 重试")}</React.Fragment>}
+                </button>
+              </div>
+            )}
             <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:20 }}>
               <div>
                 <label style={{ fontSize:11, fontWeight:"700", color:C.textMuted, display:"block", marginBottom:4 }}>{editingItem.type==="meal"?L("Meal Title","餐食名称"):L("Activity Name","运动名称")}</label>
@@ -4890,7 +5180,56 @@ function NutriLogPro({ session, onLogout }) {
                     <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🧂 {L("SODIUM (mg)","钠 (mg)")}</label><input className="inp" type="number" value={editingItem.sodium_mg||0} onChange={e=>setEditingItem({...editingItem,sodium_mg:parseFloat(e.target.value)||0})} /></div>
                     <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🌾 {L("FIBER (g)","纤维 (g)")}</label><input className="inp" type="number" value={editingItem.fiber_g||0} onChange={e=>setEditingItem({...editingItem,fiber_g:parseFloat(e.target.value)||0})} /></div>
                   </div>
+                  <div style={{ background:`${C.red}11`, borderRadius:12, padding:"10px 12px" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                      <label style={{ fontSize:11, fontWeight:"700", color:C.textMuted }}>🚩 {L("Flag this meal","标记此餐")}</label>
+                      <div
+                        onClick={() => setEditingItem({...editingItem, flagged: !editingItem.flagged})}
+                        role="switch"
+                        aria-checked={!!editingItem.flagged}
+                        style={{ position:"relative", width:42, height:24, flexShrink:0, background: editingItem.flagged ? C.red : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
+                      >
+                        <span style={{ position:"absolute", top:3, left: editingItem.flagged ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                      </div>
+                    </div>
+                    {editingItem.flagged && (
+                      <div style={{ display:"flex", flexDirection:"column", gap:10, marginTop:10 }}>
+                        <div>
+                          <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("OCCASION","场合")}</label>
+                          <div style={{ display:"flex", gap:8 }}>
+                            {[["personal",L("🏠 Personal","🏠 个人")],["work",L("💼 Work","💼 工作")]].map(([val,label]) => (
+                              <button
+                                key={val}
+                                type="button"
+                                onClick={() => setEditingItem({...editingItem, flag_occasion: editingItem.flag_occasion===val ? null : val})}
+                                style={{ flex:1, padding:"8px", borderRadius:10, fontSize:12, fontWeight:"700", cursor:"pointer",
+                                  background: editingItem.flag_occasion===val ? C.pinkGlow : "transparent",
+                                  border: `1px solid ${editingItem.flag_occasion===val ? C.pinkDim : C.border}`,
+                                  color: editingItem.flag_occasion===val ? C.pink : C.textMuted }}
+                              >{label}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("LOCATION","地点")}</label>
+                          <input className="inp" placeholder={L("e.g. office, restaurant, home","例如：办公室、餐厅、家")} value={editingItem.flag_location||""} onChange={e=>setEditingItem({...editingItem, flag_location:e.target.value})} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("COMMENTS","备注")}</label>
+                          <textarea
+                            className="inp"
+                            placeholder={L("What happened?","发生了什么？")}
+                            value={editingItem.flag_comment||""}
+                            onChange={e=>setEditingItem({...editingItem, flag_comment:e.target.value})}
+                            style={{ width:"100%", minHeight:56, resize:"vertical", padding:"8px 10px", fontSize:12.5 }}
+                          />
+                        </div>
+                        <div style={{ fontSize:10, color:C.textDim, fontStyle:"italic" }}>{L("Shows up on this meal wherever it's listed — Today, History, and Gallery.","该标记会显示在此餐出现的所有位置 —— 今日、历史与相册。")}</div>
+                      </div>
+                    )}
+                  </div>
                 </React.Fragment>
+
               )}
               {editingItem.type==="workout" && (
                 <React.Fragment>
