@@ -953,6 +953,62 @@ const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme,
   );
 });
 
+// Shared "flag this meal" editor — same toggle + occasion/location/comment fields used both
+// inside the meal edit modal (flag any meal directly) and inside the daily-login streak's red
+// circle picker (pick which meal caused a missed day, then fill in the same fields). One
+// component so the two entry points can never visually or behaviorally drift apart.
+function MealFlagEditor({ flagged, occasion, location, comment, onToggle, onOccasion, onLocation, onComment, C, L }) {
+  return (
+    <div style={{ background:`${C.red}11`, borderRadius:12, padding:"10px 12px" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <label style={{ fontSize:11, fontWeight:"700", color:C.textMuted }}>🚩 {L("Flag this meal","标记此餐")}</label>
+        <div
+          onClick={onToggle}
+          role="switch"
+          aria-checked={!!flagged}
+          style={{ position:"relative", width:42, height:24, flexShrink:0, background: flagged ? C.red : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
+        >
+          <span style={{ position:"absolute", top:3, left: flagged ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+        </div>
+      </div>
+      {flagged && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10, marginTop:10 }}>
+          <div>
+            <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("OCCASION","场合")}</label>
+            <div style={{ display:"flex", gap:8 }}>
+              {[["personal",L("🏠 Personal","🏠 个人")],["work",L("💼 Work","💼 工作")]].map(([val,label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => onOccasion(occasion===val ? null : val)}
+                  style={{ flex:1, padding:"8px", borderRadius:10, fontSize:12, fontWeight:"700", cursor:"pointer",
+                    background: occasion===val ? C.pinkGlow : "transparent",
+                    border: `1px solid ${occasion===val ? C.pinkDim : C.border}`,
+                    color: occasion===val ? C.pink : C.textMuted }}
+                >{label}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("LOCATION","地点")}</label>
+            <input className="inp" placeholder={L("e.g. office, restaurant, home","例如：办公室、餐厅、家")} value={location||""} onChange={e=>onLocation(e.target.value)} />
+          </div>
+          <div>
+            <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("COMMENTS","备注")}</label>
+            <textarea
+              className="inp"
+              placeholder={L("What happened?","发生了什么？")}
+              value={comment||""}
+              onChange={e=>onComment(e.target.value)}
+              style={{ width:"100%", minHeight:56, resize:"vertical", padding:"8px 10px", fontSize:12.5 }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly, theme, C, onSlotChange, onSaveFavorite, isFavorited, lang }) {
   const cardBg = C.card;
   const cardBgDragging = C.cardHover;
@@ -2075,17 +2131,23 @@ function NutriLogPro({ session, onLogout }) {
 
   const submitMealPost = useCallback(async () => {
     const meal = lastWeekPhotoMeals.find(m => m.id === mealPostSelectedId);
-    if (!meal) return;
+    // Falls back to the existing post's own saved fields when the user is only editing the
+    // comment (no new photo re-selected) — this used to silently fail whenever mealPostSelectedId
+    // wasn't a fresh pick, e.g. before meal_id was exposed by the feed RPC, or if the original
+    // meal had since been deleted from the log.
+    const base = meal
+      ? { meal_id: meal.id, image_url: meal.image_url, meal_name: meal.name, calories: meal.calories }
+      : (myMealPost ? { meal_id: myMealPost.meal_id||null, image_url: myMealPost.image_url, meal_name: myMealPost.meal_name, calories: myMealPost.calories } : null);
+    if (!base) return;
     setMealPostSaving(true);
     setMealPostSaveError(null);
     try {
       const saved = await DataAPI.upsertMealPost(userId, prevWeekMondayKey, {
-        meal_id: meal.id, image_url: meal.image_url, meal_name: meal.name, calories: meal.calories,
-        comment: mealPostComment.trim() || null
+        ...base, comment: mealPostComment.trim() || null
       });
       setMealPosts(prev => {
         const withoutMine = (prev||[]).filter(p => p.user_id !== userId);
-        return [...withoutMine, { post_id:saved.id, user_id:userId, display_name:baseTargets.display_name, avatar_url:baseTargets.avatar_url, gender:baseTargets.gender, image_url:saved.image_url, meal_name:saved.meal_name, calories:saved.calories, comment:saved.comment, created_at:saved.created_at, like_count: myMealPost?.like_count||0, liked_by_me: myMealPost?.liked_by_me||false }];
+        return [...withoutMine, { post_id:saved.id, user_id:userId, display_name:baseTargets.display_name, avatar_url:baseTargets.avatar_url, gender:baseTargets.gender, meal_id:saved.meal_id, image_url:saved.image_url, meal_name:saved.meal_name, calories:saved.calories, comment:saved.comment, created_at:saved.created_at, like_count: myMealPost?.like_count||0, liked_by_me: myMealPost?.liked_by_me||false }];
       });
       setMealPostPickerOpen(false);
       setMealPostSelectedId(null);
@@ -2752,6 +2814,63 @@ function NutriLogPro({ session, onLogout }) {
 
   const pct = (v,t) => Math.min(100, Math.round((v/t)*100));
   const [todayQuote] = useState(() => MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)]);
+
+  // ── "Which meal made you miss your target?" — tapping a red day-circle on the daily-login
+  // streak widget opens this picker instead of requiring a trip through History > Edit. Shares
+  // the same flagged/flag_occasion/flag_location/flag_comment fields and the same
+  // MealFlagEditor UI as the meal edit modal — just a second, more visible entry point onto the
+  // same feature, not a separate one.
+  const [flagPickerDayKey, setFlagPickerDayKey] = useState(null); // date key, or null = closed
+  const [flagPickerMealId, setFlagPickerMealId] = useState(null);
+  const [flagPickerFlagged, setFlagPickerFlagged] = useState(false);
+  const [flagPickerOccasion, setFlagPickerOccasion] = useState(null);
+  const [flagPickerLocation, setFlagPickerLocation] = useState("");
+  const [flagPickerComment, setFlagPickerComment] = useState("");
+  const [flagPickerSaving, setFlagPickerSaving] = useState(false);
+  const [flagPickerError, setFlagPickerError] = useState(null);
+
+  const flagPickerMeals = useMemo(() => {
+    if (!flagPickerDayKey) return [];
+    const todayKeyStr = todayKey(baseTargets.day_cutoff_hour);
+    return flagPickerDayKey === todayKeyStr ? dayData.meals : histRangeData.meals.filter(m => m.log_date === flagPickerDayKey);
+  }, [flagPickerDayKey, dayData.meals, histRangeData, baseTargets.day_cutoff_hour]);
+
+  const openFlagPicker = (dayKeyToOpen) => {
+    setFlagPickerDayKey(dayKeyToOpen);
+    setFlagPickerMealId(null);
+    setFlagPickerFlagged(false);
+    setFlagPickerOccasion(null);
+    setFlagPickerLocation("");
+    setFlagPickerComment("");
+    setFlagPickerError(null);
+  };
+  const selectFlagPickerMeal = (m) => {
+    setFlagPickerMealId(m.id);
+    // Picking a not-yet-flagged meal here IS the act of flagging it — default the toggle on.
+    // If it was already flagged (revisiting the day), load its existing details instead.
+    setFlagPickerFlagged(true);
+    setFlagPickerOccasion(m.flag_occasion || null);
+    setFlagPickerLocation(m.flag_location || "");
+    setFlagPickerComment(m.flag_comment || "");
+  };
+  const saveFlagPicker = async () => {
+    if (!flagPickerMealId) return;
+    setFlagPickerSaving(true);
+    setFlagPickerError(null);
+    try {
+      const patch = { flagged: !!flagPickerFlagged, flag_occasion: flagPickerFlagged ? (flagPickerOccasion||null) : null, flag_location: flagPickerFlagged ? (flagPickerLocation.trim()||null) : null, flag_comment: flagPickerFlagged ? (flagPickerComment.trim()||null) : null };
+      await DataAPI.updateMeal(flagPickerMealId, patch);
+      const apply = arr => arr.map(m => m.id===flagPickerMealId ? {...m,...patch} : m);
+      setDayData(d => ({ ...d, meals: apply(d.meals) }));
+      setHistDayData(d => ({ ...d, meals: apply(d.meals) }));
+      setHistRangeData(d => ({ ...d, meals: apply(d.meals) }));
+      setFlagPickerDayKey(null);
+    } catch (err) {
+      setFlagPickerError(err.message);
+    } finally {
+      setFlagPickerSaving(false);
+    }
+  };
 
   // ── Load range data for Dashboard analytics + History tab ──
   useEffect(() => {
@@ -3534,23 +3653,34 @@ function NutriLogPro({ session, onLogout }) {
                     : C.red;
                   const neutral = C.border;
                   const isPending = !day.hasData; // today (not yet evaluated) or future day
+                  // Only a real, completed "red" day is tappable — that's what "which meal made
+                  // you fail" is asking about, not a pending/future day or a yellow near-miss.
+                  const isRedFail = !isPending && resultColor === C.red;
+                  const dayMealsForFlag = isRedFail ? (day.key === todayKey(baseTargets.day_cutoff_hour) ? dayData.meals : histRangeData.meals.filter(m => m.log_date === day.key)) : [];
+                  const dayAlreadyFlagged = dayMealsForFlag.some(m => m.flagged);
                   return (
                     <div key={day.key} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, flex:1, position:"relative", zIndex:1 }}>
-                      <div style={{
-                        width:32, height:32, borderRadius:"50%",
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                        background: isPending ? C.surface : resultColor,
-                        border: isPending ? `2px solid ${day.isToday?C.pink:neutral}` : "none",
-                        boxShadow: day.isToday
-                          ? `0 0 0 5px ${C.pink}26`
-                          : (!isPending ? `0 0 6px ${resultColor}55` : "none"),
-                        transition:"all .3s ease"
-                      }}>
+                      <div
+                        onClick={isRedFail ? () => openFlagPicker(day.key) : undefined}
+                        title={isRedFail ? L("Which meal made you miss your target?","哪一餐导致你没有达标？") : undefined}
+                        style={{
+                          width:32, height:32, borderRadius:"50%",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          background: isPending ? C.surface : resultColor,
+                          border: isPending ? `2px solid ${day.isToday?C.pink:neutral}` : "none",
+                          boxShadow: day.isToday
+                            ? `0 0 0 5px ${C.pink}26`
+                            : (!isPending ? `0 0 6px ${resultColor}55` : "none"),
+                          cursor: isRedFail ? "pointer" : "default",
+                          transition:"all .3s ease"
+                        }}>
                         {isPending ? (
                           <span style={{ fontSize:12, fontWeight:"800", color:day.isToday?C.pink:C.textDim }}>{day.label}</span>
                         ) : resultColor !== C.red ? (
                           <span style={{ fontSize:14, fontWeight:"900", color:"#fff", lineHeight:1 }}>✓</span>
-                        ) : null}
+                        ) : (
+                          <span style={{ fontSize:13, lineHeight:1 }}>{dayAlreadyFlagged ? "🚩" : "?"}</span>
+                        )}
                       </div>
                       <span style={{ fontSize:10, color:day.isToday?C.pink:C.textDim, fontWeight:"700" }}>{day.label}</span>
                     </div>
@@ -5004,7 +5134,7 @@ function NutriLogPro({ session, onLogout }) {
                             {mealPostSaveError && <div style={{ fontSize:11.5, color:C.red, marginBottom:8 }}>⚠️ {mealPostSaveError}</div>}
                             <div style={{ display:"flex", gap:8 }}>
                               <button className="ghost-btn" style={{ flex:1 }} onClick={() => { setMealPostPickerOpen(false); setMealPostSaveError(null); }}>{T("common_cancel")}</button>
-                              <button className="pink-btn" style={{ flex:1.5, opacity: (!mealPostSelectedId || mealPostSaving)?0.6:1 }} disabled={!mealPostSelectedId || mealPostSaving} onClick={submitMealPost}>
+                              <button className="pink-btn" style={{ flex:1.5, opacity: ((!mealPostSelectedId && !myMealPost) || mealPostSaving)?0.6:1 }} disabled={(!mealPostSelectedId && !myMealPost) || mealPostSaving} onClick={submitMealPost}>
                                 {mealPostSaving ? L("Posting...","发布中...") : L("Post","发布")}
                               </button>
                             </div>
@@ -5027,28 +5157,29 @@ function NutriLogPro({ session, onLogout }) {
                     ) : mealPosts && mealPosts.length === 0 ? (
                       <div style={{ textAlign:"center", padding:"20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("No one has posted yet — be the first!","还没有人发布 —— 快来做第一个吧！")}</div>
                     ) : mealPosts && (
-                      <div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                         {mealPosts.slice().sort((a,b) => b.like_count - a.like_count).map(post => (
-                          <div key={post.post_id} className="card" style={{ padding:0, overflow:"hidden", marginBottom:12 }}>
-                            <img src={post.image_url} alt={post.meal_name} style={{ width:"100%", height:160, objectFit:"cover", display:"block" }} />
-                            <div style={{ padding:"10px 12px" }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                          <div key={post.post_id} className="card" style={{ padding:0, overflow:"hidden" }}>
+                            <img src={post.image_url} alt={post.meal_name} style={{ width:"100%", height:120, objectFit:"cover", display:"block" }} />
+                            <div style={{ padding:"8px 10px" }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
                                 {post.avatar_url ? (
-                                  <img src={post.avatar_url} alt={post.display_name} style={{ width:24, height:24, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+                                  <img src={post.avatar_url} alt={post.display_name} style={{ width:18, height:18, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
                                 ) : (
-                                  <div style={{ width:24, height:24, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, flexShrink:0 }}>
+                                  <div style={{ width:18, height:18, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, flexShrink:0 }}>
                                     {post.gender === "female" ? "👩" : post.gender === "male" ? "👨" : "🙂"}
                                   </div>
                                 )}
-                                <div style={{ fontSize:12, fontWeight:"700", color:C.text }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
+                                <div style={{ fontSize:10.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
                               </div>
-                              <div style={{ fontSize:13, fontWeight:"700", color:C.text }}>{post.meal_name} · {Math.round(post.calories)} kcal</div>
-                              {post.comment && <div style={{ fontSize:12, color:C.textMuted, marginTop:4, fontStyle:"italic" }}>"{post.comment}"</div>}
+                              <div style={{ fontSize:11.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.meal_name}</div>
+                              <div style={{ fontSize:10, color:C.textMuted, marginTop:2 }}>{Math.round(post.calories)} kcal</div>
+                              {post.comment && <div style={{ fontSize:10.5, color:C.textMuted, marginTop:4, fontStyle:"italic", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>"{post.comment}"</div>}
                               <button
                                 onClick={() => toggleMealPostLike(post)}
-                                style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", marginTop:8, padding:0, color: post.liked_by_me ? C.pink : C.textMuted, fontSize:13, fontWeight:"700" }}
+                                style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", marginTop:6, padding:0, color: post.liked_by_me ? C.pink : C.textMuted, fontSize:11.5, fontWeight:"700" }}
                               >
-                                <span style={{ fontSize:16 }}>{post.liked_by_me ? "❤️" : "🤍"}</span> {post.like_count}
+                                <span style={{ fontSize:13 }}>{post.liked_by_me ? "❤️" : "🤍"}</span> {post.like_count}
                               </button>
                             </div>
                           </div>
@@ -5180,54 +5311,17 @@ function NutriLogPro({ session, onLogout }) {
                     <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🧂 {L("SODIUM (mg)","钠 (mg)")}</label><input className="inp" type="number" value={editingItem.sodium_mg||0} onChange={e=>setEditingItem({...editingItem,sodium_mg:parseFloat(e.target.value)||0})} /></div>
                     <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🌾 {L("FIBER (g)","纤维 (g)")}</label><input className="inp" type="number" value={editingItem.fiber_g||0} onChange={e=>setEditingItem({...editingItem,fiber_g:parseFloat(e.target.value)||0})} /></div>
                   </div>
-                  <div style={{ background:`${C.red}11`, borderRadius:12, padding:"10px 12px" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                      <label style={{ fontSize:11, fontWeight:"700", color:C.textMuted }}>🚩 {L("Flag this meal","标记此餐")}</label>
-                      <div
-                        onClick={() => setEditingItem({...editingItem, flagged: !editingItem.flagged})}
-                        role="switch"
-                        aria-checked={!!editingItem.flagged}
-                        style={{ position:"relative", width:42, height:24, flexShrink:0, background: editingItem.flagged ? C.red : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
-                      >
-                        <span style={{ position:"absolute", top:3, left: editingItem.flagged ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
-                      </div>
-                    </div>
-                    {editingItem.flagged && (
-                      <div style={{ display:"flex", flexDirection:"column", gap:10, marginTop:10 }}>
-                        <div>
-                          <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("OCCASION","场合")}</label>
-                          <div style={{ display:"flex", gap:8 }}>
-                            {[["personal",L("🏠 Personal","🏠 个人")],["work",L("💼 Work","💼 工作")]].map(([val,label]) => (
-                              <button
-                                key={val}
-                                type="button"
-                                onClick={() => setEditingItem({...editingItem, flag_occasion: editingItem.flag_occasion===val ? null : val})}
-                                style={{ flex:1, padding:"8px", borderRadius:10, fontSize:12, fontWeight:"700", cursor:"pointer",
-                                  background: editingItem.flag_occasion===val ? C.pinkGlow : "transparent",
-                                  border: `1px solid ${editingItem.flag_occasion===val ? C.pinkDim : C.border}`,
-                                  color: editingItem.flag_occasion===val ? C.pink : C.textMuted }}
-                              >{label}</button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("LOCATION","地点")}</label>
-                          <input className="inp" placeholder={L("e.g. office, restaurant, home","例如：办公室、餐厅、家")} value={editingItem.flag_location||""} onChange={e=>setEditingItem({...editingItem, flag_location:e.target.value})} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{L("COMMENTS","备注")}</label>
-                          <textarea
-                            className="inp"
-                            placeholder={L("What happened?","发生了什么？")}
-                            value={editingItem.flag_comment||""}
-                            onChange={e=>setEditingItem({...editingItem, flag_comment:e.target.value})}
-                            style={{ width:"100%", minHeight:56, resize:"vertical", padding:"8px 10px", fontSize:12.5 }}
-                          />
-                        </div>
-                        <div style={{ fontSize:10, color:C.textDim, fontStyle:"italic" }}>{L("Shows up on this meal wherever it's listed — Today, History, and Gallery.","该标记会显示在此餐出现的所有位置 —— 今日、历史与相册。")}</div>
-                      </div>
-                    )}
-                  </div>
+                  <MealFlagEditor
+                    flagged={!!editingItem.flagged}
+                    occasion={editingItem.flag_occasion}
+                    location={editingItem.flag_location}
+                    comment={editingItem.flag_comment}
+                    onToggle={() => setEditingItem({...editingItem, flagged: !editingItem.flagged})}
+                    onOccasion={val => setEditingItem({...editingItem, flag_occasion: val})}
+                    onLocation={val => setEditingItem({...editingItem, flag_location: val})}
+                    onComment={val => setEditingItem({...editingItem, flag_comment: val})}
+                    C={C} L={L}
+                  />
                 </React.Fragment>
 
               )}
@@ -5244,6 +5338,66 @@ function NutriLogPro({ session, onLogout }) {
             <div style={{ display:"flex", gap:8 }}>
               <button className="ghost-btn" style={{ flex:1 }} onClick={() => setEditingItem(null)}>{T("common_cancel")}</button>
               <button className="pink-btn" style={{ flex:1.5 }} onClick={commitEdit}>{L("Save Changes","保存修改")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {flagPickerDayKey && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(10,10,13,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"16px", backdropFilter:"blur(6px)" }}>
+          <div className="card fade" style={{ width:"100%", maxWidth:"420px", maxHeight:"85vh", overflowY:"auto", padding:"20px", background:C.surface, borderColor:C.border }}>
+            <div style={{ fontSize:18, fontWeight:"800", color:C.red, marginBottom:4, fontFamily:"'DM Sans',sans-serif" }}>🚩 {L("Which meal made you miss your target?","哪一餐导致你没有达标？")}</div>
+            <div style={{ fontSize:12, color:C.textMuted, marginBottom:16 }}>
+              {new Date(flagPickerDayKey+"T00:00:00").toLocaleDateString(lang==="zh"?"zh-CN":"en-US",{weekday:"long",month:"long",day:"numeric"})}
+            </div>
+
+            {flagPickerMeals.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"20px 0", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("No meals logged that day.","当天没有记录任何餐食。")}</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+                {flagPickerMeals.map(m => (
+                  <div
+                    key={m.id}
+                    onClick={() => selectFlagPickerMeal(m)}
+                    style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:12, cursor:"pointer",
+                      border:`2px solid ${flagPickerMealId===m.id ? C.red : C.border}`,
+                      background: flagPickerMealId===m.id ? `${C.red}11` : "transparent" }}
+                  >
+                    {m.image_url && <img src={m.image_url} alt={m.name} style={{ width:36, height:36, borderRadius:8, objectFit:"cover", flexShrink:0 }} />}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.name}</div>
+                      <div style={{ fontSize:11, color:C.textMuted }}>{Math.round(m.calories)} kcal</div>
+                    </div>
+                    {m.flagged && flagPickerMealId!==m.id && <span style={{ fontSize:14 }}>🚩</span>}
+                    {flagPickerMealId===m.id && <span style={{ color:C.red, fontSize:16, fontWeight:"900" }}>✓</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {flagPickerMealId && (
+              <div style={{ marginBottom:16 }}>
+                <MealFlagEditor
+                  flagged={flagPickerFlagged}
+                  occasion={flagPickerOccasion}
+                  location={flagPickerLocation}
+                  comment={flagPickerComment}
+                  onToggle={() => setFlagPickerFlagged(v => !v)}
+                  onOccasion={setFlagPickerOccasion}
+                  onLocation={setFlagPickerLocation}
+                  onComment={setFlagPickerComment}
+                  C={C} L={L}
+                />
+              </div>
+            )}
+
+            {flagPickerError && <div style={{ fontSize:11.5, color:C.red, marginBottom:10 }}>⚠️ {flagPickerError}</div>}
+
+            <div style={{ display:"flex", gap:8 }}>
+              <button className="ghost-btn" style={{ flex:1 }} onClick={() => setFlagPickerDayKey(null)}>{T("common_cancel")}</button>
+              <button className="pink-btn" style={{ flex:1.5, opacity: (!flagPickerMealId||flagPickerSaving)?0.6:1 }} disabled={!flagPickerMealId||flagPickerSaving} onClick={saveFlagPicker}>
+                {flagPickerSaving ? L("Saving...","保存中...") : L("Save Flag","保存标记")}
+              </button>
             </div>
           </div>
         </div>
