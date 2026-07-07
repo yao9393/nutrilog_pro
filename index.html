@@ -1944,7 +1944,7 @@ function useManualMealForm({ userId, today, activeSlot, setDayData, setError, ca
   };
   const clearEntryPhoto = () => setEntryPhoto(null);
   // Called when the crop modal's "Crop" button produces a result.
-  const confirmCrop = (result) => { setEntryPhoto(result); setCropSource(null); };
+  const confirmCrop = (result) => { setEntryPhoto({ blob: result.blob, previewUrl: result.dataUrl, base64: result.base64 }); setCropSource(null); };
   // "Use Full Photo" — keep the compressed original, uncropped.
   const skipCrop = () => { setEntryPhoto({ blob: cropSource.blob, previewUrl: cropSource.dataUrl, base64: cropSource.base64 }); setCropSource(null); };
   // Cancel — abandon the photo entirely, back to no-photo state.
