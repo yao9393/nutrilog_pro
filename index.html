@@ -970,6 +970,18 @@ const ProgressBar = React.memo(function ProgressBar({ val, target, color, theme,
 // photo before it becomes the entry's photo — a tighter frame around just the food noticeably
 // helps "AI Photo Search" focus on what matters. Pointer events (not separate mouse/touch
 // handlers) so drag-to-move and drag-corner-to-resize both work on desktop and mobile alike.
+// Fullscreen enlarged photo viewer — tap anywhere (backdrop, image, or the × button) to close.
+// Deliberately simple: no pinch-zoom or swipe, just "see it bigger," since that's all Gallery
+// and the Best Meal feed's small thumbnails actually need.
+function PhotoLightbox({ src, onClose }) {
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:2100, display:"flex", alignItems:"center", justifyContent:"center", padding:20, cursor:"zoom-out" }}>
+      <button onClick={onClose} style={{ position:"absolute", top:16, right:16, background:"rgba(255,255,255,0.15)", border:"none", borderRadius:"50%", width:36, height:36, color:"#fff", fontSize:20, cursor:"pointer", lineHeight:1 }}>×</button>
+      <img src={src} alt="" style={{ maxWidth:"92vw", maxHeight:"88vh", objectFit:"contain", borderRadius:8 }} />
+    </div>
+  );
+}
+
 function PhotoCropModal({ imageDataUrl, onConfirm, onSkip, onCancel, C, lang }) {
   const imgRef = useRef();
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -2146,6 +2158,19 @@ function NutriLogPro({ session, onLogout }) {
   const userEmail = session.user.email;
 
   const [theme, setTheme] = useState(() => localStorage.getItem("nutrilog_theme") || "dark");
+  // First-launch Welcome Tour: a brand new device/browser has none of these keys set yet, so
+  // show a quick oriented tour once. An existing user (already has a theme/lang saved from
+  // before this feature existed) is never interrupted retroactively — they're marked "seen"
+  // immediately without ever seeing the tour pop up.
+  const [showWelcomeTour, setShowWelcomeTour] = useState(() => {
+    if (localStorage.getItem("nutrilog_onboarded")) return false;
+    if (localStorage.getItem("nutrilog_theme") || localStorage.getItem("nutrilog_lang")) {
+      localStorage.setItem("nutrilog_onboarded", "1");
+      return false;
+    }
+    return true;
+  });
+  const dismissWelcomeTour = () => { localStorage.setItem("nutrilog_onboarded", "1"); setShowWelcomeTour(false); };
   const [palette, setPalette] = useState(() => localStorage.getItem("nutrilog_palette") || "sweet");
   const [lang, setLang] = useState(() => localStorage.getItem("nutrilog_lang") || "en");
   const T = (key) => translate(lang, key);
@@ -2167,6 +2192,7 @@ function NutriLogPro({ session, onLogout }) {
   const [monthlySummaries, setMonthlySummaries] = useState(null); // null = not loaded yet
   const [monthlySummariesLoading, setMonthlySummariesLoading] = useState(false);
   const [monthlySummariesError, setMonthlySummariesError] = useState(null);
+  const [lightboxImage, setLightboxImage] = useState(null); // url string | null
   const [activeSlot, setActiveSlot] = useState("Breakfast");
 
   const [loading, setLoading] = useState(true);
@@ -3217,11 +3243,19 @@ function NutriLogPro({ session, onLogout }) {
   const histConsumed = histDayData.meals.reduce((a,m)=>a+Number(m.calories),0) + (histDayData.drinks||[]).reduce((a,d)=>a+Number(d.calories||0),0);
   const histBurned = (histDayData.workouts||[]).reduce((a,w)=>a+Number(w.calories),0);
   const histMacros = (() => {
-    const m = histDayData.meals.reduce((a,x)=>({ protein:a.protein+Number(x.protein||0), carbs:a.carbs+Number(x.carbs||0), fat:a.fat+Number(x.fat||0), sugar:a.sugar+Number(x.sugar_g||0), sodium:a.sodium+Number(x.sodium_mg||0) }), { protein:0, carbs:0, fat:0, sugar:0, sodium:0 });
-    const d = (histDayData.drinks||[]).reduce((a,x)=>({ protein:a.protein+Number(x.protein||0), carbs:a.carbs+Number(x.carbs||0), fat:a.fat+Number(x.fat||0), sugar:a.sugar+Number(x.sugar_g||0), sodium:a.sodium+Number(x.sodium_mg||0) }), { protein:0, carbs:0, fat:0, sugar:0, sodium:0 });
-    return { protein:m.protein+d.protein, carbs:m.carbs+d.carbs, fat:m.fat+d.fat, sugar:m.sugar+d.sugar, sodium:m.sodium+d.sodium };
+    const m = histDayData.meals.reduce((a,x)=>({ protein:a.protein+Number(x.protein||0), carbs:a.carbs+Number(x.carbs||0), fat:a.fat+Number(x.fat||0), sugar:a.sugar+Number(x.sugar_g||0), sodium:a.sodium+Number(x.sodium_mg||0), fiber:a.fiber+Number(x.fiber_g||0) }), { protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
+    const d = (histDayData.drinks||[]).reduce((a,x)=>({ protein:a.protein+Number(x.protein||0), carbs:a.carbs+Number(x.carbs||0), fat:a.fat+Number(x.fat||0), sugar:a.sugar+Number(x.sugar_g||0), sodium:a.sodium+Number(x.sodium_mg||0), fiber:a.fiber+Number(x.fiber_g||0) }), { protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
+    return { protein:m.protein+d.protein, carbs:m.carbs+d.carbs, fat:m.fat+d.fat, sugar:m.sugar+d.sugar, sodium:m.sodium+d.sodium, fiber:m.fiber+d.fiber };
   })();
   const histTargets = computeTargetsLocal(histBurned, historyDate);
+  const histWater = (histDayData.drinks||[]).reduce((s,d)=>s+Number(d.amount_ml||0),0);
+  // Same tiering used by the daily-login streak circles on Main — green/yellow/red based on
+  // how far net calories landed from that day's target, goal-aware (gain vs lose/maintain).
+  const histGoal = targetsForWeek(historyDate).goal;
+  const histNet = histConsumed - histBurned;
+  const histOffPct = histTargets.calories ? (histGoal === "gain" ? ((histTargets.calories-histNet)/histTargets.calories)*100 : ((histNet-histTargets.calories)/histTargets.calories)*100) : 0;
+  const histTier = histOffPct <= 0 ? "green" : histOffPct <= 20 ? "yellow" : "red";
+  const histTierColor = histTier === "green" ? C.green : histTier === "yellow" ? C.caution : C.red;
 
   const last7Days = useMemo(() => {
     const byDate = {};
@@ -5144,24 +5178,50 @@ function NutriLogPro({ session, onLogout }) {
                     <div className="card" style={{ padding:"16px", marginBottom:12 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
                         <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>📋 {L("Summary","摘要")}</span>
-                        <span style={{ fontSize:12, fontStyle:"italic", fontWeight:"600", color:(histConsumed-histBurned)>histTargets.calories?C.red:C.green }}>{(histConsumed-histBurned)<histTargets.calories?L("Calorie deficit ✓","热量赤字 ✓"):L("Over target","超出目标")}</span>
+                        <span style={{ fontSize:12, fontStyle:"italic", fontWeight:"600", color:histTierColor }}>{histTier==="green"?L("Calorie deficit ✓","热量赤字 ✓"):histTier==="yellow"?L("Near limit","接近上限"):L("Over target","超出目标")}</span>
                       </div>
-                      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:10 }}>
-                        {[{l:L("Consumed","摄入"),v:histConsumed,c:C.pink,u:"kcal"},{l:L("Burned","消耗"),v:histBurned,c:C.workoutAccent,u:"kcal"},{l:L("Net","净值"),v:histConsumed-histBurned,c:C.text,u:"kcal"},{l:L("Water","饮水"),v:(histDayData.drinks||[]).reduce((s,d)=>s+Number(d.amount_ml||0),0),c:C.water,u:"ml"}].map(({l,v,c,u}) => (
+
+                      {/* Row 1: consumed, target, and a status circle matching the daily-login streak circles on Main */}
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:10 }}>
+                        {[{l:L("Consumed","摄入"),v:histConsumed,c:C.pink,u:"kcal"},{l:L("Target","目标"),v:histTargets.calories,c:C.text,u:"kcal"}].map(({l,v,c,u}) => (
+                          <div key={l} style={{ background: theme==="light" ? `${C.border}22` : C.surface, borderRadius:12, padding:"10px 4px", textAlign:"center", border:theme==='light'?`1px solid ${C.border}`:"none" }}>
+                            <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
+                            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, color:c, fontWeight:"800", marginTop:3 }}>{Math.round(v)}</div>
+                            <div style={{ fontSize:9, color:C.textDim, fontWeight:"500" }}>{u}</div>
+                          </div>
+                        ))}
+                        <div style={{ background: theme==="light" ? `${C.border}22` : C.surface, borderRadius:12, padding:"10px 4px", textAlign:"center", border:theme==='light'?`1px solid ${C.border}`:"none", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:5 }}>
+                          <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{L("STATUS","状态")}</div>
+                          <div style={{ width:30, height:30, borderRadius:"50%", background:histTierColor, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 0 6px ${histTierColor}55` }}>
+                            {histTier !== "red" ? <span style={{ fontSize:13, fontWeight:"900", color:"#fff", lineHeight:1 }}>✓</span> : <span style={{ fontSize:13, lineHeight:1 }}>!</span>}
+                          </div>
+                          <div style={{ fontSize:9, color:C.textDim, fontWeight:"600" }}>{histTier==="green"?L("On Track","达标"):histTier==="yellow"?L("Near Limit","接近上限"):L("Over","超出")}</div>
+                        </div>
+                      </div>
+
+                      {/* Row 2: workout, water, protein, carbs */}
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, paddingTop:10, borderTop:`1px dashed ${C.border}`, marginBottom:10 }}>
+                        {[
+                          {l:L("Workout","运动"),v:histBurned,c:C.workoutAccent,u:"kcal"},
+                          {l:L("Water","饮水"),v:histWater,c:C.water,u:"ml"},
+                          {l:T("common_protein"),v:histMacros.protein,c:C.protein,u:"g"},
+                          {l:T("common_carbs"),v:histMacros.carbs,c:C.carbs,u:"g"},
+                        ].map(({l,v,c,u}) => (
                           <div key={l} style={{ background: theme==="light" ? `${C.border}22` : C.surface, borderRadius:12, padding:"8px 4px", textAlign:"center", border:theme==='light'?`1px solid ${C.border}`:"none" }}>
                             <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
-                            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:c, fontWeight:"800", marginTop:2 }}>{Math.round(v)}</div>
+                            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:c, fontWeight:"800", marginTop:2 }}>{Math.round(v)}</div>
                             <div style={{ fontSize:9, color:C.textDim, fontWeight:"500" }}>{u}</div>
                           </div>
                         ))}
                       </div>
-                      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6, paddingTop:10, borderTop:`1px dashed ${C.border}` }}>
+
+                      {/* Row 3: fat, fiber, sodium, sugar */}
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, paddingTop:10, borderTop:`1px dashed ${C.border}` }}>
                         {[
-                          {l:T("common_protein"),v:histMacros.protein,c:C.protein,u:"g"},
-                          {l:T("common_carbs"),v:histMacros.carbs,c:C.carbs,u:"g"},
                           {l:T("common_fat"),v:histMacros.fat,c:C.fat,u:"g"},
-                          {l:L("Sugar","糖"),v:histMacros.sugar,c:C.gold,u:"g"},
+                          {l:L("Fiber","纤维"),v:histMacros.fiber,c:C.green,u:"g"},
                           {l:L("Sodium","钠"),v:histMacros.sodium,c:C.sodium,u:"mg"},
+                          {l:L("Sugar","糖"),v:histMacros.sugar,c:C.gold,u:"g"},
                         ].map(({l,v,c,u}) => (
                           <div key={l} style={{ background: theme==="light" ? `${C.border}22` : C.surface, borderRadius:12, padding:"8px 4px", textAlign:"center", border:theme==='light'?`1px solid ${C.border}`:"none" }}>
                             <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
@@ -5360,7 +5420,7 @@ function NutriLogPro({ session, onLogout }) {
                         return (
                           <div key={m.id} className="card" style={{ padding:0, overflow:"hidden" }}>
                             <div style={{ position:"relative" }}>
-                              <img src={m.image_url} alt={m.name} style={{ width:"100%", height:120, objectFit:"cover", display:"block" }} />
+                              <img src={m.image_url} alt={m.name} onClick={() => setLightboxImage(m.image_url)} style={{ width:"100%", height:120, objectFit:"cover", display:"block", cursor:"zoom-in" }} />
                               <button
                                 onClick={() => saveFavorite("meal", { name:m.name, calories:m.calories, protein:m.protein, carbs:m.carbs, fat:m.fat, sugar_g:m.sugar_g, sodium_mg:m.sodium_mg, fiber_g:m.fiber_g, default_slot:m.slot })}
                                 title={L("Save as favorite","收藏为最爱")}
@@ -5478,7 +5538,7 @@ function NutriLogPro({ session, onLogout }) {
                       <div className="card" style={{ padding:"14px 16px", marginBottom:14 }}>
                         {myMealPost && !mealPostPickerOpen ? (
                           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                            <img src={myMealPost.image_url} alt={myMealPost.meal_name} style={{ width:44, height:44, borderRadius:10, objectFit:"cover", flexShrink:0 }} />
+                            <img src={myMealPost.image_url} alt={myMealPost.meal_name} onClick={() => setLightboxImage(myMealPost.image_url)} style={{ width:44, height:44, borderRadius:10, objectFit:"cover", flexShrink:0, cursor:"zoom-in" }} />
                             <div style={{ flex:1, minWidth:0 }}>
                               <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{myMealPost.meal_name}</div>
                               <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{myMealPost.liked_by_me ? "❤️" : "🤍"} {myMealPost.like_count} {L("likes","个赞")}</div>
@@ -5541,7 +5601,7 @@ function NutriLogPro({ session, onLogout }) {
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                         {mealPosts.slice().sort((a,b) => b.like_count - a.like_count).map(post => (
                           <div key={post.post_id} className="card" style={{ padding:0, overflow:"hidden" }}>
-                            <img src={post.image_url} alt={post.meal_name} style={{ width:"100%", height:120, objectFit:"cover", display:"block" }} />
+                            <img src={post.image_url} alt={post.meal_name} onClick={() => setLightboxImage(post.image_url)} style={{ width:"100%", height:120, objectFit:"cover", display:"block", cursor:"zoom-in" }} />
                             <div style={{ padding:"8px 10px" }}>
                               <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
                                 {post.avatar_url ? (
@@ -5693,7 +5753,7 @@ function NutriLogPro({ session, onLogout }) {
 
       {editingItem && (
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(10,10,13,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"16px", backdropFilter:"blur(6px)" }}>
-          <div className="card fade" style={{ width:"100%", maxWidth:"420px", padding:"20px", background:C.surface, borderColor:C.border }}>
+          <div className="card fade" style={{ width:"100%", maxWidth:"420px", maxHeight:"85vh", overflowY:"auto", padding:"20px", background:C.surface, borderColor:C.border }}>
             <div style={{ fontSize:18, fontWeight:"800", color:C.pink, marginBottom:16, fontFamily:"'DM Sans',sans-serif" }}>{L("Modify Entry Data","修改记录")}</div>
             {editingItem.type==="meal" && editingItem.image_url && (
               <div style={{ background:`${C.border}22`, borderRadius:12, padding:"10px 12px", marginBottom:12 }}>
@@ -5851,6 +5911,8 @@ function NutriLogPro({ session, onLogout }) {
         </div>
       )}
 
+      {lightboxImage && <PhotoLightbox src={lightboxImage} onClose={() => setLightboxImage(null)} />}
+
       {cropSource && (
         <PhotoCropModal
           imageDataUrl={cropSource.dataUrl}
@@ -5954,6 +6016,36 @@ function NutriLogPro({ session, onLogout }) {
         </div>
       )}
 
+      {showWelcomeTour && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(10,10,13,0.7)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500, padding:"16px", backdropFilter:"blur(6px)" }}>
+          <div className="card fade" style={{ width:"100%", maxWidth:"440px", maxHeight:"85vh", overflowY:"auto", padding:"22px", background:C.surface, borderColor:C.border }}>
+            <div style={{ textAlign:"center", marginBottom:18 }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>👋</div>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:19, fontWeight:"800", color:C.pink }}>{L("Welcome to","欢迎使用")} {T("app_name")}!</div>
+              <div style={{ fontSize:12, color:C.textMuted, marginTop:6 }}>{L("Here's the quick version — everything else you can discover as you go.","这里是快速上手指南 —— 其他功能可以慢慢探索。")}</div>
+            </div>
+
+            {[
+              { icon:"📸", title:L("1. Log things","1. 记录"), body:L("Tap a meal slot to add food three ways: snap a photo, type what you ate, or enter numbers yourself. Water and workouts log just as easily.","点击餐次即可记录：拍照、输入文字描述，或直接手动输入数值。饮水与运动同样简单记录。") },
+              { icon:"📊", title:L("2. Check your dashboard","2. 查看仪表盘"), body:L("The Main tab shows today's calories, macros, and water against YOUR targets — set once under Settings.","「主页」标签会显示今日的热量、营养素与饮水情况，并对照您的个人目标 —— 目标在设置中一次性配置。") },
+              { icon:"🟢", title:L("3. Know if you're on track","3. 了解是否达标"), body:L("The 7 circles each week turn green (on target), yellow (close), or red (over) — tap a red day anytime to note what caused it.","每周的 7 个圆圈会显示绿色（达标）、黄色（接近）或红色（超出）—— 点击红色圆圈可随时标记原因。") },
+              { icon:"🏆", title:L("4. Optional: Social","4. 可选：社交功能"), body:L("Opt in under Settings to compare weekly consistency with others and share a weekly \"best meal\" photo. Totally optional, off by default.","在设置中可选择加入，与他人比较每周达标情况，并分享每周的\"最佳美食\"照片。完全可选，默认关闭。") },
+              { icon:"⭐", title:L("5. Everything else","5. 其他功能"), body:L("Favorites for one-tap re-logging, a photo Gallery, CSV export, themes & language — all there when you're ready. Full list anytime under ⚙️ Settings → ℹ️ About.","收藏可一键快速记录、相册、CSV 导出、主题与语言切换 —— 准备好时都可以使用。完整功能列表可随时在 ⚙️ 设置 → ℹ️ 关于 中查看。") },
+            ].map((s,i) => (
+              <div key={i} style={{ display:"flex", gap:12, marginBottom:16 }}>
+                <div style={{ fontSize:22, flexShrink:0, width:32, textAlign:"center" }}>{s.icon}</div>
+                <div>
+                  <div style={{ fontSize:13.5, fontWeight:"800", color:C.text, marginBottom:3 }}>{s.title}</div>
+                  <div style={{ fontSize:12, color:C.textMuted, lineHeight:1.6 }}>{s.body}</div>
+                </div>
+              </div>
+            ))}
+
+            <button className="pink-btn" style={{ width:"100%", marginTop:6 }} onClick={dismissWelcomeTour}>{L("Got it, let's start! 🎉","知道了，开始使用！🎉")}</button>
+          </div>
+        </div>
+      )}
+
       {showAboutModal && (
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(10,10,13,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"16px", backdropFilter:"blur(6px)" }}>
           <div className="card fade" style={{ width:"100%", maxWidth:"440px", maxHeight:"82vh", overflowY:"auto", padding:"20px", background:C.surface, borderColor:C.border }}>
@@ -5969,20 +6061,49 @@ function NutriLogPro({ session, onLogout }) {
 
             {aboutTab === "about" && (
               <div className="fade">
-                <p style={{ fontSize:13, color:C.text, lineHeight:1.6, marginBottom:14 }}>
+                <p style={{ fontSize:13, color:C.text, lineHeight:1.6, marginBottom:16 }}>
                   {L("NutriLog Pro is a personal nutrition and fitness tracker built for everyday use — log meals, water, and workouts, and see how they all add up against goals personalized to you.",
                      "营养日志专业版是一款为日常使用打造的个人营养与健身追踪应用 —— 记录餐食、饮水与运动，并对照为您量身定制的目标查看整体进展。")}
                 </p>
-                <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:8 }}>{L("WHAT YOU CAN DO","功能一览")}</div>
+
+                <div style={{ fontSize:11, fontWeight:"700", color:C.pink, letterSpacing:"0.05em", marginBottom:8 }}>{L("1. LOGGING","1. 记录")}</div>
                 <ul style={{ fontSize:13, color:C.text, lineHeight:1.8, marginBottom:16, paddingLeft:18 }}>
-                  <li>{L("📸 Snap or upload a meal photo — AI estimates calories & macros, broken down by ingredient","📸 拍摄或上传餐食照片 —— AI 按食材估算热量与营养素")}</li>
-                  <li>{L("✏️ Or just type what you ate — AI fills in the nutrition","✏️ 也可以直接输入吃了什么 —— AI 自动补全营养信息")}</li>
-                  <li>{L("💧 Log water and other drinks, with a hydration goal personalized to your body weight","💧 记录饮水与其他饮品，饮水目标根据体重个性化设定")}</li>
-                  <li>{L("🏃 Log any workout by description — pushups, jogging, HIIT — AI estimates calories burned","🏃 用文字描述记录任意运动 —— 俯卧撑、慢跑、HIIT —— AI 估算消耗热量")}</li>
-                  <li>{L("⚖️ Track your weight over time and see your BMI","⚖️ 长期追踪体重变化并查看 BMI")}</li>
-                  <li>{L("📊 Dashboard with trends, streaks, and weekly/monthly summaries","📊 仪表盘展示趋势、连续打卡与每周/每月摘要")}</li>
-                  <li>{L("📥 Export your full history to CSV anytime","📥 随时将完整历史导出为 CSV")}</li>
+                  <li>{L("Three ways to log a meal: 📷 AI Photo Search (snap it, AI reads the photo), ✨ AI Text Search (type it, AI estimates it), or ✍️ Manual Entry (type your own numbers)","三种记录方式：📷 AI 图片识别（拍照，AI 分析照片）、✨ AI 文字识别（输入描述，AI 估算）、✍️ 手动输入（自行填写数值）")}</li>
+                  <li>{L("Crop a photo before logging to help the AI focus on just the food","记录前可裁剪照片，帮助 AI 更专注于食物本身")}</li>
+                  <li>{L("Log water & other drinks against a hydration goal personalized to your weight","记录饮水与其他饮品，饮水目标根据体重个性化设定")}</li>
+                  <li>{L("Log any workout by description — AI estimates calories burned","用文字描述记录任意运动 —— AI 估算消耗热量")}</li>
+                  <li>{L("Forgot to log yesterday? Backdate any entry from History","忘记记录昨天了？可在「历史」中为过去补记")}</li>
                 </ul>
+
+                <div style={{ fontSize:11, fontWeight:"700", color:C.pink, letterSpacing:"0.05em", marginBottom:8 }}>{L("2. READING YOUR DASHBOARD","2. 查看仪表盘")}</div>
+                <ul style={{ fontSize:13, color:C.text, lineHeight:1.8, marginBottom:16, paddingLeft:18 }}>
+                  <li>{L("Today's calories, macros, water, and workouts — all against your personal targets","今日热量、营养素、饮水与运动 —— 均对照个人目标显示")}</li>
+                  <li>{L("Weight & BMI trend chart over time","长期体重与 BMI 趋势图")}</li>
+                  <li>{L("History tab: revisit any past day, week, or month in full detail","「历史」标签：可查看过去任意一天、一周或一月的完整记录")}</li>
+                </ul>
+
+                <div style={{ fontSize:11, fontWeight:"700", color:C.pink, letterSpacing:"0.05em", marginBottom:8 }}>{L("3. AM I ON TRACK?","3. 我达标了吗？")}</div>
+                <ul style={{ fontSize:13, color:C.text, lineHeight:1.8, marginBottom:16, paddingLeft:18 }}>
+                  <li>{L("The 7-circle weekly streak: green = hit target, yellow = close, red = over — tap a red day to flag which meal caused it","每周 7 个圆圈：绿色达标、黄色接近、红色超出 —— 点击红色可标记是哪一餐导致的")}</li>
+                  <li>{L("Weekly Report Card grades your whole week, C through SSS+","「本周成绩单」为整周表现评分，从 C 到 SSS+")}</li>
+                  <li>{L("Monthly Report Cards keep a lightweight summary once day-by-day detail ages out (Social > Achievements)","当每日细节数据超过一定期限后，「月度报告卡」仍会保留精简摘要（社交 > 成就）")}</li>
+                </ul>
+
+                <div style={{ fontSize:11, fontWeight:"700", color:C.pink, letterSpacing:"0.05em", marginBottom:8 }}>{L("4. SOCIAL (OPT-IN)","4. 社交功能（可选加入）")}</div>
+                <ul style={{ fontSize:13, color:C.text, lineHeight:1.8, marginBottom:16, paddingLeft:18 }}>
+                  <li>{L("Leaderboard: compare weekly consistency with other opted-in users — always last week's finished results, never live or partial","「排行榜」：与其他已加入的用户比较每周达标情况 —— 仅显示上周的最终结果，绝不显示当天未完成的数据")}</li>
+                  <li>{L("Best Meal of the Week: post one photo a week, others can view & like it","「本周最佳美食」：每周可发布一张照片，其他人可查看并点赞")}</li>
+                  <li>{L("Achievements: your best-ever week and month","「成就」：您历史最佳的一周与一月表现")}</li>
+                </ul>
+
+                <div style={{ fontSize:11, fontWeight:"700", color:C.pink, letterSpacing:"0.05em", marginBottom:8 }}>{L("5. GOOD TO HAVE","5. 实用小功能")}</div>
+                <ul style={{ fontSize:13, color:C.text, lineHeight:1.8, marginBottom:16, paddingLeft:18 }}>
+                  <li>{L("Favorites: save any meal, drink, or workout for one-tap re-logging","「收藏」：将任意餐食、饮品或运动收藏，一键快速再次记录")}</li>
+                  <li>{L("Gallery: browse past meal photos, tap to enlarge, star your favorites","「相册」：浏览过往餐食照片，点击可放大查看，收藏喜欢的照片")}</li>
+                  <li>{L("Export your full history to CSV anytime","随时可将完整历史导出为 CSV")}</li>
+                  <li>{L("Themes, colour palettes, and English/Chinese language — all in ⚙️ Settings","主题、配色与中英文切换 —— 均在 ⚙️ 设置中")}</li>
+                </ul>
+
                 <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:8 }}>{L("GOOD TO KNOW","温馨提示")}</div>
                 <p style={{ fontSize:12, color:C.textMuted, lineHeight:1.7, marginBottom:16 }}>
                   {L("AI features use your own free Gemini API key (set it up once under ⚙️ Settings) — your key, your data, your privacy. Your account and data are private to you; nobody else can see them.",
