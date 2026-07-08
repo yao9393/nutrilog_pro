@@ -3255,7 +3255,6 @@ function NutriLogPro({ session, onLogout }) {
   const histNet = histConsumed - histBurned;
   const histOffPct = histTargets.calories ? (histGoal === "gain" ? ((histTargets.calories-histNet)/histTargets.calories)*100 : ((histNet-histTargets.calories)/histTargets.calories)*100) : 0;
   const histTier = histOffPct <= 0 ? "green" : histOffPct <= 20 ? "yellow" : "red";
-  const histTierColor = histTier === "green" ? C.green : histTier === "yellow" ? C.caution : C.red;
 
   const last7Days = useMemo(() => {
     const byDate = {};
@@ -5178,7 +5177,7 @@ function NutriLogPro({ session, onLogout }) {
                     <div className="card" style={{ padding:"16px", marginBottom:12 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
                         <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>📋 {L("Summary","摘要")}</span>
-                        <span style={{ fontSize:12, fontStyle:"italic", fontWeight:"600", color:histTierColor }}>{histTier==="green"?L("Calorie deficit ✓","热量赤字 ✓"):histTier==="yellow"?L("Near limit","接近上限"):L("Over target","超出目标")}</span>
+                        <span style={{ fontSize:12, fontStyle:"italic", fontWeight:"600", color:histTier==="green"?C.green:histTier==="yellow"?C.caution:C.red }}>{histTier==="green"?L("Calorie deficit ✓","热量赤字 ✓"):histTier==="yellow"?L("Near limit","接近上限"):L("Over target","超出目标")}</span>
                       </div>
 
                       {/* Row 1: consumed, target, and a status circle matching the daily-login streak circles on Main */}
@@ -5190,13 +5189,15 @@ function NutriLogPro({ session, onLogout }) {
                             <div style={{ fontSize:9, color:C.textDim, fontWeight:"500" }}>{u}</div>
                           </div>
                         ))}
+                        {(() => { const tierColor = histTier==="green"?C.green:histTier==="yellow"?C.caution:C.red; return (
                         <div style={{ background: theme==="light" ? `${C.border}22` : C.surface, borderRadius:12, padding:"10px 4px", textAlign:"center", border:theme==='light'?`1px solid ${C.border}`:"none", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:5 }}>
                           <div style={{ fontSize:9, color:C.textMuted, fontWeight:"700" }}>{L("STATUS","状态")}</div>
-                          <div style={{ width:30, height:30, borderRadius:"50%", background:histTierColor, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 0 6px ${histTierColor}55` }}>
+                          <div style={{ width:30, height:30, borderRadius:"50%", background:tierColor, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 0 6px ${tierColor}55` }}>
                             {histTier !== "red" ? <span style={{ fontSize:13, fontWeight:"900", color:"#fff", lineHeight:1 }}>✓</span> : <span style={{ fontSize:13, lineHeight:1 }}>!</span>}
                           </div>
                           <div style={{ fontSize:9, color:C.textDim, fontWeight:"600" }}>{histTier==="green"?L("On Track","达标"):histTier==="yellow"?L("Near Limit","接近上限"):L("Over","超出")}</div>
                         </div>
+                        ); })()}
                       </div>
 
                       {/* Row 2: workout, water, protein, carbs */}
