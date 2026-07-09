@@ -13,7 +13,6 @@
     <title>NutriLog Pro</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=DM+Sans:opsz,wght@9..40,300..800&display=swap" rel="stylesheet">
     <style>
@@ -54,7 +53,7 @@
     <div id="root">
       <div style="min-height:100vh;background:#0a0a0d;color:#f3f1f4;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;padding:20px;text-align:center;">
         <div style="width:100%;max-width:280px;">
-          <div style="font-size:38px;margin-bottom:14px;animation:bootPulse 1.4s ease-in-out infinite;">🍑</div>
+          <img src="icon-192.png" alt="" onerror="this.style.display='none'" style="width:56px;height:56px;border-radius:16px;margin-bottom:14px;animation:bootPulse 1.4s ease-in-out infinite;" />
           <div style="font-size:14px;color:#8b8794;margin-bottom:16px;">Loading NutriLog Pro...</div>
           <div style="width:100%;height:4px;background:#242229;border-radius:4px;overflow:hidden;">
             <div style="width:40%;height:100%;background:linear-gradient(90deg,#ff6fa5,#ff9fc4);border-radius:4px;animation:bootBar 1.1s ease-in-out infinite;"></div>
@@ -1200,7 +1199,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
     if (!dragRef.current.triggered && Math.abs(delta) > THRESHOLD) {
       dragRef.current.triggered = true;
       if (navigator.vibrate) navigator.vibrate(8);
-      onSlotChange(delta > 0 ? 1 : -1);
+      onSlotChange(meal.id, delta > 0 ? 1 : -1);
     }
   };
   const onPointerUp = () => {
@@ -1254,16 +1253,16 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
                   <div onClick={() => setMenuOpen(false)} style={{ position:"fixed", inset:0, zIndex:19 }} />
                   <div className="fade" style={{ position:"absolute", top:"100%", right:0, zIndex:20, background:cardBg, border:`1px solid ${C.border}`, borderRadius:12, boxShadow:"0 6px 20px rgba(0,0,0,0.18)", overflow:"hidden", minWidth:130 }}>
                     {onSaveFavorite && (
-                      <button onClick={() => { onSaveFavorite(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color: isFavorited?pinkColor:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
+                      <button onClick={() => { onSaveFavorite(meal); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color: isFavorited?pinkColor:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
                         <span style={{ fontSize:14 }}>{isFavorited?"★":"☆"}</span> {isFavorited?"Saved":"Save favorite"}
                       </button>
                     )}
                     {onEdit && (
-                      <button onClick={() => { onEdit(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
+                      <button onClick={() => { onEdit(meal); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:textColor, cursor:"pointer", whiteSpace:"nowrap" }}>
                         <span style={{ fontSize:13 }}>✏️</span> Edit
                       </button>
                     )}
-                    <button onClick={() => { onRemove(); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:C.red, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    <button onClick={() => { onRemove(meal.id); setMenuOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:C.red, cursor:"pointer", whiteSpace:"nowrap" }}>
                       <span style={{ fontSize:13 }}>×</span> Remove
                     </button>
                   </div>
@@ -3064,6 +3063,25 @@ function NutriLogPro({ session, onLogout }) {
     setHistDayData(d => ({ ...d, meals: d.meals.filter(m=>m.id!==id) }));
     try { await DataAPI.deleteMeal(id); } catch (err) { setError(L("Failed to delete: ","删除失败：") + err.message); }
   };
+  // ── Stable callback refs for MealCard ──
+  // MealCard is wrapped in React.memo, but every call site used to pass fresh inline arrow
+  // functions (`onRemove={() => removeMeal(m.id)}` etc.) — a brand new function reference every
+  // single render, which defeats memo's shallow prop comparison entirely. That meant every meal
+  // card on screen fully re-rendered on any keystroke or unrelated state change anywhere in the
+  // app, not just when that specific meal actually changed — the likely cause of the reported
+  // lag while logging/scrolling with several meals on screen. Fix: keep the latest version of
+  // each handler in a ref, and hand MealCard a truly stable (empty-deps) wrapper that reads the
+  // ref at call time — same behavior, but the prop reference itself never changes.
+  const latestHandlersRef = useRef({});
+  latestHandlersRef.current.removeMeal = removeMeal;
+  latestHandlersRef.current.removeMealFromHistory = removeMealFromHistory;
+  latestHandlersRef.current.editMeal = (meal) => setEditingItem({...meal, type:"meal"});
+  latestHandlersRef.current.saveFavoriteMeal = (meal) => saveFavorite("meal", { name:meal.name, calories:meal.calories, protein:meal.protein, carbs:meal.carbs, fat:meal.fat, sugar_g:meal.sugar_g, sodium_mg:meal.sodium_mg, fiber_g:meal.fiber_g, default_slot:meal.slot });
+  const stableRemoveMeal = useCallback((id) => latestHandlersRef.current.removeMeal(id), []);
+  const stableRemoveMealFromHistory = useCallback((id) => latestHandlersRef.current.removeMealFromHistory(id), []);
+  const stableChangeMealSlot = useCallback((id, dir) => latestHandlersRef.current.changeMealSlot(id, dir), []);
+  const stableEditMeal = useCallback((meal) => latestHandlersRef.current.editMeal(meal), []);
+  const stableSaveFavoriteMeal = useCallback((meal) => latestHandlersRef.current.saveFavoriteMeal(meal), []);
   const removeWorkoutFromHistory = async (id) => {
     setHistDayData(d => ({ ...d, workouts: (d.workouts||[]).filter(w=>w.id!==id) }));
     try { await DataAPI.deleteWorkout(id); } catch (err) { setError(L("Failed to delete: ","删除失败：") + err.message); }
@@ -3141,6 +3159,7 @@ function NutriLogPro({ session, onLogout }) {
     setDayData(d => ({ ...d, meals: d.meals.map(m => m.id===mealId ? {...m, slot:newSlot} : m) }));
     try { await DataAPI.updateMeal(mealId, { slot: newSlot }); } catch (err) { setError(L("Failed to move meal: ","移动餐食失败：") + err.message); refreshToday(); }
   };
+  latestHandlersRef.current.changeMealSlot = changeMealSlot;
   const removeWorkout = async (id) => {
     setDayData(d => ({ ...d, workouts: (d.workouts||[]).filter(w=>w.id!==id) }));
     try { await DataAPI.deleteWorkout(id); } catch (err) { setError(L("Failed to delete: ","删除失败：") + err.message); refreshToday(); }
@@ -4878,7 +4897,7 @@ function NutriLogPro({ session, onLogout }) {
                     </div>
                     {slotMeals.length===0
                       ? <div style={{ fontSize:12, fontStyle:"italic", color:C.textDim, paddingLeft:10, marginBottom:8 }}>{L(`Nothing logged for ${slotLabel(slot, lang)}`, `${slotLabel(slot, lang)}还没有记录`)}</div>
-                      : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={() => removeMeal(m.id)} onEdit={() => setEditingItem({...m,type:"meal"})} onSlotChange={(dir) => changeMealSlot(m.id, dir)} theme={theme} C={C} lang={lang} onSaveFavorite={() => saveFavorite("meal", { name:m.name, calories:m.calories, protein:m.protein, carbs:m.carbs, fat:m.fat, sugar_g:m.sugar_g, sodium_mg:m.sodium_mg, fiber_g:m.fiber_g, default_slot:m.slot })} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} />)
+                      : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={stableRemoveMeal} onEdit={stableEditMeal} onSlotChange={stableChangeMealSlot} theme={theme} C={C} lang={lang} onSaveFavorite={stableSaveFavoriteMeal} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} />)
                     }
                   </div>
                 );
@@ -5247,7 +5266,7 @@ function NutriLogPro({ session, onLogout }) {
                       return (
                         <div key={slot} style={{ marginBottom:14 }}>
                           <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"800", color:C.textMuted, marginBottom:6 }}>{SLOT_ICONS[slot]} {slotLabel(slot, lang)}</div>
-                          {sm.map(m => <MealCard key={m.id} meal={m} onRemove={() => removeMealFromHistory(m.id)} onEdit={() => setEditingItem({...m,type:"meal"})} theme={theme} C={C} lang={lang} />)}
+                          {sm.map(m => <MealCard key={m.id} meal={m} onRemove={stableRemoveMealFromHistory} onEdit={stableEditMeal} theme={theme} C={C} lang={lang} />)}
                         </div>
                       );
                     })}
@@ -6267,11 +6286,13 @@ root.render(<Root />);
 
     </script>
     <script>
-      // Babel Standalone re-parses and transforms this entire file's JSX EVERY time the app
-      // opens — a cost that grows as the app grows, and the biggest single factor in load time
-      // (confirmed by Babel's own console warning to precompile for production). Rather than
-      // changing the "single editable JSX file, no build step" setup, this caches the transform
-      // result itself: pay the cost once per version, then every load after just runs plain JS.
+      // The Babel STANDALONE LIBRARY itself (not just running it) is a multi-hundred-KB download
+      // and parse cost, separate from — and bigger than — the JSX transform it performs. The
+      // previous fix only cached the transform's OUTPUT but still force-loaded the library
+      // unconditionally via a static <script> tag, which is why it didn't feel any faster: the
+      // biggest cost was never actually skipped. This version loads Babel dynamically, and ONLY
+      // when there's no cached compile to fall back on — a cache hit now skips Babel entirely,
+      // both the download and the transform.
       (function () {
         var sourceEl = document.getElementById('app-source');
         var source = sourceEl.textContent;
@@ -6293,8 +6314,23 @@ root.render(<Root />);
         var compiled = null;
         try { compiled = localStorage.getItem(cacheKey); } catch (e) { /* storage unavailable — fine, just skip caching */ }
 
-        if (!compiled) {
-          compiled = Babel.transform(source, { presets: [["react", { runtime: "classic" }]] }).code;
+        function runCompiled(code) {
+          var scriptEl = document.createElement("script");
+          scriptEl.textContent = code;
+          document.body.appendChild(scriptEl);
+        }
+
+        if (compiled) {
+          // Cache hit: Babel is never even downloaded on this load.
+          runCompiled(compiled);
+          return;
+        }
+
+        // Cache miss: load Babel now, transform, cache the result, then run it.
+        var babelScript = document.createElement("script");
+        babelScript.src = "https://unpkg.com/@babel/standalone@7.29.7/babel.min.js";
+        babelScript.onload = function () {
+          var code = Babel.transform(source, { presets: [["react", { runtime: "classic" }]] }).code;
           try {
             // Drop any previously cached compile first — the hash only changes when the
             // source does, so an old entry is guaranteed stale and would just sit there
@@ -6303,13 +6339,15 @@ root.render(<Root />);
               var k = localStorage.key(i);
               if (k && k.indexOf("nutrilog_compiled_") === 0 && k !== cacheKey) localStorage.removeItem(k);
             }
-            localStorage.setItem(cacheKey, compiled);
+            localStorage.setItem(cacheKey, code);
           } catch (e) { /* localStorage full or unavailable — this load still works, just uncached */ }
-        }
-
-        var scriptEl = document.createElement("script");
-        scriptEl.textContent = compiled;
-        document.body.appendChild(scriptEl);
+          runCompiled(code);
+        };
+        babelScript.onerror = function () {
+          var el = document.getElementById('boot-error');
+          if (el) el.textContent = "Failed to load the Babel compiler — check your internet connection and refresh.";
+        };
+        document.head.appendChild(babelScript);
       })();
     </script>
 </body>
