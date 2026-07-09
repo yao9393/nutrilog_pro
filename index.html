@@ -53,13 +53,21 @@
 <body>
     <div id="root">
       <div style="min-height:100vh;background:#0a0a0d;color:#f3f1f4;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;padding:20px;text-align:center;">
-        <div>
-          <div style="font-size:14px;color:#8b8794;">Loading NutriLog Pro...</div>
+        <div style="width:100%;max-width:280px;">
+          <div style="font-size:38px;margin-bottom:14px;animation:bootPulse 1.4s ease-in-out infinite;">🍑</div>
+          <div style="font-size:14px;color:#8b8794;margin-bottom:16px;">Loading NutriLog Pro...</div>
+          <div style="width:100%;height:4px;background:#242229;border-radius:4px;overflow:hidden;">
+            <div style="width:40%;height:100%;background:linear-gradient(90deg,#ff6fa5,#ff9fc4);border-radius:4px;animation:bootBar 1.1s ease-in-out infinite;"></div>
+          </div>
           <div id="boot-error" style="margin-top:16px;font-size:13px;color:#e8616f;white-space:pre-wrap;max-width:90vw;"></div>
         </div>
       </div>
     </div>
-    <script type="text/babel">
+    <style>
+      @keyframes bootPulse { 0%,100% { transform:scale(1); opacity:1; } 50% { transform:scale(1.12); opacity:0.75; } }
+      @keyframes bootBar { 0% { transform:translateX(-120%); } 100% { transform:translateX(350%); } }
+    </style>
+    <script type="text/plain" id="app-source">
 const { useState, useRef, useCallback, useEffect, useMemo } = React;
 
 // ── Supabase client ───────────────────────────────────────────
@@ -187,7 +195,7 @@ const STRINGS = {
     settings_anthropic_label: "Claude API key (secondary provider, optional)",
     settings_anthropic_hint: "A genuinely independent provider from Google — used automatically once your Gemini limit is reached or Gemini is rate-limited, so AI photo analysis can keep working. Get a key at console.anthropic.com.",
     settings_daily_limit_label: "Daily AI limit",
-    settings_daily_limit_hint: "A soft cap this app enforces to protect your free Google quota — not Google's own limit. Raise it if your account has more headroom.",
+    settings_daily_limit_hint: "A warning threshold only — this app's own estimate of your free Google quota, not Google's actual limit. Past it, AI Photo/Text Search still works as normal; you'll just see a heads-up. Set it to whatever fits your account's real headroom.",
     settings_fallback_key_label: "Fallback API key (optional)",
     settings_fallback_key_hint: "Only helps if this key is from a genuinely separate Google Cloud project — a second key in the same project shares the same quota and won't add headroom.",
     settings_get_key_title: "Get a free key",
@@ -265,7 +273,7 @@ const STRINGS = {
     settings_anthropic_label: "Claude API 密钥（备用服务商，可选）",
     settings_anthropic_hint: "与 Google 完全独立的服务商 —— 当 Gemini 达到限额或被限流时会自动启用，让 AI 拍照分析得以继续工作。可前往 console.anthropic.com 获取密钥。",
     settings_daily_limit_label: "每日 AI 上限",
-    settings_daily_limit_hint: "这是本应用设定的软性上限，用于保护您的免费 Google 额度，并非 Google 本身的限制。如果您的账号额度充足，可以调高此值。",
+    settings_daily_limit_hint: "仅作为提醒阈值 —— 这是本应用对您免费 Google 额度的估算，并非 Google 本身的实际限制。超过此数值后，AI 图片/文字识别仍可正常使用，只是会显示提醒。可根据您账号实际的额度空间自行设置。",
     settings_fallback_key_label: "备用 API 密钥（可选）",
     settings_fallback_key_hint: "仅当此密钥来自完全独立的 Google Cloud 项目时才有帮助 —— 同一项目下的第二个密钥共享同一额度，不会增加可用量。",
     settings_get_key_title: "获取免费密钥",
@@ -1848,26 +1856,20 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
     const claudeKey = (anthropicKey||"").trim();
     if (!key && !claudeKey) throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
 
-    // Soft, app-side daily cap on Gemini specifically — checked BEFORE spending a real request, so
-    // a day that's already used up fails fast instead of burning one more call for the same 429.
-    // This is our own count of requests made through this app (Google doesn't expose a "check
-    // remaining quota" endpoint), so treat it as an estimate, not gospel. Once this cap is hit, if
-    // Claude is configured we route straight there instead of touching Gemini at all — Claude is a
-    // genuinely separate provider with its own independent quota, not just another Google project.
-    const limit = dailyLimit || 15;
-    const usedSoFar = getAiUsageToday();
-    const geminiAvailable = !!key && usedSoFar < limit;
-
-    if (!geminiAvailable) {
+    // The daily limit in Settings is a soft, INFORMATIONAL cap only — it warns in the UI once
+    // passed (see the budget indicator above the entry card) but never blocks a request. It's
+    // this app's own estimate of usage (Google doesn't expose a "check remaining quota"
+    // endpoint), and different accounts can have very different real headroom — e.g. a paid or
+    // shared/pooled Google account may have far more room than the default 15/day guess. Only a
+    // genuine Google-side error below (QUOTA_EXHAUSTED / RATE_LIMITED) still triggers the
+    // fallback-key or Claude path — this local counter no longer does on its own.
+    if (!key) {
       if (claudeKey) {
         const result = await attemptWithClaude(claudeKey, body);
         incrementClaudeUsageToday();
         return result;
       }
-      if (!key) throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
-      const e = new Error("LOCAL_LIMIT_REACHED");
-      e.used = usedSoFar; e.limit = limit;
-      throw e;
+      throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
     }
 
     try {
@@ -1899,7 +1901,6 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
   const friendlyGeminiError = (err) => {
     if (err.message === "KEY_RESTRICTED") return "⚠️ Your key has domain restrictions. See Settings for a fix.";
     if (err.message === "TIMED_OUT") return "AI is taking longer than usual to respond right now — this can happen when it's busy, not necessarily your connection. Tap 🔄 Retry AI in a moment, or fill in values by hand.";
-    if (err.message === "LOCAL_LIMIT_REACHED") return `You've hit your daily AI limit (${err.used}/${err.limit}) — this is a limit set in this app's Settings to protect your free quota, not Google's own cutoff. Raise it in Settings > AI Settings if you have headroom left, add a Claude key as a second provider, or use manual entry for now.`;
     if (err.message === "QUOTA_EXHAUSTED") {
       const { countdownText, clockText } = pacificResetCountdown();
       return `You've used up today's free AI quota. It resets in about ${countdownText} (around ${clockText} your time) — manual entry works meanwhile. If this happens often, enabling billing on your Google AI Studio project removes the daily cap entirely (Gemini Flash-Lite costs a fraction of a cent per request), or add a Claude key in Settings as a second provider.`;
@@ -3251,9 +3252,14 @@ function NutriLogPro({ session, onLogout }) {
   const histWater = (histDayData.drinks||[]).reduce((s,d)=>s+Number(d.amount_ml||0),0);
   // Same tiering used by the daily-login streak circles on Main — green/yellow/red based on
   // how far net calories landed from that day's target, goal-aware (gain vs lose/maintain).
-  const histGoal = targetsForWeek(historyDate).goal;
+  // Deliberately uses the RAW base target here (not histTargets.calories, which already has the
+  // workout bonus added in) — histNet already subtracts the workout burn from consumption, so
+  // comparing it against a target that ALSO adds the burn back in double-counts the workout and
+  // artificially shrinks the deviation. The Target box below still shows histTargets.calories
+  // (the workout-inclusive allowance) since that's the more useful number to actually display.
+  const histBaseTarget = targetsForWeek(historyDate);
   const histNet = histConsumed - histBurned;
-  const histOffPct = histTargets.calories ? (histGoal === "gain" ? ((histTargets.calories-histNet)/histTargets.calories)*100 : ((histNet-histTargets.calories)/histTargets.calories)*100) : 0;
+  const histOffPct = histBaseTarget.calories ? (histBaseTarget.goal === "gain" ? ((histBaseTarget.calories-histNet)/histBaseTarget.calories)*100 : ((histNet-histBaseTarget.calories)/histBaseTarget.calories)*100) : 0;
   const histTier = histOffPct <= 0 ? "green" : histOffPct <= 20 ? "yellow" : "red";
 
   const last7Days = useMemo(() => {
@@ -4753,11 +4759,14 @@ function NutriLogPro({ session, onLogout }) {
             )}
             {(() => {
               const used = getAiUsageToday();
+              const over = used > aiDailyLimit;
               const remaining = Math.max(0, aiDailyLimit - used);
-              const color = remaining === 0 ? C.red : remaining <= Math.max(1, Math.round(aiDailyLimit*0.2)) ? C.caution : C.textDim;
+              const color = over ? C.red : remaining === 0 ? C.red : remaining <= Math.max(1, Math.round(aiDailyLimit*0.2)) ? C.caution : C.textDim;
               return (
                 <div style={{ fontSize:10.5, color, textAlign:"center", marginBottom:8, fontStyle:"italic" }}>
-                  {L(`🤖 ${remaining} of ${aiDailyLimit} AI calls left today (photo + Suggest share this budget)`, `🤖 今日剩余 AI 次数 ${remaining} / ${aiDailyLimit}（拍照分析与 AI建议 共用此额度）`)}
+                  {over
+                    ? L(`⚠️ ${used} of ${aiDailyLimit} AI calls used today — past your set limit, but AI Photo/Text Search will keep working`,`⚠️ 今日已使用 AI 次数 ${used} / ${aiDailyLimit} —— 已超出设定上限，但 AI 图片/文字识别仍可继续使用`)
+                    : L(`🤖 ${remaining} of ${aiDailyLimit} AI calls left today (photo + Suggest share this budget)`, `🤖 今日剩余 AI 次数 ${remaining} / ${aiDailyLimit}（拍照分析与 AI建议 共用此额度）`)}
                 </div>
               );
             })()}
@@ -6256,6 +6265,52 @@ function Root() {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<Root />);
 
+    </script>
+    <script>
+      // Babel Standalone re-parses and transforms this entire file's JSX EVERY time the app
+      // opens — a cost that grows as the app grows, and the biggest single factor in load time
+      // (confirmed by Babel's own console warning to precompile for production). Rather than
+      // changing the "single editable JSX file, no build step" setup, this caches the transform
+      // result itself: pay the cost once per version, then every load after just runs plain JS.
+      (function () {
+        var sourceEl = document.getElementById('app-source');
+        var source = sourceEl.textContent;
+
+        // Fast, synchronous, dependency-free fingerprint (FNV-1a) — deliberately not
+        // crypto.subtle.digest, since that's unavailable in insecure contexts like a bare
+        // file:// page, and this only needs to change when the source changes, not be
+        // cryptographically unguessable.
+        function fingerprint(str) {
+          var hash = 0x811c9dc5;
+          for (var i = 0; i < str.length; i++) {
+            hash ^= str.charCodeAt(i);
+            hash = Math.imul(hash, 0x01000193);
+          }
+          return (hash >>> 0).toString(16);
+        }
+
+        var cacheKey = "nutrilog_compiled_" + fingerprint(source);
+        var compiled = null;
+        try { compiled = localStorage.getItem(cacheKey); } catch (e) { /* storage unavailable — fine, just skip caching */ }
+
+        if (!compiled) {
+          compiled = Babel.transform(source, { presets: [["react", { runtime: "classic" }]] }).code;
+          try {
+            // Drop any previously cached compile first — the hash only changes when the
+            // source does, so an old entry is guaranteed stale and would just sit there
+            // taking up space otherwise.
+            for (var i = localStorage.length - 1; i >= 0; i--) {
+              var k = localStorage.key(i);
+              if (k && k.indexOf("nutrilog_compiled_") === 0 && k !== cacheKey) localStorage.removeItem(k);
+            }
+            localStorage.setItem(cacheKey, compiled);
+          } catch (e) { /* localStorage full or unavailable — this load still works, just uncached */ }
+        }
+
+        var scriptEl = document.createElement("script");
+        scriptEl.textContent = compiled;
+        document.body.appendChild(scriptEl);
+      })();
     </script>
 </body>
 </html>
