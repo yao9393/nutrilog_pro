@@ -2141,7 +2141,7 @@ function useCustomDrinkForm({ userId, today, setDayData, setError, callGemini, f
   };
 
   return {
-    customDrinkName, setCustomDrinkName, customDrinkMl, customDrinkCal, setCustomDrinkCal,
+    customDrinkName, setCustomDrinkName, customDrinkMl, setCustomDrinkMl, customDrinkCal, setCustomDrinkCal,
     customDrinkProt, setCustomDrinkProt, customDrinkCarb, setCustomDrinkCarb, customDrinkFat, setCustomDrinkFat,
     customDrinkSugar, setCustomDrinkSugar, customDrinkSodium, setCustomDrinkSodium,
     isSuggestingDrink, drinkRatePer100ml, setDrinkRatePer100ml,
@@ -2361,7 +2361,7 @@ function CoachMacroPill({ kind, label, value, unit, color, textDim }) {
 // existing archetype rather than getting bespoke art.
 function CoachDishIcon({ visual, C, size = 46 }) {
   if (!visual) return null;
-  const { type, variant } = visual;
+  const { type, variant, color } = visual; // color: only used by drink types below, for variety within one archetype (tea vs coffee vs soda)
   const s = { width:size-8, height:size-8, display:"block" };
   let shape = null;
   switch (type) {
@@ -2389,6 +2389,9 @@ function CoachDishIcon({ visual, C, size = 46 }) {
       else if (variant==="broccoli") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="18" y="24" width="4" height="10" fill={C.gold}/><circle cx="16" cy="18" r="7" fill={C.green}/><circle cx="24" cy="18" r="7" fill={C.green}/><circle cx="20" cy="12" r="7" fill={C.green}/></svg>);
       else shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 8c8 0 13 6 13 13s-5 13-13 13-13-6-13-13S12 8 20 8z" fill={C.green} opacity="0.9"/></svg>);
       break;
+    case "hotcup": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M9 16h20l-2 15a3 3 0 01-3 3H14a3 3 0 01-3-3z" fill={color||C.pink}/><path d="M29 19h3a4 4 0 010 8h-2" fill="none" stroke={color||C.pink} strokeWidth="2.2"/><path d="M14 10c1-2 0-3 1-5M20 10c1-2 0-3 1-5M26 10c1-2 0-3 1-5" stroke={C.textDim} strokeWidth="1.6" strokeLinecap="round" opacity="0.6"/></svg>); break;
+    case "icedcup": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M10 12h20l-2.5 21a2 2 0 01-2 1.8H14.5a2 2 0 01-2-1.8z" fill={C.surface} stroke={C.border}/><path d="M11 15h18l-2 17a1.6 1.6 0 01-1.6 1.4H14.6A1.6 1.6 0 0113 32z" fill={color||C.pink} opacity="0.85"/><line x1="24" y1="6" x2="19" y2="30" stroke={C.textDim} strokeWidth="2" strokeLinecap="round"/></svg>); break;
+    case "can": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="12" y="8" width="16" height="26" rx="3" fill={color||C.pink}/><rect x="12" y="8" width="16" height="5" rx="2" fill={C.border}/><rect x="16" y="4" width="2" height="5" fill={C.border}/></svg>); break;
     default: shape = null;
   }
   return (
@@ -2571,6 +2574,216 @@ function DietCoachModal({ onClose, onLogThis, C, lang, L }) {
               onToggle={id => setExpandedId(expandedId===id ? null : id)}
               onLogThis={onLogThis} C={C} lang={lang} L={L}
             />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// DRINK COACH — same pattern as Diet Coach: curated reference library,
+// opened from the Water tab's 4-quadrant chooser. Reuses CoachMacroPill,
+// COACH_MACRO_EMOJI, and CoachDishIcon (hotcup/icedcup/can archetypes)
+// rather than building a parallel icon/macro system.
+// ════════════════════════════════════════════════════════════
+const DRINK_CATEGORIES = [
+  { key: "tea", label: "Tea", label_zh: "茶", emoji: "🍵" },
+  { key: "coffee", label: "Coffee", label_zh: "咖啡", emoji: "☕" },
+  { key: "local", label: "Local", label_zh: "本地饮品", emoji: "🥤" },
+  { key: "soda", label: "Soda", label_zh: "汽水", emoji: "🧋" },
+];
+
+// Sugar-level adjuster — reuses the same "adjust relative to one listed
+// component" idea as Diet Coach's rice/noodle portion adjuster, just with
+// levels that match how people actually order these drinks locally.
+const SUGAR_LEVELS = [
+  { key: 1, label: "Normal", label_zh: "正常" },
+  { key: 0.75, label: "Less Sweet", label_zh: "少甜" },
+  { key: 0.5, label: "Half Sugar", label_zh: "半糖" },
+  { key: 0.1, label: "No Sugar", label_zh: "无糖" },
+];
+
+const DRINK_COACH_ITEMS = [
+  // ── Tea ──────────────────────────────────────────────
+  { id:"teh_tarik", name:"Teh Tarik", name_zh:"拉茶", category:"tea", portion:"1 cup (250ml)", kcal:120, protein:2, carbs:20, fat:4, fiber:0, sugar:18, sodium:45,
+    visual:{ type:"hotcup" },
+    sugarKcal: 70, sugarG: 16,
+    tip:"Most of the sugar here comes from the condensed milk, not just added sugar — ordering it 'kurang manis' cuts a real amount, not just a token gesture." },
+  { id:"teh_o", name:"Teh O", name_zh:"红茶", category:"tea", portion:"1 cup (250ml)", kcal:70, protein:0.5, carbs:17, fat:0, fiber:0, sugar:16, sodium:10,
+    visual:{ type:"hotcup" }, sugarKcal:65, sugarG:16 },
+  { id:"iced_lemon_tea", name:"Iced Lemon Tea", name_zh:"柠檬茶", category:"tea", portion:"1 glass (300ml)", kcal:110, protein:0, carbs:28, fat:0, fiber:0, sugar:26, sodium:5,
+    visual:{ type:"icedcup" }, sugarKcal:100, sugarG:26 },
+  { id:"green_tea", name:"Green Tea (unsweetened)", name_zh:"绿茶（无糖）", category:"tea", portion:"1 bottle (350ml)", kcal:0, protein:0, carbs:0, fat:0, fiber:0, sugar:0, sodium:5,
+    visual:{ type:"icedcup" },
+    tip:"Zero sugar by default — the easy swap when you want something with flavour but no added sugar." },
+  { id:"bubble_tea", name:"Bubble Milk Tea", name_zh:"珍珠奶茶", category:"tea", portion:"1 cup (500ml)", kcal:320, protein:3, carbs:68, fat:6, fiber:0, sugar:55, sodium:60,
+    visual:{ type:"icedcup" }, sugarKcal:180, sugarG:40,
+    tip:"The pearls add their own sugar and carbs on top of the tea itself — a 500ml cup can carry as much sugar as two cans of soda." },
+
+  // ── Coffee ───────────────────────────────────────────
+  { id:"kopi", name:"Kopi", name_zh:"咖啡（加炼乳）", category:"coffee", portion:"1 cup (250ml)", kcal:140, protein:3, carbs:22, fat:5, fiber:0, sugar:20, sodium:40,
+    visual:{ type:"hotcup" }, sugarKcal:90, sugarG:18 },
+  { id:"kopi_o", name:"Kopi O", name_zh:"黑咖啡（加糖）", category:"coffee", portion:"1 cup (250ml)", kcal:60, protein:0.3, carbs:15, fat:0, fiber:0, sugar:14, sodium:5,
+    visual:{ type:"hotcup" }, sugarKcal:55, sugarG:14 },
+  { id:"white_coffee", name:"White Coffee", name_zh:"白咖啡", category:"coffee", portion:"1 cup (250ml)", kcal:130, protein:3, carbs:18, fat:5, fiber:0, sugar:16, sodium:50,
+    visual:{ type:"hotcup" }, sugarKcal:70, sugarG:16 },
+  { id:"iced_americano", name:"Iced Americano", name_zh:"美式冰咖啡", category:"coffee", portion:"1 cup (350ml)", kcal:15, protein:0.5, carbs:3, fat:0, fiber:0, sugar:0, sodium:10,
+    visual:{ type:"icedcup" },
+    tip:"The lowest-calorie way to get a caffeine fix here — no added sugar to begin with." },
+  { id:"cappuccino", name:"Cappuccino", name_zh:"卡布奇诺", category:"coffee", portion:"1 cup (250ml)", kcal:110, protein:6, carbs:10, fat:5, fiber:0, sugar:9, sodium:80,
+    visual:{ type:"hotcup" },
+    tip:"Most of the calories and sugar here are from the milk itself, not added syrup — there isn't much to trim by asking for less sweet." },
+
+  // ── Local ────────────────────────────────────────────
+  { id:"milo", name:"Milo", name_zh:"美禄", category:"local", portion:"1 cup (250ml)", kcal:190, protein:5, carbs:30, fat:6, fiber:0, sugar:26, sodium:90,
+    visual:{ type:"hotcup" }, sugarKcal:110, sugarG:24 },
+  { id:"bandung", name:"Bandung", name_zh:"万汶玫瑰奶", category:"local", portion:"1 glass (250ml)", kcal:180, protein:2, carbs:34, fat:4, fiber:0, sugar:32, sodium:40,
+    visual:{ type:"icedcup" }, sugarKcal:140, sugarG:30,
+    tip:"The rose syrup carries almost all of the sugar here — the milk itself is a much smaller share." },
+  { id:"sugarcane", name:"Sugar Cane Juice (Tebu)", name_zh:"甘蔗汁", category:"local", portion:"1 cup (350ml)", kcal:150, protein:0, carbs:38, fat:0, fiber:0, sugar:36, sodium:15,
+    visual:{ type:"icedcup" },
+    tip:"100% natural sugar straight from the cane — no syrup added, but the sugar total still runs close to a can of soda." },
+  { id:"soymilk", name:"Soy Milk (sweetened)", name_zh:"豆浆（加糖）", category:"local", portion:"1 cup (300ml)", kcal:130, protein:7, carbs:16, fat:4, fiber:1, sugar:14, sodium:60,
+    visual:{ type:"icedcup" }, sugarKcal:60, sugarG:14,
+    tip:"One of the few drinks here with real protein — worth keeping on the list even at normal sweetness." },
+  { id:"cincau", name:"Grass Jelly Drink (Cincau)", name_zh:"仙草冰", category:"local", portion:"1 glass (300ml)", kcal:140, protein:1, carbs:34, fat:0, fiber:1, sugar:30, sodium:20,
+    visual:{ type:"icedcup" }, sugarKcal:110, sugarG:28 },
+
+  // ── Soda ─────────────────────────────────────────────
+  { id:"cola", name:"Cola", name_zh:"可乐", category:"soda", portion:"1 can (330ml)", kcal:140, protein:0, carbs:39, fat:0, fiber:0, sugar:39, sodium:15,
+    visual:{ type:"can" },
+    tip:"Essentially all of this is added sugar — there's no 'less sweet' option for a sealed can." },
+  { id:"isotonic", name:"Isotonic Drink (100 Plus)", name_zh:"运动饮料", category:"soda", portion:"1 can (325ml)", kcal:90, protein:0, carbs:22, fat:0, fiber:0, sugar:22, sodium:100,
+    visual:{ type:"can" },
+    tip:"Lighter than most sodas, but still worth counting as a sugary drink outside of actual post-exercise rehydration." },
+  { id:"sprite", name:"Lemon-Lime Soda", name_zh:"雪碧", category:"soda", portion:"1 can (330ml)", kcal:140, protein:0, carbs:35, fat:0, fiber:0, sugar:35, sodium:40,
+    visual:{ type:"can" } },
+  { id:"rootbeer", name:"Root Beer", name_zh:"沙士", category:"soda", portion:"1 can (330ml)", kcal:150, protein:0, carbs:40, fat:0, fiber:0, sugar:40, sodium:30,
+    visual:{ type:"can" } },
+  { id:"orangesoda", name:"Orange Soda", name_zh:"橙味汽水", category:"soda", portion:"1 can (325ml)", kcal:130, protein:0, carbs:33, fat:0, fiber:0, sugar:33, sodium:35,
+    visual:{ type:"can" } },
+];
+
+function DrinkCard({ drink, C, lang, L, onAdd }) {
+  const [level, setLevel] = useState(1);
+  const hasSugarAdjust = drink.sugarKcal != null;
+  const mult = hasSugarAdjust ? level : 1;
+  const deltaKcal = hasSugarAdjust ? drink.sugarKcal * (mult - 1) : 0;
+  const deltaSugar = hasSugarAdjust ? drink.sugarG * (mult - 1) : 0;
+  const kcal = Math.round(drink.kcal + deltaKcal);
+  const sugar = Math.max(0, Math.round(drink.sugar + deltaSugar));
+  const isAdjusted = hasSugarAdjust && level !== 1;
+  const dishName = lang === "zh" ? drink.name_zh : drink.name;
+  // Icon color varies by category so tea/coffee/local/soda read as visually distinct
+  // even when they share the same cup/can archetype — all theme-driven, no fixed hex.
+  const iconColor = { tea: C.green, coffee: C.gold, local: C.carbs, soda: C.pink }[drink.category] || C.pink;
+
+  return (
+    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px" }}>
+      <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+        <CoachDishIcon visual={{ ...drink.visual, color: iconColor }} C={C} />
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{dishName}</div>
+          <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{lang==="zh"?drink.name:drink.name_zh} · {drink.portion}</div>
+        </div>
+        <div style={{ textAlign:"right", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"flex-end" }}>
+            <span style={{ fontSize:14 }}>🔥</span>
+            <span style={{ fontSize:17, fontWeight:800, color:C.pink }}>{kcal}</span>
+          </div>
+          <div style={{ fontSize:10, color:C.textDim }}>{isAdjusted ? L("kcal (adjusted)","千卡（已调整）") : "kcal"}</div>
+        </div>
+      </div>
+
+      <div style={{ display:"flex", marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+        <CoachMacroPill kind="protein" label={L("Protein","蛋白质")} value={drink.protein} unit="g" color={C.protein} textDim={C.textDim} />
+        <CoachMacroPill kind="carbs" label={L("Carbs","碳水")} value={drink.carbs} unit="g" color={C.carbs} textDim={C.textDim} />
+        <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={drink.fat} unit="g" color={C.fat} textDim={C.textDim} />
+      </div>
+      <div style={{ display:"flex", marginTop:6 }}>
+        <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={sugar} unit="g" color={C.sugar} textDim={C.textDim} />
+        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={drink.sodium} unit="mg" color={C.sodium} textDim={C.textDim} />
+        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={drink.fiber} unit="g" color={C.fiber} textDim={C.textDim} />
+      </div>
+
+      {hasSugarAdjust && (
+        <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:11, color:C.textMuted, marginBottom:6 }}>{L("Sugar level","甜度")}</div>
+          <div style={{ display:"flex", gap:6 }}>
+            {SUGAR_LEVELS.map(t => (
+              <button key={t.key} onClick={() => setLevel(t.key)} style={{
+                flex:1, fontSize:10.5, fontWeight:600, padding:"6px 2px", borderRadius:8,
+                border:`1px solid ${level===t.key?C.pink:C.border}`,
+                background:level===t.key?C.pinkGlow:"transparent",
+                color:level===t.key?C.pink:C.textMuted, cursor:"pointer",
+              }}>
+                {lang==="zh"?t.label_zh:t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {drink.tip && (
+        <div style={{ marginTop:10, fontSize:12, color:C.gold, background:C.pinkGlow, borderRadius:8, padding:"8px 10px", lineHeight:1.4 }}>💡 {drink.tip}</div>
+      )}
+
+      <button
+        onClick={() => onAdd(drink, { kcal, sugar, level })}
+        style={{ marginTop:10, width:"100%", padding:"9px 0", borderRadius:10, border:`1px solid ${C.pink}`, background:C.pinkGlow, color:C.pink, fontSize:12.5, fontWeight:700, cursor:"pointer" }}
+      >
+        {L("+ Add as drink","+ 添加为饮品")}
+      </button>
+    </div>
+  );
+}
+
+function DrinkCoachModal({ onClose, onAdd, C, lang, L }) {
+  const [activeCategory, setActiveCategory] = useState("tea");
+  const [search, setSearch] = useState("");
+
+  const filtered = DRINK_COACH_ITEMS.filter(d => {
+    const inCat = d.category === activeCategory;
+    const q = search.trim().toLowerCase();
+    const matches = !q || d.name.toLowerCase().includes(q) || d.name_zh.includes(search.trim());
+    return inCat && matches;
+  });
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:1200, display:"flex", flexDirection:"column" }}>
+      <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${C.border}`, boxSizing:"border-box" }}>
+        <div style={{ fontSize:18, fontWeight:800, color:C.text, fontFamily:"'DM Sans',sans-serif" }}>🥤 {L("Drink Coach","饮品教练")}</div>
+        <button onClick={onClose} style={{ background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:34, height:34, color:C.text, fontSize:18, cursor:"pointer", lineHeight:1, flexShrink:0 }}>×</button>
+      </div>
+
+      <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"12px 16px 0", boxSizing:"border-box" }}>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder={L("Search a drink…","搜索饮品…")}
+          className="inp"
+          style={{ width:"100%", boxSizing:"border-box", marginBottom:12 }}
+        />
+        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:12 }}>
+          {DRINK_CATEGORIES.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => setActiveCategory(cat.key)}
+              style={{ flexShrink:0, padding:"7px 12px", borderRadius:999, border:`1px solid ${activeCategory===cat.key?C.pink:C.border}`, background:activeCategory===cat.key?C.pink:"transparent", color:activeCategory===cat.key?"#fff":C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}
+            >
+              {cat.emoji} {lang==="zh"?cat.label_zh:cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto" }}>
+        <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"0 16px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:10 }}>
+          {filtered.length === 0 && (
+            <div style={{ textAlign:"center", color:C.textDim, fontSize:13, padding:"30px 0" }}>{L("No items found here yet.","这里还没有相关项目。")}</div>
+          )}
+          {filtered.map(drink => (
+            <DrinkCard key={drink.id} drink={drink} C={C} lang={lang} L={L} onAdd={onAdd} />
           ))}
         </div>
       </div>
@@ -3297,7 +3510,7 @@ function NutriLogPro({ session, onLogout }) {
   } = useManualMealForm({ userId, today, activeSlot, setDayData, setError, callGemini, friendlyGeminiError, L });
 
   const {
-    customDrinkName, setCustomDrinkName, customDrinkMl, customDrinkCal, setCustomDrinkCal,
+    customDrinkName, setCustomDrinkName, customDrinkMl, setCustomDrinkMl, customDrinkCal, setCustomDrinkCal,
     customDrinkProt, setCustomDrinkProt, customDrinkCarb, setCustomDrinkCarb, customDrinkFat, setCustomDrinkFat,
     customDrinkSugar, setCustomDrinkSugar, customDrinkSodium, setCustomDrinkSodium,
     isSuggestingDrink, drinkRatePer100ml, setDrinkRatePer100ml,
@@ -3347,6 +3560,27 @@ function NutriLogPro({ session, onLogout }) {
     });
     setShowDietCoach(false);
     setMealEntryMethod("photo");
+  };
+
+  // Water tab's 4-quadrant chooser — same pattern as Meal. null = still choosing.
+  const [waterEntryMethod, setWaterEntryMethod] = useState(null); // null | "quick" | "text" | "manual"
+  const [showDrinkCoach, setShowDrinkCoach] = useState(false);
+  const logDrinkFromCoach = (drink, computed) => {
+    const dishName = lang === "zh" ? drink.name_zh : drink.name;
+    const level = SUGAR_LEVELS.find(l => l.key === computed.level);
+    const name = (level && level.key !== 1) ? `${dishName} (${lang==="zh"?level.label_zh:level.label})` : dishName;
+    const mlMatch = drink.portion.match(/(\d+)\s*ml/);
+    setCustomDrinkName(name);
+    setCustomDrinkMl(mlMatch ? mlMatch[1] : "250");
+    setCustomDrinkCal(String(computed.kcal));
+    setCustomDrinkProt(String(drink.protein));
+    setCustomDrinkCarb(String(drink.carbs));
+    setCustomDrinkFat(String(drink.fat));
+    setCustomDrinkSugar(String(computed.sugar));
+    setCustomDrinkSodium(String(drink.sodium));
+    setDrinkRatePer100ml(null);
+    setShowDrinkCoach(false);
+    setWaterEntryMethod("manual");
   };
 
   // AI Text Search's autocomplete: matches typed description against saved favorites, so a
@@ -4828,100 +5062,41 @@ function NutriLogPro({ session, onLogout }) {
 
         {activeTab==="today" && (
           <div className="fade">
-            {(() => {
-              const winBoxes = [
-                {
-                  key:"calories", label:L("Calories","热量"), icon:"🔥",
-                  status: (() => {
-                    if (consumed.calories===0 && burned===0) return "neutral";
-                    const pct = (net / targets.calories) * 100;
-                    if (isGainPlan) {
-                      if (pct >= 80) return "good";
-                      return "caution";
-                    }
-                    if (pct <= 100) return "good";
-                    if (pct <= 120) return "caution";
-                    return "bad";
-                  })(),
-                  detail: (() => {
-                    const pct = targets.calories ? (net / targets.calories) * 100 : 0;
-                    if (isGainPlan) {
-                      if (pct >= 100) return L(`Great — you've hit your ${Math.round(targets.calories)} kcal goal today.`, `太棒了 —— 今天已达成 ${Math.round(targets.calories)} 千卡的目标。`);
-                      if (pct >= 80) return L(`${Math.round(targets.calories-net)} kcal left to fully hit your gain target.`, `还差 ${Math.round(targets.calories-net)} 千卡即可完全达成增重目标。`);
-                      return L(`${Math.round(targets.calories-net)} kcal short of your gain target — you still need to eat some more.`, `距离增重目标还差 ${Math.round(targets.calories-net)} 千卡 —— 还需要多吃一些。`);
-                    }
-                    if (pct <= 100) return L(`${Math.round(targets.calories-net)} kcal of headroom left today.`, `今天还剩 ${Math.round(targets.calories-net)} 千卡的空间。`);
-                    if (pct <= 120) return L(`${Math.round(net-targets.calories)} kcal over — still within a fine range (up to 120%).`, `超出 ${Math.round(net-targets.calories)} 千卡 —— 仍在可接受范围内 (120%以内)。`);
-                    return L(`${Math.round(net-targets.calories)} kcal over — that's over-consumption (120%+).`, `超出 ${Math.round(net-targets.calories)} 千卡 —— 已属于过量摄入 (超过120%)。`);
-                  })(),
-                  advice: (() => {
-                    const pct = targets.calories ? (net / targets.calories) * 100 : 0;
-                    if (isGainPlan) {
-                      if (pct >= 100) return L("Nice work — that's what fuels the gains!", "做得好 —— 这正是增重所需的动力！");
-                      if (pct >= 80) return L("Add a snack or a bigger portion to close the gap.", "加一份小食或加大份量来补齐差距。");
-                      return L("You're under your gain target — try an extra meal or a calorie-dense snack today.", "目前低于增重目标 —— 今天可以尝试加餐或吃一份高热量小食。");
-                    }
-                    if (pct <= 100) return L("Nice pacing — keep it up!", "节奏很好 —— 继续保持！");
-                    if (pct <= 120) return L("A little over, but no need for caution yet — just keep an eye on it.", "略有超出，但还不需要担心 —— 留意一下即可。");
-                    return L("Caution: that's a meaningful over-consumption. Try a lighter next meal, or log a workout to balance it out.", "注意：这已属于明显的过量摄入。下一餐可以吃得清淡些，或记录一次运动来平衡一下。");
-                  })()
-                },
-                {
-                  key:"hydration", label:L("Hydration","饮水"), icon:"💧",
-                  status: totalDrinkMl===0 ? "neutral" : totalDrinkMl >= waterTarget ? "good" : "bad",
-                  detail: totalDrinkMl >= waterTarget
-                    ? L(`Goal hit — ${totalDrinkMl}ml of ${waterTarget}ml.`, `目标达成 —— 已喝 ${totalDrinkMl}ml，目标 ${waterTarget}ml。`)
-                    : L(`${waterTarget-totalDrinkMl}ml left to reach your ${waterTarget}ml goal.`, `距离 ${waterTarget}ml 的目标还差 ${waterTarget-totalDrinkMl}ml。`),
-                  advice: totalDrinkMl >= waterTarget ? L("Great hydration today!", "今天补水做得很好！") : L("Drink more water — try a glass now.", "多喝点水 —— 现在就喝一杯吧。")
-                },
-                {
-                  key:"workout", label:L("Workout","运动"), icon:"🏃",
-                  status: (dayData.workouts||[]).length > 0 ? "good" : "neutral",
-                  detail: (dayData.workouts||[]).length > 0
-                    ? L(`${(dayData.workouts||[]).length} workout(s) logged, ${burned} kcal burned.`, `已记录 ${(dayData.workouts||[]).length} 次运动，消耗 ${burned} 千卡。`)
-                    : L("No workout logged yet today.", "今天还没有记录运动。"),
-                  advice: (dayData.workouts||[]).length > 0 ? L("Awesome work today!", "今天表现很棒！") : L("Let's workout a bit — even a short walk counts.", "动一动吧 —— 哪怕只是短暂散步也算数。")
-                },
-              ];
-              const colorsFor = (status, key) => {
-                const dotColor = {
-                  good: C.green,
-                  caution: C.caution,
-                  bad: C.red,
-                  neutral: C.textDim
-                }[status];
-                return { bg: C.card, border: C.border, dot: dotColor, text: dotColor };
-              };
-              const activeBox = winBoxes.find(b => b.key === expandedWinBox);
-              return (
+            <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>⚖️ {L("Weight & BMI","体重与 BMI")}</span>
+                {!showWeightReminder && !todayWeight && (
+                  <button className="ghost-btn" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>setShowWeightReminder(true)}>+ {L("Log today","记录今天")}</button>
+                )}
+              </div>
+              {weightHistory.length === 0 ? (
+                <div style={{ fontSize:13, fontStyle:"italic", color:C.textDim, textAlign:"center", padding:"16px 0" }}>{L("Log your weight to start tracking your trend and BMI.","记录体重，开始追踪趋势与 BMI。")}</div>
+              ) : (
                 <React.Fragment>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
-                    {winBoxes.map((box) => {
-                      const colors = colorsFor(box.status, box.key);
-                      return (
-                        <div key={box.key} onClick={() => setExpandedWinBox(expandedWinBox===box.key ? null : box.key)} style={{
-                          background:colors.bg,
-                          border:`1px solid ${expandedWinBox===box.key?colors.dot:colors.border}`,
-                          borderRadius:14, padding:"10px 6px", textAlign:"center", cursor:"pointer",
-                          boxShadow: box.status !== "neutral" ? `0 0 14px 2px ${colors.dot}55` : "none",
-                          transition:"all .15s"
-                        }}>
-                          <div style={{ fontSize:18, lineHeight:1, marginBottom:4 }}>{box.icon}</div>
-                          <div style={{ fontSize:10, fontWeight:"700", color:C.text }}>{box.label}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {activeBox && (
-                    <div className="card fade" style={{ padding:"12px 14px", marginBottom:14, background:C.card, borderColor:C.border }}>
-                      <div style={{ fontSize:13, fontWeight:"700", color:colorsFor(activeBox.status, activeBox.key).text, marginBottom:4 }}>{activeBox.detail}</div>
-                      <div style={{ fontSize:12, color:C.textMuted, fontStyle:"italic" }}>{activeBox.advice}</div>
+                  <div style={{ display:"grid", gridTemplateColumns: bmiInfo ? "1fr 1fr" : "1fr", gap:10, marginBottom:14 }}>
+                    <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                      <div style={{ fontSize:10, letterSpacing:".1em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>{L("CURRENT WEIGHT","当前体重")}</div>
+                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C.pink, lineHeight:1 }}>{currentWeightForCalc}</div>
+                      <div style={{ fontSize:10, color:C.textDim, fontWeight:"500" }}>kg</div>
                     </div>
+                    {bmiInfo && (
+                      <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                        <div style={{ fontSize:10, letterSpacing:".1em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>BMI</div>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C[BMI_CATEGORY_COLOR_KEY[bmiInfo.key]], lineHeight:1 }}>{bmiInfo.value}</div>
+                        <div style={{ fontSize:10, color:C[BMI_CATEGORY_COLOR_KEY[bmiInfo.key]], fontWeight:"600" }}>{bmiInfo.category}</div>
+                      </div>
+                    )}
+                  </div>
+                  {!bmiInfo && <div style={{ fontSize:11, color:C.textMuted, fontStyle:"italic", marginBottom:10 }}>{L("Add your height in your Profile (👤 on Main) to see your BMI.","在主页的个人资料 (👤) 中填写身高，即可查看 BMI。")}</div>}
+                  {weightHistory.length > 1 && (
+                    <WeightBMIChart points={weightHistory.slice(-30).map(w => ({ dateKey: w.log_date, value: w.weight_kg }))} color={C.pink} C={C} lang={lang} />
+                  )}
+                  {weightTrendMessage && (
+                    <div style={{ fontSize:12, color:C.textMuted, fontStyle:"italic", textAlign:"center", marginTop:10 }}>{weightTrendMessage}</div>
                   )}
                 </React.Fragment>
-              );
-            })()}
-
+              )}
+            </div>
             <div className="card-primary" style={{ padding:"20px 18px", marginBottom:14 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
                 <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink }}>🔥 {L("Today's Calorie Balance","今日热量平衡")}</span>
@@ -5012,20 +5187,27 @@ function NutriLogPro({ session, onLogout }) {
             </div>
             <div className="card-primary" style={{ padding:"20px 18px", marginBottom:14 }}>
               <div style={{ marginBottom:14 }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink, marginBottom:4 }}>⚖️ {L("Macro Nutrients","宏量营养素")}</div>
-                <div style={{ fontSize:11, fontStyle:"italic", color:C.textMuted, fontWeight:"500" }}>{L("Fat: stay under · Protein & Carbs: aim to reach","脂肪：控制在目标以下 · 蛋白质与碳水：争取达到目标")}</div>
+                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.pink, marginBottom:4 }}>⚖️ {L("Nutrients","营养素")}</div>
+                <div style={{ fontSize:11, fontStyle:"italic", color:C.textMuted, fontWeight:"500" }}>{L("Fat & Sugar & Sodium: stay under · Protein, Carbs & Fiber: aim to reach","脂肪、糖、钠：控制在目标以下 · 蛋白质、碳水、纤维：争取达到目标")}</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                {[{label:T("common_protein"),key:"protein",color:C.protein,target:targets.protein,icon:"🥩",isCap:false},{label:T("common_carbs"),key:"carbs",color:C.carbs,target:targets.carbs,icon:"🍞",isCap:false},{label:T("common_fat"),key:"fat",color:C.fat,target:targets.fat,icon:"🥑",isCap:true}].map(({label,key,color,target,icon,isCap}) => {
-                  const realPct = target ? (consumed[key]/target)*100 : 0;
+                {[
+                  { label:T("common_protein"), key:"protein", color:C.protein, target:targets.protein, icon:"🥩", unit:"g", isCap:false, val:consumed.protein },
+                  { label:T("common_carbs"), key:"carbs", color:C.carbs, target:targets.carbs, icon:"🍞", unit:"g", isCap:false, val:consumed.carbs },
+                  { label:T("common_fat"), key:"fat", color:C.fat, target:targets.fat, icon:"🥑", unit:"g", isCap:true, val:consumed.fat },
+                  { label:L("Sugar","糖"), key:"sugar", color:C.sugar, target:baseTargets.sugar_limit_g||50, icon:"🍬", unit:"g", isCap:true, val:consumed.sugar },
+                  { label:L("Sodium","钠"), key:"sodium", color:C.sodium, target:(baseTargets.sodium_limit_mg||2300)+sodiumWorkoutBonus(burned), icon:"🧂", unit:"mg", isCap:true, val:consumed.sodium },
+                  { label:L("Fiber","纤维"), key:"fiber", color:C.fiber, target:baseTargets.fiber_target_g||25, icon:"🌾", unit:"g", isCap:false, val:consumed.fiber },
+                ].map(({label,key,color,target,icon,unit,isCap,val}) => {
+                  const realPct = target ? (val/target)*100 : 0;
                   const barWidth = Math.min(100, realPct); // bar fill always caps at 100% — the real value is shown separately as text
                   const labelInside = barWidth >= 14;
-                  const over = isCap && consumed[key] > target;
+                  const over = isCap && val > target;
                   return (
                     <div key={key}>
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:12 }}>
                         <span style={{ fontWeight:"700", color }}>{icon} {label}</span>
-                        <span style={{ color: over?C.red:C.text }}>{Math.round(consumed[key])} / {Math.round(target)}g {isCap && over ? L("(over limit)","(超出限额)") : ""}</span>
+                        <span style={{ color: over?C.red:C.text }}>{Math.round(val)} / {Math.round(target)}{unit} {isCap ? (over?L("(over limit)","(超出限额)"):"") : (val>=target?L("(goal met!)","(已达标!)"):"")}</span>
                       </div>
                       <div style={{ position:"relative", height:12, background:C.border, borderRadius:6, overflow:"hidden" }}>
                         <div style={{ height:"100%", width:`${barWidth}%`, background:`linear-gradient(90deg, color-mix(in srgb, ${color} 100%, white 35%), color-mix(in srgb, ${color} 100%, black 15%))`, borderRadius:6, transition:"width .5s ease" }} />
@@ -5045,51 +5227,6 @@ function NutriLogPro({ session, onLogout }) {
                   );
                 })}
               </div>
-            </div>
-
-            <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
-              <div style={{ marginBottom:14 }}>
-                <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:4 }}>🧪 {L("Secondary nutrients","次要营养素")}</div>
-                <div style={{ fontSize:11, fontStyle:"italic", color:C.textMuted }}>{L("Sugar & sodium: stay under · Fiber: aim to reach","糖与钠：控制在目标以下 · 纤维：争取达到目标")}</div>
-              </div>
-              {[
-                { label:L("Sugar","糖"), icon:"🍬", val:consumed.sugar, target:baseTargets.sugar_limit_g||50, unit:"g", isCap:true },
-                { label:L("Sodium","钠"), icon:"🧂", val:consumed.sodium, target:(baseTargets.sodium_limit_mg||2300)+sodiumWorkoutBonus(burned), unit:"mg", isCap:true },
-                { label:L("Fiber","纤维"), icon:"🌾", val:consumed.fiber, target:baseTargets.fiber_target_g||25, unit:"g", isCap:false },
-              ].map(({label,icon,val,target,unit,isCap}) => {
-                const realPct = target ? (val/target)*100 : 0;
-                // The bar fill always caps at 100% width — once over the limit it simply shows full,
-                // never overflowing or looking broken. The real, uncapped % is shown as text instead,
-                // so going from 200% over to 400% over still reads correctly even though the bar is maxed.
-                const barWidth = Math.min(100, realPct);
-                const labelInside = barWidth >= 14;
-                const over = isCap && val > target;
-                // Sweet Pink: bar fill stays in the pink family — the over-limit warning lives in the
-                // red text label instead. Other palettes keep their original green/red fill for now.
-                const barColor = over ? C.pinkDim : C.pink;
-                return (
-                  <div key={label} style={{ marginBottom:12 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:12 }}>
-                      <span style={{ fontWeight:"700", color:C.text }}>{icon} {label}</span>
-                      <span style={{ color: over?C.red:C.textMuted }}>{Math.round(val)} / {Math.round(target)}{unit} {isCap ? (over?L("(over limit)","(超出限额)"):"") : (val>=target?L("(goal met!)","(已达标!)"):"")}</span>
-                    </div>
-                    <div style={{ position:"relative", height:12, background:C.border, borderRadius:6, overflow:"hidden" }}>
-                      <div style={{ height:"100%", width:`${barWidth}%`, background:barColor, borderRadius:6, transition:"width .5s ease" }} />
-                      <div style={{
-                        position:"absolute", top:0, bottom:0, display:"flex", alignItems:"center",
-                        left: labelInside ? "auto" : `calc(${barWidth}% + 6px)`,
-                        right: labelInside ? `calc(${100-barWidth}% + 6px)` : "auto",
-                        fontSize:10, fontWeight:"800",
-                        color: labelInside ? "#fff" : C.text,
-                        textShadow: labelInside ? "0 1px 2px rgba(0,0,0,0.5)" : "none",
-                        whiteSpace:"nowrap"
-                      }}>
-                        {Math.round(realPct)}%
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
 
             <div className="card-primary" style={{ padding:"20px 18px", marginBottom:14, background: totalDrinkMl>=waterTarget ? `${C.water}12` : C.card }}>
@@ -5142,41 +5279,6 @@ function NutriLogPro({ session, onLogout }) {
               )}
             </div>
 
-            <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink }}>⚖️ {L("Weight & BMI","体重与 BMI")}</span>
-                {!showWeightReminder && !todayWeight && (
-                  <button className="ghost-btn" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>setShowWeightReminder(true)}>+ {L("Log today","记录今天")}</button>
-                )}
-              </div>
-              {weightHistory.length === 0 ? (
-                <div style={{ fontSize:13, fontStyle:"italic", color:C.textDim, textAlign:"center", padding:"16px 0" }}>{L("Log your weight to start tracking your trend and BMI.","记录体重，开始追踪趋势与 BMI。")}</div>
-              ) : (
-                <React.Fragment>
-                  <div style={{ display:"grid", gridTemplateColumns: bmiInfo ? "1fr 1fr" : "1fr", gap:10, marginBottom:14 }}>
-                    <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
-                      <div style={{ fontSize:10, letterSpacing:".1em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>{L("CURRENT WEIGHT","当前体重")}</div>
-                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C.pink, lineHeight:1 }}>{currentWeightForCalc}</div>
-                      <div style={{ fontSize:10, color:C.textDim, fontWeight:"500" }}>kg</div>
-                    </div>
-                    {bmiInfo && (
-                      <div style={{ background:C.surface, borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
-                        <div style={{ fontSize:10, letterSpacing:".1em", color:C.textMuted, marginBottom:4, fontWeight:"700" }}>BMI</div>
-                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:22, fontWeight:"800", color:C[BMI_CATEGORY_COLOR_KEY[bmiInfo.key]], lineHeight:1 }}>{bmiInfo.value}</div>
-                        <div style={{ fontSize:10, color:C[BMI_CATEGORY_COLOR_KEY[bmiInfo.key]], fontWeight:"600" }}>{bmiInfo.category}</div>
-                      </div>
-                    )}
-                  </div>
-                  {!bmiInfo && <div style={{ fontSize:11, color:C.textMuted, fontStyle:"italic", marginBottom:10 }}>{L("Add your height in your Profile (👤 on Main) to see your BMI.","在主页的个人资料 (👤) 中填写身高，即可查看 BMI。")}</div>}
-                  {weightHistory.length > 1 && (
-                    <WeightBMIChart points={weightHistory.slice(-30).map(w => ({ dateKey: w.log_date, value: w.weight_kg }))} color={C.pink} C={C} lang={lang} />
-                  )}
-                  {weightTrendMessage && (
-                    <div style={{ fontSize:12, color:C.textMuted, fontStyle:"italic", textAlign:"center", marginTop:10 }}>{weightTrendMessage}</div>
-                  )}
-                </React.Fragment>
-              )}
-            </div>
 
             <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
@@ -5397,136 +5499,140 @@ function NutriLogPro({ session, onLogout }) {
 
         {activeTab==="water" && (
           <div className="fade">
-            <div className="card" style={{ padding:"18px 16px", marginBottom:14 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.water }}>💧 {L("Hydration","饮水")}</span>
-                <span style={{ fontSize:12, fontStyle:"italic", color:C.textMuted, fontWeight:"500" }}>{totalDrinkMl} / {waterTarget} ml</span>
-              </div>
-              <div className="wave-box" style={{ height:90, marginBottom:14 }}>
-                <div className="wave" style={{ top:`${Math.max(0,100-Math.min(100,(totalDrinkMl/waterTarget)*100))}%` }}></div>
-                <div className="wave-overlay" style={{ top:`${Math.max(0,100-Math.min(100,(totalDrinkMl/waterTarget)*100))}%` }}></div>
-                <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", zIndex:10 }}>
-                  <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:20, fontWeight:"800", color:"#fff", textShadow:"0 2px 4px rgba(0,0,0,0.5)" }}>{totalDrinkMl}</span>
-                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.9)", fontWeight:"600", textShadow:"0 1px 2px rgba(0,0,0,0.5)" }}>{L("ml logged","ml 已记录")}</span>
+            {waterEntryMethod === null ? (
+              <React.Fragment>
+                <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
+                  <div style={{ fontSize:10.5, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:10, textAlign:"center" }}>{L("HOW WOULD YOU LIKE TO LOG THIS?","您想如何记录？")}</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <button className="ghost-btn" onClick={()=>setWaterEntryMethod("quick")} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76, borderColor:C.water, color:C.water }}>
+                      <span style={{ fontSize:20 }}>💧</span>
+                      <span>{L("Quick Add","快速添加")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setWaterEntryMethod("text")} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76, borderColor:C.pink, color:C.pink }}>
+                      <span style={{ fontSize:20 }}>✨</span>
+                      <span>{L("AI Text Search","AI 文字识别")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setShowDrinkCoach(true)} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76 }}>
+                      <span style={{ fontSize:20 }}>🥤</span>
+                      <span>{L("Drink Coach","饮品教练")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setWaterEntryMethod("manual")} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76 }}>
+                      <span style={{ fontSize:20 }}>✍️</span>
+                      <span>{L("Manual Entry","手动输入")}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {favDrinks.length > 0 && (
+                  <div className="card" style={{ padding:12, marginBottom:14 }}>
+                    <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif" }}>★ {L("MY FAVORITES","我的收藏")}</div>
+                    <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
+                      {favDrinks.map(fav => (
+                        <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteDrink(fav)}>
+                          <span>{fav.drink_type || fav.name} ({fav.amount_ml}ml{fav.calories>0?`, ${Math.round(fav.calories)}kcal`:""})</span>
+                          <span onClick={(e)=>{e.stopPropagation(); removeFavorite("drink", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.water, marginBottom:10 }}>{L("Today's Drinks","今日饮品")}</div>
+                  {(dayData.drinks||[]).length===0 ? (
+                    <div style={{ fontSize:13, fontStyle:"italic", color:C.textDim, paddingLeft:10 }}>{L("Nothing logged yet today","今天还没有记录")}</div>
+                  ) : (dayData.drinks||[]).slice().reverse().map(d => {
+                    const dColor = getDrinkColor(d.drink_type, C);
+                    const hasMacros = Number(d.protein||0) > 0 || Number(d.carbs||0) > 0 || Number(d.fat||0) > 0 || Number(d.sugar_g||0) > 0 || Number(d.sodium_mg||0) > 0;
+                    const isFav = favDrinks.some(f=>f.drink_type===d.drink_type && f.amount_ml===d.amount_ml);
+                    return (
+                      <div key={d.id} className="card" style={{ padding:"12px 14px", marginBottom:8, borderLeft:`3px solid ${dColor}` }}>
+                        <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+                          {/* Name gets the full remaining width and wraps onto up to 2 lines instead of crowding the calories column */}
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", lineHeight:1.3 }}>{d.drink_type}</div>
+                            <div style={{ fontSize:11, color:C.textMuted }}>{d.amount_ml}ml{d.logged_at?` · ${new Date(d.logged_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`:""}</div>
+                          </div>
+                          {/* Calories + a single overflow menu, stacked vertically so they don't crowd the name row */}
+                          <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4, flexShrink:0, position:"relative" }}>
+                            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:dColor, fontWeight:"800" }}>{Math.round(d.calories||0)}</div>
+                            <button onClick={() => setDrinkMenuOpen(drinkMenuOpen===d.id?null:d.id)} style={{ background:"none", border:"none", color:C.textDim, fontSize:16, cursor:"pointer", padding:"2px 4px", lineHeight:1 }}>⋯</button>
+                            {drinkMenuOpen===d.id && (
+                              <React.Fragment>
+                                <div onClick={() => setDrinkMenuOpen(null)} style={{ position:"fixed", inset:0, zIndex:19 }} />
+                                <div className="fade" style={{ position:"absolute", top:"100%", right:0, zIndex:20, background:C.card, border:`1px solid ${C.border}`, borderRadius:12, boxShadow:"0 6px 20px rgba(0,0,0,0.18)", overflow:"hidden", minWidth:130 }}>
+                                  <button onClick={() => { saveFavorite("drink", { name:d.drink_type, drink_type:d.drink_type, amount_ml:d.amount_ml, calories:d.calories, protein:d.protein, carbs:d.carbs, fat:d.fat, sugar_g:d.sugar_g, sodium_mg:d.sodium_mg, fiber_g:d.fiber_g }); setDrinkMenuOpen(null); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color: isFav?dColor:C.text, cursor:"pointer", whiteSpace:"nowrap" }}>
+                                    <span style={{ fontSize:14 }}>{isFav?"★":"☆"}</span> {isFav?L("Saved","已收藏"):L("Save favorite","收藏")}
+                                  </button>
+                                  <button onClick={() => { removeDrink(d.id); setDrinkMenuOpen(null); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:C.red, cursor:"pointer", whiteSpace:"nowrap" }}>
+                                    <span style={{ fontSize:13 }}>×</span> {T("common_delete")}
+                                  </button>
+                                </div>
+                              </React.Fragment>
+                            )}
+                          </div>
+                        </div>
+                        {/* Macros always shown together in their own clean row */}
+                        {hasMacros && (
+                          <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
+                            <span style={{ fontSize:11, color:C.protein, fontWeight:"600" }}>P 🥩 {Math.round(d.protein||0)}g</span>
+                            <span style={{ fontSize:11, color:C.carbs, fontWeight:"600" }}>C 🍞 {Math.round(d.carbs||0)}g</span>
+                            <span style={{ fontSize:11, color:C.fat, fontWeight:"600" }}>F 🥑 {Math.round(d.fat||0)}g</span>
+                            <span style={{ fontSize:11, color:C.sugar, fontWeight:"600" }}>S 🍬 {Math.round(d.sugar_g||0)}g</span>
+                            <span style={{ fontSize:11, color:C.sodium, fontWeight:"600" }}>NA 🧂 {Math.round(d.sodium_mg||0)}mg</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            ) : waterEntryMethod === "quick" ? (
+              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
+                <button className="ghost-btn" onClick={()=>setWaterEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+                <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{L("QUICK ADD WATER","快速添加饮水")}</div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={() => adjustWater(-250)} className="ghost-btn" style={{ padding:"5px 8px", flex:0.8, fontSize:14 }}>−250</button>
+                  <button onClick={() => adjustWater(250)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+250ml</button>
+                  <button onClick={() => adjustWater(500)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+500ml</button>
+                  <button onClick={() => adjustWater(1000)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+1L</button>
                 </div>
               </div>
-              {achievedMilestone && (
-                <div className="fade" style={{ textAlign:"center", fontSize:13, fontWeight:"600", color:C.water, marginBottom:10 }}>{achievedMilestone.comment}</div>
-              )}
-              <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-                {waterMilestones.map(m => (
-                  <div key={m.pct} style={{ flex:1, textAlign:"center", padding:"6px 4px", borderRadius:12, background: totalDrinkMl>=m.ml ? `${C.water}1f` : C.surface, border:`1px solid ${totalDrinkMl>=m.ml?C.water:C.border}` }}>
-                    <div style={{ fontSize:11, fontWeight:"700", color: totalDrinkMl>=m.ml ? C.water : C.textMuted }}>{m.label}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize:10, color:C.textMuted, fontStyle:"italic", textAlign:"center", marginBottom:10 }}>
-                {L(`Goal personalized to your ${currentWeightForCalc ? `${currentWeightForCalc}kg` : "default"} body weight${baseTargets.activity_level ? ` and ${baseTargets.activity_level.replace('_',' ')} activity level` : ""}.`,
-                   `目标已根据您的${currentWeightForCalc ? `${currentWeightForCalc}kg` : "默认"}体重${baseTargets.activity_level ? `及"${activityLabel(baseTargets.activity_level, "zh")}"活动水平` : ""}个性化设定。`)}
-              </div>
-              <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:6 }}>{L("QUICK ADD WATER","快速添加饮水")}</div>
-              <div style={{ display:"flex", gap:6 }}>
-                <button onClick={() => adjustWater(-250)} className="ghost-btn" style={{ padding:"5px 8px", flex:0.8, fontSize:14 }}>−250</button>
-                <button onClick={() => adjustWater(250)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+250ml</button>
-                <button onClick={() => adjustWater(500)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+500ml</button>
-                <button onClick={() => adjustWater(1000)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+1L</button>
-              </div>
-            </div>
-
-            {favDrinks.length > 0 && (
-              <div className="card" style={{ padding:12, marginBottom:14 }}>
-                <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif" }}>★ {L("MY FAVORITES","我的收藏")}</div>
-                <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
-                  {favDrinks.map(fav => (
-                    <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteDrink(fav)}>
-                      <span>{fav.drink_type || fav.name} ({fav.amount_ml}ml{fav.calories>0?`, ${Math.round(fav.calories)}kcal`:""})</span>
-                      <span onClick={(e)=>{e.stopPropagation(); removeFavorite("drink", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
-                    </div>
-                  ))}
+            ) : (
+              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
+                <button className="ghost-btn" onClick={()=>setWaterEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+                <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:8 }}>{L("CUSTOM DRINK","自定义饮品")}</div>
+                <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                  <input className="inp" placeholder={L("Drink name (e.g. Bubble tea)","饮品名称 (例如：珍珠奶茶)")} value={customDrinkName} onChange={e=>{setCustomDrinkName(e.target.value); setDrinkRatePer100ml(null);}} style={{ flex:2 }} />
+                  <input className="inp" type="number" placeholder="ml" value={customDrinkMl} onChange={e=>onCustomDrinkMlChange(e.target.value)} style={{ flex:1 }} />
+                  {waterEntryMethod === "text" && (
+                    <button className="ghost-btn" onClick={suggestDrinkNutrition} disabled={isSuggestingDrink} style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, minWidth:"56px", display:"flex", justifyContent:"center", alignItems:"center", flexShrink:0 }}>
+                      {isSuggestingDrink ? <div className="spin" style={{ width:14, height:14, border:`2px solid ${C.border}`, borderTopColor:C.pink, borderRadius:"50%" }} /> : "✨"}
+                    </button>
+                  )}
+                </div>
+                {drinkRatePer100ml && <div style={{ fontSize:10, color:C.textMuted, marginBottom:8, fontStyle:"italic" }}>✨ {L("AI-estimated — values auto-scale if you change ml","AI 估算值 —— 修改 ml 会自动等比例调整")}</div>}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6, marginBottom:8 }}>
+                  <input className="inp" type="number" placeholder="kcal" value={customDrinkCal} onChange={e=>{setCustomDrinkCal(e.target.value); setDrinkRatePer100ml(null);}} />
+                  <input className="inp" type="number" placeholder={L("P g","蛋白质 g")} value={customDrinkProt} onChange={e=>{setCustomDrinkProt(e.target.value); setDrinkRatePer100ml(null);}} />
+                  <input className="inp" type="number" placeholder={L("C g","碳水 g")} value={customDrinkCarb} onChange={e=>{setCustomDrinkCarb(e.target.value); setDrinkRatePer100ml(null);}} />
+                  <input className="inp" type="number" placeholder={L("F g","脂肪 g")} value={customDrinkFat} onChange={e=>{setCustomDrinkFat(e.target.value); setDrinkRatePer100ml(null);}} />
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:8 }}>
+                  <input className="inp" type="number" placeholder={L("Sugar g","糖 g")} value={customDrinkSugar} onChange={e=>{setCustomDrinkSugar(e.target.value); setDrinkRatePer100ml(null);}} />
+                  <input className="inp" type="number" placeholder={L("Sodium mg","钠 mg")} value={customDrinkSodium} onChange={e=>{setCustomDrinkSodium(e.target.value); setDrinkRatePer100ml(null);}} />
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button className="pink-btn" style={{ flex:1 }} onClick={addCustomDrink}>+ {L("Add Drink","添加饮品")}</button>
+                  <button className="ghost-btn" title={L("Save as favorite for quick re-logging","收藏以便快速再次记录")} style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, fontSize:16 }}
+                    onClick={() => {
+                      const ml = parseFloat(customDrinkMl);
+                      if (!ml||ml<=0) { setError(L("Enter an amount before saving a favorite.","请先输入毫升数再收藏。")); return; }
+                      saveFavorite("drink", { name: customDrinkName.trim()||"Other", drink_type: customDrinkName.trim()||"Other", amount_ml: ml, calories: parseFloat(customDrinkCal)||0, protein: parseFloat(customDrinkProt)||0, carbs: parseFloat(customDrinkCarb)||0, fat: parseFloat(customDrinkFat)||0, sugar_g: parseFloat(customDrinkSugar)||0, sodium_mg: parseFloat(customDrinkSodium)||0, fiber_g: 0 });
+                    }}>☆</button>
                 </div>
               </div>
             )}
-
-            <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
-              <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:8 }}>{L("CUSTOM DRINK","自定义饮品")}</div>
-              <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-                <input className="inp" placeholder={L("Drink name (e.g. Bubble tea)","饮品名称 (例如：珍珠奶茶)")} value={customDrinkName} onChange={e=>{setCustomDrinkName(e.target.value); setDrinkRatePer100ml(null);}} style={{ flex:2 }} />
-                <input className="inp" type="number" placeholder="ml" value={customDrinkMl} onChange={e=>onCustomDrinkMlChange(e.target.value)} style={{ flex:1 }} />
-                <button className="ghost-btn" onClick={suggestDrinkNutrition} disabled={isSuggestingDrink} style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, minWidth:"56px", display:"flex", justifyContent:"center", alignItems:"center", flexShrink:0 }}>
-                  {isSuggestingDrink ? <div className="spin" style={{ width:14, height:14, border:`2px solid ${C.border}`, borderTopColor:C.pink, borderRadius:"50%" }} /> : "✨"}
-                </button>
-              </div>
-              {drinkRatePer100ml && <div style={{ fontSize:10, color:C.textMuted, marginBottom:8, fontStyle:"italic" }}>✨ {L("AI-estimated — values auto-scale if you change ml","AI 估算值 —— 修改 ml 会自动等比例调整")}</div>}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6, marginBottom:8 }}>
-                <input className="inp" type="number" placeholder="kcal" value={customDrinkCal} onChange={e=>{setCustomDrinkCal(e.target.value); setDrinkRatePer100ml(null);}} />
-                <input className="inp" type="number" placeholder={L("P g","蛋白质 g")} value={customDrinkProt} onChange={e=>{setCustomDrinkProt(e.target.value); setDrinkRatePer100ml(null);}} />
-                <input className="inp" type="number" placeholder={L("C g","碳水 g")} value={customDrinkCarb} onChange={e=>{setCustomDrinkCarb(e.target.value); setDrinkRatePer100ml(null);}} />
-                <input className="inp" type="number" placeholder={L("F g","脂肪 g")} value={customDrinkFat} onChange={e=>{setCustomDrinkFat(e.target.value); setDrinkRatePer100ml(null);}} />
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:8 }}>
-                <input className="inp" type="number" placeholder={L("Sugar g","糖 g")} value={customDrinkSugar} onChange={e=>{setCustomDrinkSugar(e.target.value); setDrinkRatePer100ml(null);}} />
-                <input className="inp" type="number" placeholder={L("Sodium mg","钠 mg")} value={customDrinkSodium} onChange={e=>{setCustomDrinkSodium(e.target.value); setDrinkRatePer100ml(null);}} />
-              </div>
-              <div style={{ display:"flex", gap:8 }}>
-                <button className="pink-btn" style={{ flex:1 }} onClick={addCustomDrink}>+ {L("Add Drink","添加饮品")}</button>
-                <button className="ghost-btn" title={L("Save as favorite for quick re-logging","收藏以便快速再次记录")} style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, fontSize:16 }}
-                  onClick={() => {
-                    const ml = parseFloat(customDrinkMl);
-                    if (!ml||ml<=0) { setError(L("Enter an amount before saving a favorite.","请先输入毫升数再收藏。")); return; }
-                    saveFavorite("drink", { name: customDrinkName.trim()||"Other", drink_type: customDrinkName.trim()||"Other", amount_ml: ml, calories: parseFloat(customDrinkCal)||0, protein: parseFloat(customDrinkProt)||0, carbs: parseFloat(customDrinkCarb)||0, fat: parseFloat(customDrinkFat)||0, sugar_g: parseFloat(customDrinkSugar)||0, sodium_mg: parseFloat(customDrinkSodium)||0, fiber_g: 0 });
-                  }}>☆</button>
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.water, marginBottom:10 }}>{L("Today's Drinks","今日饮品")}</div>
-              {(dayData.drinks||[]).length===0 ? (
-                <div style={{ fontSize:13, fontStyle:"italic", color:C.textDim, paddingLeft:10 }}>{L("Nothing logged yet today","今天还没有记录")}</div>
-              ) : (dayData.drinks||[]).slice().reverse().map(d => {
-                const dColor = getDrinkColor(d.drink_type, C);
-                const hasMacros = Number(d.protein||0) > 0 || Number(d.carbs||0) > 0 || Number(d.fat||0) > 0 || Number(d.sugar_g||0) > 0 || Number(d.sodium_mg||0) > 0;
-                const isFav = favDrinks.some(f=>f.drink_type===d.drink_type && f.amount_ml===d.amount_ml);
-                return (
-                  <div key={d.id} className="card" style={{ padding:"12px 14px", marginBottom:8, borderLeft:`3px solid ${dColor}` }}>
-                    <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
-                      {/* Name gets the full remaining width and wraps onto up to 2 lines instead of crowding the calories column */}
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", lineHeight:1.3 }}>{d.drink_type}</div>
-                        <div style={{ fontSize:11, color:C.textMuted }}>{d.amount_ml}ml{d.logged_at?` · ${new Date(d.logged_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`:""}</div>
-                      </div>
-                      {/* Calories + a single overflow menu, stacked vertically so they don't crowd the name row */}
-                      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4, flexShrink:0, position:"relative" }}>
-                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:dColor, fontWeight:"800" }}>{Math.round(d.calories||0)}</div>
-                        <button onClick={() => setDrinkMenuOpen(drinkMenuOpen===d.id?null:d.id)} style={{ background:"none", border:"none", color:C.textDim, fontSize:16, cursor:"pointer", padding:"2px 4px", lineHeight:1 }}>⋯</button>
-                        {drinkMenuOpen===d.id && (
-                          <React.Fragment>
-                            <div onClick={() => setDrinkMenuOpen(null)} style={{ position:"fixed", inset:0, zIndex:19 }} />
-                            <div className="fade" style={{ position:"absolute", top:"100%", right:0, zIndex:20, background:C.card, border:`1px solid ${C.border}`, borderRadius:12, boxShadow:"0 6px 20px rgba(0,0,0,0.18)", overflow:"hidden", minWidth:130 }}>
-                              <button onClick={() => { saveFavorite("drink", { name:d.drink_type, drink_type:d.drink_type, amount_ml:d.amount_ml, calories:d.calories, protein:d.protein, carbs:d.carbs, fat:d.fat, sugar_g:d.sugar_g, sodium_mg:d.sodium_mg, fiber_g:d.fiber_g }); setDrinkMenuOpen(null); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color: isFav?dColor:C.text, cursor:"pointer", whiteSpace:"nowrap" }}>
-                                <span style={{ fontSize:14 }}>{isFav?"★":"☆"}</span> {isFav?L("Saved","已收藏"):L("Save favorite","收藏")}
-                              </button>
-                              <button onClick={() => { removeDrink(d.id); setDrinkMenuOpen(null); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, color:C.red, cursor:"pointer", whiteSpace:"nowrap" }}>
-                                <span style={{ fontSize:13 }}>×</span> {T("common_delete")}
-                              </button>
-                            </div>
-                          </React.Fragment>
-                        )}
-                      </div>
-                    </div>
-                    {/* Macros always shown together in their own clean row */}
-                    {hasMacros && (
-                      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
-                        <span style={{ fontSize:11, color:C.protein, fontWeight:"600" }}>P 🥩 {Math.round(d.protein||0)}g</span>
-                        <span style={{ fontSize:11, color:C.carbs, fontWeight:"600" }}>C 🍞 {Math.round(d.carbs||0)}g</span>
-                        <span style={{ fontSize:11, color:C.fat, fontWeight:"600" }}>F 🥑 {Math.round(d.fat||0)}g</span>
-                        <span style={{ fontSize:11, color:C.sugar, fontWeight:"600" }}>S 🍬 {Math.round(d.sugar_g||0)}g</span>
-                        <span style={{ fontSize:11, color:C.sodium, fontWeight:"600" }}>NA 🧂 {Math.round(d.sodium_mg||0)}mg</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
 
@@ -6465,6 +6571,14 @@ function NutriLogPro({ session, onLogout }) {
         <DietCoachModal
           onClose={() => setShowDietCoach(false)}
           onLogThis={logFoodFromCoach}
+          C={C} lang={lang} L={L}
+        />
+      )}
+
+      {showDrinkCoach && (
+        <DrinkCoachModal
+          onClose={() => setShowDrinkCoach(false)}
+          onAdd={logDrinkFromCoach}
           C={C} lang={lang} L={L}
         />
       )}
