@@ -2258,6 +2258,16 @@ function NutriLogPro({ session, onLogout }) {
   const [backdateSlot, setBackdateSlot] = useState("Breakfast");
   const [backdateDesc, setBackdateDesc] = useState("");
   const [backdateAmount, setBackdateAmount] = useState("");
+  // Macro fields — shown for meal & drink (not workout, which has no macros). backdateCalories
+  // is separate from backdateAmount for drinks specifically, since backdateAmount there is the
+  // ml volume, not the calorie count (previously drinks were silently saved as always 0 kcal).
+  const [backdateCalories, setBackdateCalories] = useState("");
+  const [backdateProtein, setBackdateProtein] = useState("");
+  const [backdateCarbs, setBackdateCarbs] = useState("");
+  const [backdateFat, setBackdateFat] = useState("");
+  const [backdateSugar, setBackdateSugar] = useState("");
+  const [backdateSodium, setBackdateSodium] = useState("");
+  const [backdateFiber, setBackdateFiber] = useState("");
   const [histRangeData, setHistRangeData] = useState({ meals: [], workouts: [], drinks: [] });
   const [histDayData, setHistDayData] = useState({ meals: [], workouts: [], drinks: [] });
   const [expandedWeek, setExpandedWeek] = useState(null);
@@ -3109,11 +3119,15 @@ function NutriLogPro({ session, onLogout }) {
   const addBackdatedEntry = async () => {
     const amount = parseFloat(backdateAmount);
     if (!amount || amount<=0) { setError("Enter a valid amount."); return; }
+    const macros = {
+      protein: parseFloat(backdateProtein)||0, carbs: parseFloat(backdateCarbs)||0, fat: parseFloat(backdateFat)||0,
+      sugar_g: parseFloat(backdateSugar)||0, sodium_mg: parseFloat(backdateSodium)||0, fiber_g: parseFloat(backdateFiber)||0
+    };
     try {
       if (backdateType === "meal") {
         const meal = await DataAPI.addMeal(userId, {
           log_date: historyDate, slot: backdateSlot, name: backdateDesc.trim()||"Logged meal", calories: amount,
-          protein:0, carbs:0, fat:0, confidence:"manual", logged_at: new Date(historyDate+"T12:00:00").toISOString()
+          ...macros, confidence:"manual", logged_at: new Date(historyDate+"T12:00:00").toISOString()
         });
         setHistDayData(d => ({ ...d, meals: [...(d.meals||[]), meal] }));
         if (historyDate === today) setDayData(d => ({ ...d, meals: [...d.meals, meal] }));
@@ -3126,13 +3140,15 @@ function NutriLogPro({ session, onLogout }) {
         if (historyDate === today) setDayData(d => ({ ...d, workouts: [...(d.workouts||[]), w] }));
       } else {
         const d2 = await DataAPI.addDrink(userId, {
-          log_date: historyDate, drink_type: backdateDesc.trim()||"Water", amount_ml: amount, calories:0, sugar_g:0,
-          logged_at: new Date(historyDate+"T12:00:00").toISOString()
+          log_date: historyDate, drink_type: backdateDesc.trim()||"Water", amount_ml: amount, calories: parseFloat(backdateCalories)||0,
+          ...macros, logged_at: new Date(historyDate+"T12:00:00").toISOString()
         });
         setHistDayData(d => ({ ...d, drinks: [...(d.drinks||[]), d2] }));
         if (historyDate === today) setDayData(d => ({ ...d, drinks: [...(d.drinks||[]), d2] }));
       }
-      setBackdateDesc(""); setBackdateAmount("");
+      setBackdateDesc(""); setBackdateAmount(""); setBackdateCalories("");
+      setBackdateProtein(""); setBackdateCarbs(""); setBackdateFat("");
+      setBackdateSugar(""); setBackdateSodium(""); setBackdateFiber("");
     } catch (err) { setError("Failed to add entry: " + err.message); }
   };
 
@@ -5194,8 +5210,28 @@ function NutriLogPro({ session, onLogout }) {
                   </div>
                   <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                     <input className="inp" placeholder={backdateType==="drink"?L("Drink name","饮品名称"):L("Description","描述")} value={backdateDesc} onChange={e=>setBackdateDesc(e.target.value)} style={{ flex:2 }} />
-                    <input className="inp" type="number" placeholder={backdateType==="drink"?"ml":"kcal"} value={backdateAmount} onChange={e=>setBackdateAmount(e.target.value)} style={{ flex:1 }} />
+                    <input className="inp" type="number" placeholder={backdateType==="drink"?L("ml","毫升"):L("kcal","千卡")} value={backdateAmount} onChange={e=>setBackdateAmount(e.target.value)} style={{ flex:1 }} />
                   </div>
+                  {backdateType === "drink" && (
+                    <div style={{ marginBottom:8 }}>
+                      <input className="inp" type="number" placeholder={L("Calories (kcal) — 0 for plain water","热量 (kcal) —— 白水填 0")} value={backdateCalories} onChange={e=>setBackdateCalories(e.target.value)} style={{ width:"100%" }} />
+                    </div>
+                  )}
+                  {(backdateType === "meal" || backdateType === "drink") && (
+                    <React.Fragment>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
+                        <input className="inp" type="number" placeholder={L("Protein (g)","蛋白质 (g)")} value={backdateProtein} onChange={e=>setBackdateProtein(e.target.value)} />
+                        <input className="inp" type="number" placeholder={L("Carbs (g)","碳水 (g)")} value={backdateCarbs} onChange={e=>setBackdateCarbs(e.target.value)} />
+                        <input className="inp" type="number" placeholder={L("Fat (g)","脂肪 (g)")} value={backdateFat} onChange={e=>setBackdateFat(e.target.value)} />
+                      </div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
+                        <input className="inp" type="number" placeholder={L("Sugar (g)","糖 (g)")} value={backdateSugar} onChange={e=>setBackdateSugar(e.target.value)} />
+                        <input className="inp" type="number" placeholder={L("Sodium (mg)","钠 (mg)")} value={backdateSodium} onChange={e=>setBackdateSodium(e.target.value)} />
+                        <input className="inp" type="number" placeholder={L("Fiber (g)","纤维 (g)")} value={backdateFiber} onChange={e=>setBackdateFiber(e.target.value)} />
+                      </div>
+                      <div style={{ fontSize:10, color:C.textDim, fontStyle:"italic", marginBottom:8 }}>{L("All macros optional — leave blank for 0","所有营养素均为可选 —— 留空则记为 0")}</div>
+                    </React.Fragment>
+                  )}
                   <button className="pink-btn" style={{ width:"100%" }} onClick={addBackdatedEntry}>+ {L("Add to this day","添加到这一天")}</button>
                 </div>
                 {histDayData.meals.length===0 && (histDayData.workouts||[]).length===0 && (histDayData.drinks||[]).length===0 ? (
