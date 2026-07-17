@@ -1304,7 +1304,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
   );
 });
 
-const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel, onUpdate, onRetryAI, analyzeStatusMsg, slot, theme, C, saving, lang }) {
+const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel, onUpdate, onRetryAI, analyzeStatusMsg, slot, onSlotChange, theme, C, saving, lang, L }) {
   const isWorkout = entry.type === "workout";
   const isDark = theme !== "light";
   const bg = C.surface;
@@ -1325,11 +1325,25 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
   const isLoading = entry.aiStatus === "loading";
   const isError = entry.aiStatus === "error";
   const numInputStyle = { width:"100%", background:"transparent", border:"none", outline:"none", textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontWeight:"700", color:textColor, fontSize:17 };
+  // "Detected" only makes sense for AI-sourced entries; Coach/manual entries are already
+  // filled in, so the title reads as a confirmation step instead of an AI claim.
+  const titleWord = isWorkout ? "Workout Detected" : (entry.source === "ai" ? `${slotLabel(slot, lang)} Detected` : `Confirm ${slotLabel(slot, lang)}`);
   return (
     <div className="fade" style={{ background:bg, border:`1px solid ${border}`, borderRadius:18, padding:16, marginTop:12 }}>
       <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:titleColor, marginBottom:12 }}>
-        {isWorkout ? "⌚ Workout Detected" : `🍽 ${slotLabel(slot, lang)} Detected`}
+        {isWorkout ? "⌚ Workout Detected" : `🍽 ${titleWord}`}
       </div>
+
+      {!isWorkout && onSlotChange && (
+        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:14 }}>
+          {SLOTS.map(s => (
+            <button key={s} className={`slot-btn ${slot===s?"on":""}`} onClick={() => onSlotChange(s)} style={{ flexShrink:0 }}>
+              {SLOT_ICONS[s]} {slotLabel(s, lang)}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div style={{ display:"flex", gap:12, marginBottom:14 }}>
         {entry.image && <img src={entry.image} alt="entry" style={{ width:64, height:64, borderRadius:12, objectFit:"cover", flexShrink:0 }} />}
         <div style={{ flex:1, minWidth:0 }}>
@@ -1385,17 +1399,43 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
         </div>
       )}
       {!isWorkout && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
-          {[["Protein","protein",entry.protein,proteinColor],["Carbs","carbs",entry.carbs,carbsColor],["Fat","fat",entry.fat,fatColor]].map(([l,key,v,c]) => (
-            <div key={l} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
-              <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
-              <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:2 }}>
-                <input type="number" value={v||0} onChange={e => onUpdate({ [key]: Number(e.target.value)||0 })} style={numInputStyle} />
-                <span style={{ fontSize:11, color:c }}>g</span>
+        <React.Fragment>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
+            {[["Protein","protein",entry.protein,proteinColor],["Carbs","carbs",entry.carbs,carbsColor],["Fat","fat",entry.fat,fatColor]].map(([l,key,v,c]) => (
+              <div key={l} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
+                <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
+                <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:2 }}>
+                  <input type="number" value={v||0} onChange={e => onUpdate({ [key]: Number(e.target.value)||0 })} style={numInputStyle} />
+                  <span style={{ fontSize:11, color:c }}>g</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
+            {[["Sugar","sugar",entry.sugar,C.sugar,"g"],["Sodium","sodium",entry.sodium,C.sodium,"mg"],["Fiber","fiber",entry.fiber,C.fiber,"g"]].map(([l,key,v,c,unit]) => (
+              <div key={l} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
+                <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
+                <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:2 }}>
+                  <input type="number" value={v||0} onChange={e => onUpdate({ [key]: Number(e.target.value)||0 })} style={numInputStyle} />
+                  <span style={{ fontSize:11, color:c }}>{unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <MealFlagEditor
+              flagged={!!entry.flagged}
+              occasion={entry.flag_occasion}
+              location={entry.flag_location}
+              comment={entry.flag_comment}
+              onToggle={() => onUpdate({ flagged: !entry.flagged })}
+              onOccasion={val => onUpdate({ flag_occasion: val })}
+              onLocation={val => onUpdate({ flag_location: val })}
+              onComment={val => onUpdate({ flag_comment: val })}
+              C={C} L={L || ((en,zh)=>lang==="zh"?zh:en)}
+            />
+          </div>
+        </React.Fragment>
       )}
       <div style={{ display:"flex", gap:8 }}>
         <button className="ghost-btn" style={{ flex:1 }} onClick={onCancel} disabled={saving}>Discard</button>
@@ -1932,6 +1972,10 @@ function useManualMealForm({ userId, today, activeSlot, setDayData, setError, ca
   const [manualSugar, setManualSugar] = useState("");
   const [manualSodium, setManualSodium] = useState("");
   const [manualFiber, setManualFiber] = useState("");
+  const [manualFlagged, setManualFlagged] = useState(false);
+  const [manualFlagOccasion, setManualFlagOccasion] = useState(null);
+  const [manualFlagLocation, setManualFlagLocation] = useState("");
+  const [manualFlagComment, setManualFlagComment] = useState("");
   const [isSuggesting, setIsSuggesting] = useState(false);
   // The photo attached at the start of logging is shared across all three methods (AI Photo
   // Search, AI Text Search, Manual) — captured once, then the person picks how the NUMBERS get
@@ -2004,11 +2048,14 @@ function useManualMealForm({ userId, today, activeSlot, setDayData, setError, ca
         log_date: today, slot: activeSlot, name: manualDesc||"Manual entry", calories: cal,
         protein: parseFloat(manualProt)||0, carbs: parseFloat(manualCarb)||0, fat: parseFloat(manualFat)||0,
         sugar_g: parseFloat(manualSugar)||0, sodium_mg: parseFloat(manualSodium)||0, fiber_g: parseFloat(manualFiber)||0,
-        confidence: "manual", image_url: imageUrl, logged_at: new Date().toISOString()
+        confidence: "manual", image_url: imageUrl, logged_at: new Date().toISOString(),
+        flagged: !!manualFlagged, flag_occasion: manualFlagged ? (manualFlagOccasion||null) : null,
+        flag_location: manualFlagged ? (manualFlagLocation||null) : null, flag_comment: manualFlagged ? (manualFlagComment||null) : null
       });
       setDayData(d => ({ ...d, meals: [...d.meals, meal] }));
       setManualCal(""); setManualDesc(""); setManualProt(""); setManualCarb(""); setManualFat("");
       setManualSugar(""); setManualSodium(""); setManualFiber(""); setEntryPhoto(null);
+      setManualFlagged(false); setManualFlagOccasion(null); setManualFlagLocation(""); setManualFlagComment("");
     } catch (err) { setError(L("Failed to add meal: ","添加餐食失败：") + err.message); }
   };
 
@@ -2016,6 +2063,8 @@ function useManualMealForm({ userId, today, activeSlot, setDayData, setError, ca
     manualCal, setManualCal, manualDesc, setManualDesc, manualProt, setManualProt,
     manualCarb, setManualCarb, manualFat, setManualFat, manualSugar, setManualSugar,
     manualSodium, setManualSodium, manualFiber, setManualFiber,
+    manualFlagged, setManualFlagged, manualFlagOccasion, setManualFlagOccasion,
+    manualFlagLocation, setManualFlagLocation, manualFlagComment, setManualFlagComment,
     isSuggesting, suggestManualDiet, addManualMeal,
     entryPhoto, attachEntryPhoto, clearEntryPhoto, entryPhotoUploading, setEntryPhoto,
     cropSource, confirmCrop, skipCrop, cancelCrop
@@ -2151,11 +2200,390 @@ function useManualWorkoutForm({ userId, today, setDayData, setError, callGemini,
   };
 }
 
+// ════════════════════════════════════════════════════════════
+// DIET COACH — reference library + portion/add-on adjusters.
+// Data lives here as plain constants for now (same pattern as PALETTES /
+// MOTIVATIONAL_QUOTES above) — move to a Supabase table later if the list
+// needs to grow without a redeploy. Tips are English-only for this first
+// pass; dish names already carry real EN/ZH translations via name/name_zh.
+// ════════════════════════════════════════════════════════════
+const COACH_ADDONS = {
+  egg: { name: "Extra Egg", name_zh: "加蛋", unitKcal: 70, unitProtein: 6, unitCarbs: 0.5, unitFat: 5 },
+  sambal: { name: "Extra Sambal", name_zh: "加参巴辣椒酱", unitKcal: 40, unitProtein: 0.5, unitCarbs: 3, unitFat: 3 },
+  chiliSauce: { name: "Extra Chili Sauce", name_zh: "加辣椒酱", unitKcal: 20, unitProtein: 0, unitCarbs: 3, unitFat: 1 },
+  peanutSauce: { name: "Extra Peanut Sauce", name_zh: "加沙爹酱", unitKcal: 55, unitProtein: 2, unitCarbs: 3, unitFat: 4 },
+  curryDip: { name: "Extra Curry Dip", name_zh: "加咖喱酱", unitKcal: 40, unitProtein: 1, unitCarbs: 4, unitFat: 2 },
+};
+
+const COACH_CATEGORIES = [
+  { key: "chinese", label: "Chinese", label_zh: "中式", emoji: "🥢" },
+  { key: "malay", label: "Malay", label_zh: "马来式", emoji: "🍛" },
+  { key: "indian", label: "Indian", label_zh: "印度式", emoji: "🍚" },
+  { key: "western", label: "Western", label_zh: "西式", emoji: "🍝" },
+  { key: "fastfood", label: "Fast Food", label_zh: "快餐", emoji: "🍟" },
+  { key: "fruits", label: "Fruits", label_zh: "水果", emoji: "🍎" },
+  { key: "protein", label: "Protein & Eggs", label_zh: "蛋白质与蛋类", emoji: "🍗" },
+  { key: "veg", label: "Vegetables", label_zh: "蔬菜", emoji: "🥦" },
+];
+
+const COACH_FOODS = [
+  { id:"ckt", name:"Char Kway Teow", name_zh:"炒粿条", category:"chinese", portion:"1 plate (350g)", kcal:650, protein:18, carbs:78, fat:28, fiber:3, sugar:6, sodium:980,
+    visual:{ type:"noodles" },
+    components:[{ name:"Flat rice noodles", kcal:220, grams:150, portionAdjust:true },{ name:"Cooking oil / lard", kcal:210 },{ name:"Prawns & egg", kcal:130 },{ name:"Bean sprouts, chives, sauce", kcal:90 }],
+    tip:"Most of the calories come from the oil the noodles are fried in, not the noodles themselves — ask for less oil to cut ~150 kcal. It's also one of the saltier dishes in this library, at close to half a day's typical sodium.",
+    portionComponent:"Flat rice noodles", addons:[COACH_ADDONS.egg] },
+  { id:"hokkienmee", name:"Hokkien Mee", name_zh:"福建面", category:"chinese", portion:"1 plate (350g)", kcal:600, protein:22, carbs:65, fat:26, fiber:3, sugar:4, sodium:1050,
+    visual:{ type:"noodles" },
+    components:[{ name:"Yellow noodles", kcal:180, grams:150, portionAdjust:true },{ name:"Prawn & pork stock, lard", kcal:240 },{ name:"Prawns, squid, pork belly", kcal:140 },{ name:"Sambal & garnish", kcal:40 }],
+    tip:"The dark, glossy sauce is largely lard-based stock — a lean-meat version cuts a meaningful chunk of fat. The sodium here is mostly from that same stock, not the noodles.",
+    portionComponent:"Yellow noodles", addons:[COACH_ADDONS.egg, COACH_ADDONS.sambal] },
+  { id:"wantanmee", name:"Wantan Mee (dry)", name_zh:"云吞面", category:"chinese", portion:"1 bowl (300g)", kcal:480, protein:20, carbs:60, fat:16, fiber:3, sugar:5, sodium:890,
+    visual:{ type:"noodles" },
+    components:[{ name:"Egg noodles", kcal:210, grams:150, portionAdjust:true },{ name:"Oil & dark soy toss", kcal:90 },{ name:"Char siu & wantan dumplings", kcal:150 },{ name:"Vegetables & garnish", kcal:30 }],
+    tip:"The soup version usually runs lighter than the dry version, since dry mee is tossed in oil and dark soy sauce instead.",
+    portionComponent:"Egg noodles", addons:[COACH_ADDONS.egg] },
+  { id:"chickenrice", name:"Hainanese Chicken Rice", name_zh:"海南鸡饭", category:"chinese", portion:"1 plate (rice + 100g chicken)", kcal:590, protein:32, carbs:68, fat:20, fiber:2, sugar:3, sodium:760,
+    visual:{ type:"rice" },
+    components:[{ name:"Oiled rice", kcal:280, grams:150, portionAdjust:true },{ name:"Steamed chicken (100g)", kcal:200 },{ name:"Skin & chili oil", kcal:110 }],
+    tip:"Removing the skin saves ~80–100 kcal with almost no protein loss.",
+    portionComponent:"Oiled rice", addons:[COACH_ADDONS.chiliSauce] },
+  { id:"nasilemak", name:"Nasi Lemak (standard)", name_zh:"椰浆饭", category:"malay", portion:"1 plate (rice + egg + anchovies + sambal)", kcal:640, protein:16, carbs:78, fat:28, fiber:4, sugar:5, sodium:820,
+    visual:{ type:"rice" },
+    components:[{ name:"Coconut rice", kcal:320, grams:150, portionAdjust:true },{ name:"Fried egg", kcal:90 },{ name:"Fried anchovies & peanuts", kcal:150 },{ name:"Sambal", kcal:80 }],
+    tip:"The coconut milk rice carries about half the calories — a smaller rice portion keeps the flavour with less impact.",
+    portionComponent:"Coconut rice", addons:[COACH_ADDONS.egg, COACH_ADDONS.sambal] },
+  { id:"rendang", name:"Beef Rendang (with rice)", name_zh:"仁当牛肉", category:"malay", portion:"1 plate (150g beef + 1 bowl rice)", kcal:720, protein:34, carbs:82, fat:30, fiber:4, sugar:6, sodium:680,
+    visual:{ type:"rice" },
+    components:[{ name:"Rice", kcal:260, grams:150, portionAdjust:true },{ name:"Beef rendang (150g)", kcal:380 },{ name:"Coconut gravy", kcal:80 }],
+    tip:"Rendang itself is slow-cooked with little added salt compared to fried dishes — most of the sodium here actually comes from the rice and side sambal, not the beef.",
+    portionComponent:"Rice" },
+  { id:"satay", name:"Satay (chicken, 5 sticks)", name_zh:"沙爹", category:"malay", portion:"5 sticks + peanut sauce", kcal:420, protein:28, carbs:18, fat:26, fiber:3, sugar:9, sodium:540,
+    visual:{ type:"skewer" },
+    components:[{ name:"Grilled chicken (5 sticks)", kcal:220 },{ name:"Peanut sauce (3 tbsp)", kcal:160 },{ name:"Ketupat/rice cake", kcal:40 }],
+    tip:"The peanut sauce is dense in calories and sugar — dipping lightly instead of pouring saves the most on both.",
+    addons:[COACH_ADDONS.peanutSauce] },
+  { id:"roticanai", name:"Roti Canai (plain, 1 pc)", name_zh:"印度煎饼", category:"indian", portion:"1 piece + curry dip", kcal:340, protein:7, carbs:38, fat:18, fiber:2, sugar:3, sodium:480,
+    visual:{ type:"flatbread" },
+    components:[{ name:"Dough & ghee layers", kcal:260 },{ name:"Curry dip (small bowl)", kcal:80 }],
+    tip:"Almost 80% of this is the ghee folded into the dough during frying, not the flour.",
+    addons:[COACH_ADDONS.curryDip] },
+  { id:"biryani", name:"Chicken Briyani", name_zh:"印度香饭", category:"indian", portion:"1 plate (rice + chicken piece)", kcal:680, protein:30, carbs:85, fat:24, fiber:3, sugar:5, sodium:890,
+    visual:{ type:"rice" },
+    components:[{ name:"Ghee rice", kcal:340, grams:150, portionAdjust:true },{ name:"Chicken piece", kcal:260 },{ name:"Fried onions & spices", kcal:80 }],
+    tip:"Similar rule to nasi lemak: the rice is cooked in ghee and stock, so it's not calorie-neutral like plain rice — a smaller rice portion matters more here than trimming the chicken.",
+    portionComponent:"Ghee rice", addons:[COACH_ADDONS.egg] },
+  { id:"tosai", name:"Plain Thosai", name_zh:"印度薄饼", category:"indian", portion:"1 piece + sambar + chutney", kcal:280, protein:8, carbs:48, fat:6, fiber:3, sugar:2, sodium:420,
+    visual:{ type:"flatbread" },
+    components:[{ name:"Fermented rice-lentil crepe", kcal:220 },{ name:"Sambar & chutney", kcal:60 }],
+    tip:"One of the lighter options here — fermented batter keeps it low-fat, but easy to undo with extra ghee brushed on the pan." },
+  { id:"spag_bol", name:"Spaghetti Bolognese", name_zh:"意式肉酱面", category:"western", portion:"1 plate (300g)", kcal:560, protein:26, carbs:68, fat:18, fiber:5, sugar:8, sodium:780,
+    visual:{ type:"pasta" },
+    components:[{ name:"Spaghetti", kcal:240, grams:150, portionAdjust:true },{ name:"Meat & tomato sauce", kcal:260 },{ name:"Parmesan & oil", kcal:60 }],
+    tip:"The tomato-based sauce actually adds decent fiber compared to cream-based pastas — it's the more balanced pasta choice of the two here.",
+    portionComponent:"Spaghetti" },
+  { id:"carbonara", name:"Spaghetti Carbonara", name_zh:"培根蛋面", category:"western", portion:"1 plate (300g)", kcal:680, protein:24, carbs:62, fat:34, fiber:3, sugar:4, sodium:820,
+    visual:{ type:"pasta" },
+    components:[{ name:"Spaghetti", kcal:260, grams:150, portionAdjust:true },{ name:"Cream/egg & cheese sauce", kcal:260 },{ name:"Bacon/pancetta", kcal:160 }],
+    tip:"The cream-and-cheese sauce is the heaviest part — a tomato-based pasta of the same size runs ~200 kcal lighter.",
+    portionComponent:"Spaghetti" },
+  { id:"margherita", name:"Margherita Pizza (2 slices)", name_zh:"玛格丽特披萨", category:"western", portion:"2 slices from a 12\" pizza", kcal:440, protein:18, carbs:52, fat:18, fiber:3, sugar:6, sodium:760,
+    visual:{ type:"pizza" },
+    components:[{ name:"Dough base", kcal:180 },{ name:"Mozzarella & cheese", kcal:190 },{ name:"Tomato sauce & basil", kcal:70 }],
+    tip:"Cheese is the main sodium contributor here, more than the crust — a thin-crust, less-cheese slice cuts sodium more than skipping the crust would." },
+  { id:"burger", name:"Cheeseburger (fast food)", name_zh:"芝士汉堡", category:"fastfood", portion:"1 regular burger", kcal:520, protein:26, carbs:40, fat:28, fiber:2, sugar:7, sodium:980,
+    visual:{ type:"burger" },
+    components:[{ name:"Bun", kcal:130 },{ name:"Beef patty", kcal:230 },{ name:"Cheese & sauce", kcal:160 }],
+    tip:"A regular cheeseburger already carries close to half a typical day's sodium target — easy to underestimate since it doesn't taste especially salty." },
+  { id:"friedchicken", name:"Fried Chicken (2pc, fast food)", name_zh:"炸鸡", category:"fastfood", portion:"2 pieces (thigh + drumstick)", kcal:590, protein:38, carbs:22, fat:38, fiber:1, sugar:1, sodium:1120,
+    visual:{ type:"fried" },
+    components:[{ name:"Chicken meat", kcal:260 },{ name:"Breading & skin", kcal:200 },{ name:"Frying oil absorbed", kcal:130 }],
+    tip:"Removing the breading and skin roughly halves the fat and cuts a good chunk of sodium too, while keeping most of the protein." },
+  { id:"frenchfries", name:"French Fries (regular)", name_zh:"薯条", category:"fastfood", portion:"1 regular serving (115g)", kcal:365, protein:4, carbs:48, fat:17, fiber:4, sugar:1, sodium:380,
+    visual:{ type:"fries" },
+    components:[{ name:"Potato", kcal:180 },{ name:"Frying oil absorbed", kcal:155 },{ name:"Salt seasoning", kcal:0 }],
+    tip:"Low in sugar compared to most snacks, but the fryer salt adds up fast — a large size roughly doubles the sodium, not just the calories." },
+  { id:"apple", name:"Apple", name_zh:"苹果", category:"fruits", portion:"1 medium (180g)", kcal:95, protein:0.5, carbs:25, fat:0.3, fiber:4.4, sugar:19, sodium:2,
+    visual:{ type:"fruit", variant:"apple" },
+    tip:"The fiber here slows down how fast the sugar hits your bloodstream compared to juice — eating it whole beats drinking it blended." },
+  { id:"banana", name:"Banana", name_zh:"香蕉", category:"fruits", portion:"1 medium (120g)", kcal:105, protein:1.3, carbs:27, fat:0.4, fiber:3.1, sugar:14, sodium:1,
+    visual:{ type:"fruit", variant:"banana" } },
+  { id:"watermelon", name:"Watermelon", name_zh:"西瓜", category:"fruits", portion:"1 wedge (250g)", kcal:75, protein:1.5, carbs:19, fat:0.4, fiber:1, sugar:15, sodium:3,
+    visual:{ type:"fruit", variant:"watermelon" },
+    tip:"Low fiber for a fruit, and the sugar is concentrated — easy to eat two or three wedges without feeling full, which adds up faster than it seems." },
+  { id:"papaya", name:"Papaya", name_zh:"木瓜", category:"fruits", portion:"1 cup diced (150g)", kcal:60, protein:0.9, carbs:15, fat:0.2, fiber:2.6, sugar:11, sodium:5,
+    visual:{ type:"fruit", variant:"citrus" } },
+  { id:"mango", name:"Mango", name_zh:"芒果", category:"fruits", portion:"1 medium (200g)", kcal:120, protein:1.3, carbs:30, fat:0.6, fiber:3, sugar:27, sodium:3,
+    visual:{ type:"fruit", variant:"citrus" },
+    tip:"One of the sweeter fruits by far — a whole mango carries close to a can of soda's worth of sugar. Great in moderation, but worth counting like a dessert-adjacent choice, not a free snack." },
+  { id:"orange", name:"Orange", name_zh:"橙子", category:"fruits", portion:"1 medium (150g)", kcal:70, protein:1.4, carbs:18, fat:0.2, fiber:3.6, sugar:14, sodium:0,
+    visual:{ type:"fruit", variant:"citrus" } },
+  { id:"p_thigh", name:"Chicken Thigh (deboned, grilled)", name_zh:"去骨鸡腿", category:"protein", portion:"1 piece (120g)", kcal:185, protein:22, carbs:0, fat:11, fiber:0, sugar:0, sodium:65,
+    visual:{ type:"meat" } },
+  { id:"p_breast", name:"Chicken Breast (grilled)", name_zh:"鸡胸肉", category:"protein", portion:"1 piece (150g)", kcal:165, protein:31, carbs:0, fat:4, fiber:0, sugar:0, sodium:70,
+    visual:{ type:"meat" },
+    tip:"Leaner than thigh meat for the same weight — a straight swap in a mixed dish cuts fat without losing much protein." },
+  { id:"p_fish", name:"Fish Fillet (dory / mackerel, grilled)", name_zh:"鱼柳", category:"protein", portion:"1 fillet (120g)", kcal:140, protein:26, carbs:0, fat:4, fiber:0, sugar:0, sodium:75,
+    visual:{ type:"fish" } },
+  { id:"p_tofu", name:"Firm Tofu", name_zh:"豆腐", category:"protein", portion:"1 block (100g)", kcal:80, protein:9, carbs:2, fat:5, fiber:1, sugar:0, sodium:10,
+    visual:{ type:"tofu" } },
+  { id:"p_egg", name:"Egg (large, boiled)", name_zh:"鸡蛋", category:"protein", portion:"1 egg (50g)", kcal:70, protein:6, carbs:0.5, fat:5, fiber:0, sugar:0, sodium:70,
+    visual:{ type:"egg" } },
+  { id:"v_carrot", name:"Carrot (cooked)", name_zh:"胡萝卜", category:"veg", portion:"1 medium (80g)", kcal:34, protein:0.8, carbs:8, fat:0.2, fiber:2.3, sugar:5.4, sodium:55,
+    visual:{ type:"veg", variant:"carrot" },
+    tip:"One of the lowest-sodium vegetables here since it's usually just boiled or steamed, not stir-fried in sauce." },
+  { id:"v_broccoli", name:"Broccoli (cooked)", name_zh:"西兰花", category:"veg", portion:"1 cup (90g)", kcal:31, protein:2.6, carbs:6, fat:0.3, fiber:2.8, sugar:1.6, sodium:30,
+    visual:{ type:"veg", variant:"broccoli" } },
+  { id:"v_cabbage", name:"Cabbage (stir-fried)", name_zh:"炒卷心菜", category:"veg", portion:"3 tbsp (100g)", kcal:45, protein:1.3, carbs:6, fat:2, fiber:2, sugar:3, sodium:190,
+    visual:{ type:"veg", variant:"leafy" },
+    tip:"The sodium here comes from the soy sauce or belacan used in stir-frying — the cabbage itself is naturally low-sodium." },
+  { id:"v_kailan", name:"Kailan / Spinach (stir-fried)", name_zh:"炒芥兰/菠菜", category:"veg", portion:"3 tbsp (100g)", kcal:40, protein:2, carbs:4, fat:2.5, fiber:2.5, sugar:1, sodium:210,
+    visual:{ type:"veg", variant:"leafy" } },
+  { id:"v_longbean", name:"Long Beans (stir-fried)", name_zh:"炒豆角", category:"veg", portion:"3 tbsp (100g)", kcal:55, protein:2.2, carbs:7, fat:2.5, fiber:2.7, sugar:3, sodium:160,
+    visual:{ type:"veg", variant:"leafy" } },
+];
+
+const COACH_MACRO_EMOJI = { kcal:"🔥", protein:"🥩", carbs:"🍞", fat:"🥑", fiber:"🌾", sugar:"🍬", sodium:"🧂" };
+
+function CoachMacroPill({ kind, label, value, unit, color, textDim }) {
+  return (
+    <div style={{ textAlign:"center", flex:1 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
+        <span style={{ fontSize:12 }}>{COACH_MACRO_EMOJI[kind]}</span>
+        <span style={{ fontSize:13, fontWeight:700, color }}>{value}{unit}</span>
+      </div>
+      <div style={{ fontSize:10, color:textDim, marginTop:1 }}>{label}</div>
+    </div>
+  );
+}
+
+// Reusable dish-illustration archetypes — same idea as WorkoutIllustration
+// above (icon keyed by detected type). New dishes just pick the closest
+// existing archetype rather than getting bespoke art.
+function CoachDishIcon({ visual, C, size = 46 }) {
+  if (!visual) return null;
+  const { type, variant } = visual;
+  const s = { width:size-8, height:size-8, display:"block" };
+  let shape = null;
+  switch (type) {
+    case "noodles": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 22a14 6 0 0028 0v4a14 6 0 01-28 0z" fill={C.surface} stroke={C.border}/><path d="M10 20c2-4 2-8 0-12M16 20c2-4 1-9-1-13M22 20c2-4 3-8 1-13M28 20c1-4 2-8 0-12" stroke={C.pink} strokeWidth="2" strokeLinecap="round"/></svg>); break;
+    case "rice": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 20a14 8 0 0028 0v3a14 8 0 01-28 0z" fill={C.surface} stroke={C.border}/><ellipse cx="20" cy="20" rx="14" ry="8" fill={C.gold} opacity="0.9"/></svg>); break;
+    case "flatbread": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M8 26c0-10 6-18 12-18s12 8 12 18c0 3-24 3-24 0z" fill={C.carbs} opacity="0.9"/></svg>); break;
+    case "skewer": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><line x1="6" y1="34" x2="32" y2="8" stroke={C.textDim} strokeWidth="2" strokeLinecap="round"/><ellipse cx="14" cy="26" rx="5" ry="4.2" fill={C.protein} transform="rotate(-40 14 26)"/><ellipse cx="21" cy="19" rx="5" ry="4.2" fill={C.protein} transform="rotate(-40 21 19)"/><ellipse cx="28" cy="12" rx="4.5" ry="3.8" fill={C.protein} transform="rotate(-40 28 12)"/></svg>); break;
+    case "pasta": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 22a14 8 0 0028 0v3a14 8 0 01-28 0z" fill={C.surface} stroke={C.border}/><path d="M12 22c2-2 2-4 0-6s0-4 2-5M18 23c2-2 2-4 0-6s0-4 2-5M24 22c2-2 2-4 0-6s0-4 2-5M30 23c1-2 1-4 0-6" stroke={C.fat} strokeWidth="1.8" strokeLinecap="round" fill="none"/></svg>); break;
+    case "pizza": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 6l14 28H6z" fill={C.gold}/><path d="M20 6l14 28H6z" fill="none" stroke={C.border} strokeWidth="2"/><circle cx="18" cy="20" r="2" fill={C.pink}/><circle cx="23" cy="26" r="2" fill={C.pink}/></svg>); break;
+    case "burger": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M8 16a12 7 0 0124 0z" fill={C.gold}/><rect x="7" y="17" width="26" height="4" rx="1" fill={C.green}/><rect x="7" y="22" width="26" height="4" rx="1" fill={C.protein}/><path d="M7 27h26v3a3 3 0 01-3 3H10a3 3 0 01-3-3z" fill={C.carbs}/></svg>); break;
+    case "fried": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M14 8c6-2 10 2 12 8 3 8-2 16-9 18-5 1-9-2-9-7 0-3 2-4 3-7 1-4-1-7 3-12z" fill={C.gold}/></svg>); break;
+    case "fries": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M9 18l3 16h16l3-16z" fill={C.protein}/>{[12,17,22,27].map((x,i)=>(<rect key={i} x={x-1.5} y={6+(i%2)*3} width="3" height={22-(i%2)*3} rx="1" fill={C.gold}/>))}</svg>); break;
+    case "meat": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M13 10c6-3 15 2 16 10 1 6-4 12-11 12-5 0-9-4-9-9 0-4 2-5 2-8 0-2 1-4 2-5z" fill={C.protein}/></svg>); break;
+    case "fish": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 20c6-8 18-10 26-2-8 8-20 6-26 2z" fill={C.water}/><path d="M30 18l6-5v11z" fill={C.water}/></svg>); break;
+    case "tofu": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="9" y="12" width="22" height="18" rx="2" fill={C.surface} stroke={C.border}/></svg>); break;
+    case "egg": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><ellipse cx="20" cy="21" rx="13" ry="10" fill={C.surface} stroke={C.border}/><circle cx="20" cy="21" r="6" fill={C.gold}/></svg>); break;
+    case "fruit":
+      if (variant==="banana") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M10 30c2-14 10-22 20-21-1 3-3 4-5 5-8 3-11 10-11 18 0 3-1 5-4 5-3 0-4-3-3-7z" fill={C.gold}/></svg>);
+      else if (variant==="watermelon") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 6a26 26 0 0116 28H4A26 26 0 0120 6z" fill={C.pink} stroke={C.green} strokeWidth="2.5"/><circle cx="17" cy="24" r="1" fill={C.textDim}/><circle cx="23" cy="27" r="1" fill={C.textDim}/></svg>);
+      else if (variant==="apple") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 14c5-4 12-1 12 7 0 8-6 13-12 13S8 29 8 21c0-8 7-11 12-7z" fill={C.pink}/><path d="M21 9c2-1 4-1 5 1" fill={C.green}/></svg>);
+      else shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><circle cx="20" cy="21" r="14" fill={C.gold}/></svg>);
+      break;
+    case "veg":
+      if (variant==="carrot") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M18 12l6 2-14 20-4-4z" fill={C.gold}/><path d="M18 12c0-3 1-6 3-7M20 10c1-3 3-5 5-5" stroke={C.green} strokeWidth="2" strokeLinecap="round"/></svg>);
+      else if (variant==="broccoli") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="18" y="24" width="4" height="10" fill={C.gold}/><circle cx="16" cy="18" r="7" fill={C.green}/><circle cx="24" cy="18" r="7" fill={C.green}/><circle cx="20" cy="12" r="7" fill={C.green}/></svg>);
+      else shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 8c8 0 13 6 13 13s-5 13-13 13-13-6-13-13S12 8 20 8z" fill={C.green} opacity="0.9"/></svg>);
+      break;
+    default: shape = null;
+  }
+  return (
+    <div style={{ width:size, height:size, borderRadius:12, background:C.surface, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+      {shape}
+    </div>
+  );
+}
+
+const COACH_PORTION_TABS = [{ key:0.5, label:"0.5x" }, { key:1, label:"1x" }, { key:1.5, label:"1.5x" }];
+
+function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
+  const [multiplier, setMultiplier] = useState(1);
+  const [addonQty, setAddonQty] = useState({});
+
+  const portionComp = food.portionComponent && food.components?.find(c => c.name === food.portionComponent);
+  const portionDeltaKcal = portionComp ? portionComp.kcal * (multiplier - 1) : 0;
+  const addonDelta = (food.addons||[]).reduce((acc,a) => {
+    const qty = addonQty[a.name] || 0;
+    acc.kcal += qty*a.unitKcal; acc.protein += qty*(a.unitProtein||0); acc.carbs += qty*(a.unitCarbs||0); acc.fat += qty*(a.unitFat||0);
+    return acc;
+  }, { kcal:0, protein:0, carbs:0, fat:0 });
+
+  const kcal = food.kcal + portionDeltaKcal + addonDelta.kcal;
+  const protein = food.protein + addonDelta.protein;
+  const carbs = food.carbs + portionDeltaKcal/4 + addonDelta.carbs;
+  const fat = food.fat + addonDelta.fat;
+  const isAdjusted = multiplier !== 1 || Object.values(addonQty).some(q => q > 0);
+  const setAddon = (name, qty) => setAddonQty(prev => ({ ...prev, [name]: Math.max(0, Math.min(2, qty)) }));
+
+  const dishName = lang === "zh" ? food.name_zh : food.name;
+
+  return (
+    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px" }}>
+      <div onClick={() => food.components && onToggle(food.id)} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", cursor: food.components?"pointer":"default", gap:10 }}>
+        <div style={{ display:"flex", gap:10, alignItems:"center", minWidth:0 }}>
+          <CoachDishIcon visual={food.visual} C={C} />
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{dishName}</div>
+            <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{lang==="zh"?food.name:food.name_zh} · {food.portion}</div>
+          </div>
+        </div>
+        <div style={{ textAlign:"right", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"flex-end" }}>
+            <span style={{ fontSize:14 }}>🔥</span>
+            <span style={{ fontSize:17, fontWeight:800, color:C.pink }}>{Math.round(kcal)}</span>
+          </div>
+          <div style={{ fontSize:10, color:C.textDim }}>{isAdjusted ? L("kcal (adjusted)","千卡（已调整）") : "kcal"}</div>
+        </div>
+      </div>
+
+      <div style={{ display:"flex", marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+        <CoachMacroPill kind="protein" label={L("Protein","蛋白质")} value={Math.round(protein)} unit="g" color={C.protein} textDim={C.textDim} />
+        <CoachMacroPill kind="carbs" label={L("Carbs","碳水")} value={Math.round(carbs)} unit="g" color={C.carbs} textDim={C.textDim} />
+        <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={Math.round(fat)} unit="g" color={C.fat} textDim={C.textDim} />
+      </div>
+      <div style={{ display:"flex", marginTop:6 }}>
+        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={food.fiber} unit="g" color={C.fiber} textDim={C.textDim} />
+        <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={food.sugar} unit="g" color={C.sugar} textDim={C.textDim} />
+        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={food.sodium} unit="mg" color={C.sodium} textDim={C.textDim} />
+      </div>
+
+      {portionComp && (
+        <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:11, color:C.textMuted, marginBottom:6 }}>{portionComp.name} {L("portion","份量")}</div>
+          <div style={{ display:"flex", gap:6 }}>
+            {COACH_PORTION_TABS.map(t => (
+              <button key={t.key} onClick={(e)=>{e.stopPropagation(); setMultiplier(t.key);}} style={{ flex:1, fontSize:11.5, fontWeight:600, padding:"6px 0", borderRadius:8, border:`1px solid ${multiplier===t.key?C.pink:C.border}`, background:multiplier===t.key?C.pinkGlow:"transparent", color:multiplier===t.key?C.pink:C.textMuted, cursor:"pointer" }}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {food.addons && food.addons.length > 0 && (
+        <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:6 }}>
+          {food.addons.map(a => {
+            const qty = addonQty[a.name] || 0;
+            return (
+              <div key={a.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:C.surface, borderRadius:8, padding:"7px 10px" }}>
+                <span style={{ fontSize:12, color:C.text }}>{lang==="zh"?a.name_zh:a.name} <span style={{ color:C.textDim }}>(+{a.unitKcal} kcal {L("each","每份")})</span></span>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <button onClick={(e)=>{e.stopPropagation(); setAddon(a.name, qty-1);}} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textMuted, cursor:"pointer", fontSize:13, lineHeight:1 }}>−</button>
+                  <span style={{ fontSize:12.5, fontWeight:700, color:C.text, minWidth:12, textAlign:"center" }}>{qty}</span>
+                  <button onClick={(e)=>{e.stopPropagation(); setAddon(a.name, qty+1);}} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.pink}`, background:"transparent", color:C.pink, cursor:"pointer", fontSize:13, lineHeight:1 }}>+</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <button
+        onClick={(e) => { e.stopPropagation(); onLogThis(food, { kcal:Math.round(kcal), protein:Math.round(protein), carbs:Math.round(carbs), fat:Math.round(fat), fiber:food.fiber, sugar:food.sugar, sodium:food.sodium, multiplier, addonQty }); }}
+        style={{ marginTop:12, width:"100%", padding:"9px 0", borderRadius:10, border:`1px solid ${C.pink}`, background:C.pinkGlow, color:C.pink, fontSize:12.5, fontWeight:700, cursor:"pointer" }}
+      >
+        {L("+ Add as meal","+ 添加为一餐")}
+      </button>
+
+      {food.components && (
+        <div style={{ marginTop:8, fontSize:11, color:C.textDim, display:"flex", alignItems:"center", gap:4, cursor:"pointer" }} onClick={() => onToggle(food.id)}>
+          {expanded ? `▲ ${L("Hide breakdown","隐藏明细")}` : `▼ ${L("See what makes up these calories","查看热量构成")}`}
+        </div>
+      )}
+
+      {expanded && food.components && (
+        <div style={{ marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}` }}>
+          {food.components.map((c,i) => {
+            const isPortionLine = c.portionAdjust;
+            const lineKcal = isPortionLine ? Math.round(c.kcal*multiplier) : c.kcal;
+            const lineGrams = isPortionLine && c.grams ? Math.round(c.grams*multiplier) : null;
+            return (
+              <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"3px 0", color:C.textMuted }}>
+                <span>{c.name}{isPortionLine && <span style={{ color:C.pink }}> (×{multiplier}{lineGrams?`, ${lineGrams}g`:""})</span>}</span>
+                <span style={{ color:C.text, fontWeight:600 }}>{lineKcal} kcal</span>
+              </div>
+            );
+          })}
+          {(food.addons||[]).filter(a => (addonQty[a.name]||0) > 0).map(a => (
+            <div key={a.name} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"3px 0", color:C.pink }}>
+              <span>+ {lang==="zh"?a.name_zh:a.name} ×{addonQty[a.name]}</span>
+              <span style={{ fontWeight:600 }}>{a.unitKcal*addonQty[a.name]} kcal</span>
+            </div>
+          ))}
+          {food.tip && (
+            <div style={{ marginTop:8, fontSize:12, color:C.gold, background:C.pinkGlow, borderRadius:8, padding:"8px 10px", lineHeight:1.4 }}>💡 {food.tip}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DietCoachModal({ onClose, onLogThis, C, lang, L }) {
+  const [activeCategory, setActiveCategory] = useState("chinese");
+  const [search, setSearch] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+
+  const filtered = COACH_FOODS.filter(f => {
+    const inCat = f.category === activeCategory;
+    const q = search.trim().toLowerCase();
+    const matches = !q || f.name.toLowerCase().includes(q) || f.name_zh.includes(search.trim());
+    return inCat && matches;
+  });
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:1200, display:"flex", flexDirection:"column" }}>
+      <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${C.border}`, boxSizing:"border-box" }}>
+        <div style={{ fontSize:18, fontWeight:800, color:C.text, fontFamily:"'DM Sans',sans-serif" }}>📖 {L("Diet Coach","饮食教练")}</div>
+        <button onClick={onClose} style={{ background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:34, height:34, color:C.text, fontSize:18, cursor:"pointer", lineHeight:1, flexShrink:0 }}>×</button>
+      </div>
+
+      <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"12px 16px 0", boxSizing:"border-box" }}>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder={L("Search a dish or ingredient…","搜索菜肴或食材…")}
+          className="inp"
+          style={{ width:"100%", boxSizing:"border-box", marginBottom:12 }}
+        />
+        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:12 }}>
+          {COACH_CATEGORIES.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => { setActiveCategory(cat.key); setExpandedId(null); }}
+              style={{ flexShrink:0, padding:"7px 12px", borderRadius:999, border:`1px solid ${activeCategory===cat.key?C.pink:C.border}`, background:activeCategory===cat.key?C.pink:"transparent", color:activeCategory===cat.key?"#fff":C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}
+            >
+              {cat.emoji} {lang==="zh"?cat.label_zh:cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto" }}>
+        <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"0 16px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:10 }}>
+          {filtered.length === 0 && (
+            <div style={{ textAlign:"center", color:C.textDim, fontSize:13, padding:"30px 0" }}>{L("No items found here yet.","这里还没有相关项目。")}</div>
+          )}
+          {filtered.map(food => (
+            <CoachFoodCard
+              key={food.id} food={food} expanded={expandedId===food.id}
+              onToggle={id => setExpandedId(expandedId===id ? null : id)}
+              onLogThis={onLogThis} C={C} lang={lang} L={L}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // MAIN APP — gated by auth session
 // ════════════════════════════════════════════════════════════
 function NutriLogPro({ session, onLogout }) {
   const userId = session.user.id;
   const userEmail = session.user.email;
+
 
   const [theme, setTheme] = useState(() => localStorage.getItem("nutrilog_theme") || "dark");
   // First-launch Welcome Tour: a brand new device/browser has none of these keys set yet, so
@@ -2655,10 +3083,6 @@ function NutriLogPro({ session, onLogout }) {
   };
 
   const openTargetModal = () => {
-    setTempCal(baseTargets.calories.toString());
-    setTempProt(baseTargets.protein.toString());
-    setTempCarb(baseTargets.carbs.toString());
-    setTempFat(baseTargets.fat.toString());
     setTempGender(baseTargets.gender||"");
     setTempHeight(baseTargets.height_cm?baseTargets.height_cm.toString():"");
     setTempBirthYear(baseTargets.birth_year?baseTargets.birth_year.toString():"");
@@ -2865,6 +3289,8 @@ function NutriLogPro({ session, onLogout }) {
     manualCal, setManualCal, manualDesc, setManualDesc, manualProt, setManualProt,
     manualCarb, setManualCarb, manualFat, setManualFat, manualSugar, setManualSugar,
     manualSodium, setManualSodium, manualFiber, setManualFiber,
+    manualFlagged, setManualFlagged, manualFlagOccasion, setManualFlagOccasion,
+    manualFlagLocation, setManualFlagLocation, manualFlagComment, setManualFlagComment,
     isSuggesting, suggestManualDiet, addManualMeal,
     entryPhoto, attachEntryPhoto, clearEntryPhoto, entryPhotoUploading, setEntryPhoto,
     cropSource, confirmCrop, skipCrop, cancelCrop
@@ -2888,7 +3314,40 @@ function NutriLogPro({ session, onLogout }) {
   // captured once, up front, shared by all three — see the unified entry card below).
   // null = still choosing.
   const [mealEntryMethod, setMealEntryMethod] = useState(null); // null | "photo" | "text" | "manual"
-  const backToMethodChooser = () => { setMealEntryMethod(null); setPendingEntry(null); };
+  const backToMethodChooser = () => { setMealEntryMethod(null); setPendingEntry(null); setEntryPhoto(null); };
+
+  // Tapping the "AI Photo Search" quadrant opens the file picker directly — no separate
+  // "attach a photo" step. Once the picked photo clears the crop modal and becomes entryPhoto,
+  // this effect fires the actual search automatically.
+  const [autoSearchAfterPhoto, setAutoSearchAfterPhoto] = useState(false);
+  const startPhotoQuadrant = () => { setAutoSearchAfterPhoto(true); foodRef.current?.click(); };
+  useEffect(() => {
+    if (autoSearchAfterPhoto && entryPhoto) {
+      setAutoSearchAfterPhoto(false);
+      startPhotoSearch();
+    }
+  }, [entryPhoto, autoSearchAfterPhoto]);
+
+  // Diet Coach — reference library, opened from the meal-logging method chooser.
+  // "Log this meal" builds the same pendingEntry shape AI analysis produces, so it lands on
+  // the identical PendingCard review screen — full macros, flags, slot picker, edit-before-save.
+  const [showDietCoach, setShowDietCoach] = useState(false);
+  const logFoodFromCoach = (food, computed) => {
+    const dishName = lang === "zh" ? food.name_zh : food.name;
+    const extras = [];
+    if (computed.multiplier !== 1) extras.push(`${computed.multiplier}x ${food.portionComponent || ""}`.trim());
+    Object.entries(computed.addonQty || {}).forEach(([name, qty]) => { if (qty > 0) extras.push(`${name} x${qty}`); });
+    setPendingEntry({
+      type: "meal", source: "coach",
+      name: extras.length ? `${dishName} (${extras.join(", ")})` : dishName,
+      calories: computed.kcal, protein: computed.protein, carbs: computed.carbs, fat: computed.fat,
+      sugar: computed.sugar, sodium: computed.sodium, fiber: computed.fiber,
+      confidence: "manual", image: null, items: null,
+      flagged: false, flag_occasion: null, flag_location: null, flag_comment: null
+    });
+    setShowDietCoach(false);
+    setMealEntryMethod("photo");
+  };
 
   // AI Text Search's autocomplete: matches typed description against saved favorites, so a
   // repeat meal can be filled in instantly (name + full macros) with zero AI calls, and the
@@ -3046,6 +3505,8 @@ function NutriLogPro({ session, onLogout }) {
           sugar_g: pendingEntry.sugar||0, sodium_mg: pendingEntry.sodium||0, fiber_g: pendingEntry.fiber||0,
           confidence: pendingEntry.confidence||"high", image_url: imageUrl,
           items: Array.isArray(pendingEntry.items) ? pendingEntry.items : null,
+          flagged: !!pendingEntry.flagged, flag_occasion: pendingEntry.flagged ? (pendingEntry.flag_occasion||null) : null,
+          flag_location: pendingEntry.flagged ? (pendingEntry.flag_location||null) : null, flag_comment: pendingEntry.flagged ? (pendingEntry.flag_comment||null) : null,
           logged_at: new Date().toISOString()
         });
         setDayData(d => ({ ...d, meals: [...d.meals, meal] }));
@@ -4773,72 +5234,89 @@ function NutriLogPro({ session, onLogout }) {
                 <button className="ghost-btn" style={{ flexShrink:0, padding:"6px 12px", fontSize:12 }} onClick={() => setShowSettings(true)}>{L("Set up","去设置")}</button>
               </div>
             )}
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", color:C.textMuted, marginBottom:8 }}>{L("Log a meal for...","为以下用餐时段记录...")}</div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {SLOTS.map(s => (<button key={s} className={`slot-btn ${activeSlot===s?"on":""}`} onClick={() => setActiveSlot(s)}>{SLOT_ICONS[s]} {slotLabel(s, lang)}</button>))}
-              </div>
-            </div>
-            {favMeals.length > 0 && (
-              <div className="card" style={{ padding:12, marginBottom:12 }}>
-                <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:6 }}>★ {L("MY FAVORITES","我的收藏")}</div>
-                <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
-                  {favMeals.map(fav => (
-                    <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteMeal(fav)}>
-                      <span>{fav.name} ({Math.round(fav.calories)} kcal)</span>
-                      <span onClick={(e)=>{e.stopPropagation(); removeFavorite("meal", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {(() => {
-              const used = getAiUsageToday();
-              const over = used > aiDailyLimit;
-              const remaining = Math.max(0, aiDailyLimit - used);
-              const color = over ? C.red : remaining === 0 ? C.red : remaining <= Math.max(1, Math.round(aiDailyLimit*0.2)) ? C.caution : C.textDim;
-              return (
-                <div style={{ fontSize:10.5, color, textAlign:"center", marginBottom:8, fontStyle:"italic" }}>
-                  {over
-                    ? L(`⚠️ ${used} of ${aiDailyLimit} AI calls used today — past your set limit, but AI Photo/Text Search will keep working`,`⚠️ 今日已使用 AI 次数 ${used} / ${aiDailyLimit} —— 已超出设定上限，但 AI 图片/文字识别仍可继续使用`)
-                    : L(`🤖 ${remaining} of ${aiDailyLimit} AI calls left today (photo + Suggest share this budget)`, `🤖 今日剩余 AI 次数 ${remaining} / ${aiDailyLimit}（拍照分析与 AI建议 共用此额度）`)}
-                </div>
-              );
-            })()}
             <input ref={foodRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>attachEntryPhoto(e.target.files[0])} />
             {mealEntryMethod === null ? (
-              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
-                {entryPhoto ? (
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-                    <img src={entryPhoto.previewUrl} alt="" style={{ width:56, height:56, borderRadius:12, objectFit:"cover", flexShrink:0 }} />
-                    <div style={{ flex:1, fontSize:12, color:C.textMuted }}>{L("Photo attached","照片已添加")}</div>
-                    <button onClick={clearEntryPhoto} style={{ background:"none", border:"none", color:C.red, fontSize:20, cursor:"pointer", padding:"0 4px" }}>×</button>
+              <React.Fragment>
+                <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
+                  <div style={{ fontSize:10.5, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:10, textAlign:"center" }}>{L("HOW WOULD YOU LIKE TO LOG THIS?","您想如何记录？")}</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <button
+                      className="ghost-btn" onClick={startPhotoQuadrant}
+                      style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76, borderColor:C.pink, color:C.pink }}
+                    >
+                      <span style={{ fontSize:20 }}>📷</span>
+                      <span>{L("AI Photo Search","AI 图片识别")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setMealEntryMethod("text")} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76, borderColor:C.pink, color:C.pink }}>
+                      <span style={{ fontSize:20 }}>✨</span>
+                      <span>{L("AI Text Search","AI 文字识别")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setShowDietCoach(true)} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76 }}>
+                      <span style={{ fontSize:20 }}>📖</span>
+                      <span>{L("Diet Coach","饮食教练")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setMealEntryMethod("manual")} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76 }}>
+                      <span style={{ fontSize:20 }}>✍️</span>
+                      <span>{L("Manual Entry","手动输入")}</span>
+                    </button>
                   </div>
-                ) : (
-                  <div className="upload-zone" style={{ marginBottom:14 }} onClick={() => foodRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();attachEntryPhoto(e.dataTransfer.files[0])}}>
-                    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
-                      <div style={{ fontSize:28 }}>📸</div>
-                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", color:C.text }}>{L("Add a photo (optional)","添加照片（可选）")}</div>
-                      <div style={{ fontSize:11.5, fontStyle:"italic", color:C.textMuted }}>{L("Take one or choose from your library","拍照或从相册选择")}</div>
+                </div>
+
+                {(() => {
+                  const used = getAiUsageToday();
+                  const over = used > aiDailyLimit;
+                  const remaining = Math.max(0, aiDailyLimit - used);
+                  const color = over ? C.red : remaining === 0 ? C.red : remaining <= Math.max(1, Math.round(aiDailyLimit*0.2)) ? C.caution : C.textDim;
+                  return (
+                    <div style={{ fontSize:10.5, color, textAlign:"center", marginBottom:14, fontStyle:"italic" }}>
+                      {over
+                        ? L(`⚠️ ${used} of ${aiDailyLimit} AI calls used today — past your set limit, but AI Photo/Text Search will keep working`,`⚠️ 今日已使用 AI 次数 ${used} / ${aiDailyLimit} —— 已超出设定上限，但 AI 图片/文字识别仍可继续使用`)
+                        : L(`🤖 ${remaining} of ${aiDailyLimit} AI calls left today (photo + Suggest share this budget)`, `🤖 今日剩余 AI 次数 ${remaining} / ${aiDailyLimit}（拍照分析与 AI建议 共用此额度）`)}
+                    </div>
+                  );
+                })()}
+
+                {favMeals.length > 0 && (
+                  <div className="card" style={{ padding:12, marginBottom:12 }}>
+                    <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:6 }}>★ {L("MY FAVORITES","我的收藏")}</div>
+                    <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
+                      {favMeals.map(fav => (
+                        <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteMeal(fav)}>
+                          <span>{fav.name} ({Math.round(fav.calories)} kcal)</span>
+                          <span onClick={(e)=>{e.stopPropagation(); removeFavorite("meal", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
-                <div style={{ fontSize:10.5, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:10, textAlign:"center" }}>{L("HOW WOULD YOU LIKE TO LOG THIS?","您想如何记录？")}</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  <button
-                    className="ghost-btn" disabled={!entryPhoto} onClick={startPhotoSearch}
-                    style={{ padding:"10px", fontSize:13, fontWeight:"700", display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-                      borderColor: entryPhoto?C.pink:C.border, color: entryPhoto?C.pink:C.textDim, opacity: entryPhoto?1:0.5, cursor: entryPhoto?"pointer":"default" }}
-                  >📷 {L("AI Photo Search","AI 图片识别")}{!entryPhoto && <span style={{ fontSize:10, fontStyle:"italic" }}>({L("attach a photo first","请先添加照片")})</span>}</button>
-                  <button className="ghost-btn" onClick={()=>setMealEntryMethod("text")} style={{ padding:"10px", fontSize:13, fontWeight:"700", borderColor:C.pink, color:C.pink }}>✨ {L("AI Text Search","AI 文字识别")}</button>
-                  <button className="ghost-btn" onClick={()=>setMealEntryMethod("manual")} style={{ padding:"10px", fontSize:13, fontWeight:"700" }}>✍️ {L("Manual Entry","手动输入")}</button>
+
+                <div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:10 }}>📝 {L("Food Intake Feed","饮食记录动态")}</div>
+                  {SLOTS.map(slot => {
+                    const slotMeals = dayData.meals.filter(m=>m.slot===slot);
+                    return (
+                      <div key={slot} style={{ marginBottom:14 }}>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:"800", color:C.textMuted, marginBottom:6, display:"flex", justifyContent:"space-between" }}>
+                          <span>{SLOT_ICONS[slot]} {slotLabel(slot, lang)}</span>
+                          <span>{Math.round(slotMeals.reduce((sum,m)=>sum+Number(m.calories),0))} kcal</span>
+                        </div>
+                        {slotMeals.length===0
+                          ? <div style={{ fontSize:12, fontStyle:"italic", color:C.textDim, paddingLeft:10, marginBottom:8 }}>{L(`Nothing logged for ${slotLabel(slot, lang)}`, `${slotLabel(slot, lang)}还没有记录`)}</div>
+                          : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={stableRemoveMeal} onEdit={stableEditMeal} onSlotChange={stableChangeMealSlot} theme={theme} C={C} lang={lang} onSaveFavorite={stableSaveFavoriteMeal} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} />)
+                        }
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              </React.Fragment>
             ) : mealEntryMethod === "photo" ? (
-              pendingEntry && pendingEntry.type==="meal" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={backToMethodChooser} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} slot={activeSlot} theme={theme} C={C} saving={savingEntry} lang={lang} />
+              pendingEntry && pendingEntry.type==="meal" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={backToMethodChooser} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} slot={activeSlot} onSlotChange={setActiveSlot} theme={theme} C={C} saving={savingEntry} lang={lang} L={L} />
             ) : (
               <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
                 <button className="ghost-btn" onClick={backToMethodChooser} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+                <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:14 }}>
+                  {SLOTS.map(s => (<button key={s} className={`slot-btn ${activeSlot===s?"on":""}`} onClick={() => setActiveSlot(s)} style={{ flexShrink:0 }}>{SLOT_ICONS[s]} {slotLabel(s, lang)}</button>))}
+                </div>
                 {entryPhoto && (
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
                     <img src={entryPhoto.previewUrl} alt="" style={{ width:36, height:36, borderRadius:8, objectFit:"cover", flexShrink:0 }} />
@@ -4888,6 +5366,19 @@ function NutriLogPro({ session, onLogout }) {
                   <div><label style={{ fontSize:10, color:C.textMuted, display:"block", marginBottom:4, fontWeight:"700" }}>🧂 {L("SODIUM (mg)","钠 (mg)")}</label><input className="inp" type="number" value={manualSodium} onChange={e=>setManualSodium(e.target.value)} placeholder="0" /></div>
                   <div><label style={{ fontSize:10, color:C.textMuted, display:"block", marginBottom:4, fontWeight:"700" }}>🌾 {L("FIBER (g)","纤维 (g)")}</label><input className="inp" type="number" value={manualFiber} onChange={e=>setManualFiber(e.target.value)} placeholder="0" /></div>
                 </div>
+                <div style={{ marginBottom:14 }}>
+                  <MealFlagEditor
+                    flagged={!!manualFlagged}
+                    occasion={manualFlagOccasion}
+                    location={manualFlagLocation}
+                    comment={manualFlagComment}
+                    onToggle={() => setManualFlagged(!manualFlagged)}
+                    onOccasion={val => setManualFlagOccasion(val)}
+                    onLocation={val => setManualFlagLocation(val)}
+                    onComment={val => setManualFlagComment(val)}
+                    C={C} L={L}
+                  />
+                </div>
                 <div style={{ display:"flex", gap:8 }}>
                   <button className="pink-btn" style={{ flex:1, opacity:entryPhotoUploading?0.6:1 }} disabled={entryPhotoUploading} onClick={addManualMeal}>
                     {entryPhotoUploading ? L("Saving...","保存中...") : `+ ${L("Add Meal","添加餐食")}`}
@@ -4901,24 +5392,6 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
               </div>
             )}
-            <div style={{ marginTop:20 }}>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:10 }}>📝 {L("Food Intake Feed","饮食记录动态")}</div>
-              {SLOTS.map(slot => {
-                const slotMeals = dayData.meals.filter(m=>m.slot===slot);
-                return (
-                  <div key={slot} style={{ marginBottom:14 }}>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:"800", color:C.textMuted, marginBottom:6, display:"flex", justifyContent:"space-between" }}>
-                      <span>{SLOT_ICONS[slot]} {slotLabel(slot, lang)}</span>
-                      <span>{Math.round(slotMeals.reduce((sum,m)=>sum+Number(m.calories),0))} kcal</span>
-                    </div>
-                    {slotMeals.length===0
-                      ? <div style={{ fontSize:12, fontStyle:"italic", color:C.textDim, paddingLeft:10, marginBottom:8 }}>{L(`Nothing logged for ${slotLabel(slot, lang)}`, `${slotLabel(slot, lang)}还没有记录`)}</div>
-                      : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={stableRemoveMeal} onEdit={stableEditMeal} onSlotChange={stableChangeMealSlot} theme={theme} C={C} lang={lang} onSaveFavorite={stableSaveFavoriteMeal} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} />)
-                    }
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
 
@@ -5985,6 +6458,14 @@ function NutriLogPro({ session, onLogout }) {
           onSkip={skipCrop}
           onCancel={cancelCrop}
           C={C} lang={lang}
+        />
+      )}
+
+      {showDietCoach && (
+        <DietCoachModal
+          onClose={() => setShowDietCoach(false)}
+          onLogThis={logFoodFromCoach}
+          C={C} lang={lang} L={L}
         />
       )}
 
