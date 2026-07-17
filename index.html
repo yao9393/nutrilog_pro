@@ -54,7 +54,14 @@
       <div style="min-height:100vh;background:#0a0a0d;color:#f3f1f4;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;padding:20px;text-align:center;">
         <div style="width:100%;max-width:280px;">
           <img src="icon-192.png" alt="" onerror="this.style.display='none'" style="width:56px;height:56px;border-radius:16px;margin-bottom:14px;animation:bootPulse 1.4s ease-in-out infinite;" />
-          <div style="font-size:14px;color:#8b8794;margin-bottom:16px;">Loading NutriLog Pro...</div>
+          <div id="boot-loading-text" style="font-size:14px;color:#8b8794;margin-bottom:16px;">Loading NutriLog Pro...</div>
+          <script>
+            try {
+              if (localStorage.getItem("nutrilog_lang") === "zh") {
+                document.getElementById("boot-loading-text").textContent = "正在加载 NutriLog Pro...";
+              }
+            } catch (e) {}
+          </script>
           <div style="width:100%;height:4px;background:#242229;border-radius:4px;overflow:hidden;">
             <div style="width:40%;height:100%;background:linear-gradient(90deg,#ff6fa5,#ff9fc4);border-radius:4px;animation:bootBar 1.1s ease-in-out infinite;"></div>
           </div>
@@ -1285,7 +1292,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
       )}
       {hasItems && expanded && (
         <div className="fade" style={{ marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
-          <div style={{ fontSize:10, color:textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:6 }}>WHAT'S IN THIS MEAL</div>
+          <div style={{ fontSize:10, color:textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:6 }}>{lang==="zh" ? "这餐包含什么" : "WHAT'S IN THIS MEAL"}</div>
           {meal.items.slice().sort((a,b)=>(b.calories||0)-(a.calories||0)).map((it,idx) => (
             <div key={idx} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0" }}>
               <span style={{ fontSize:12, color:textColor, textTransform:"capitalize" }}>{it.item}</span>
@@ -1295,10 +1302,10 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
         </div>
       )}
       {onSlotChange && !readonly && !isDragging && (
-        <div style={{ textAlign:"center", fontSize:9, color:btnColor, marginTop:6, fontStyle:"italic" }}>hold &amp; drag up/down to change meal time</div>
+        <div style={{ textAlign:"center", fontSize:9, color:btnColor, marginTop:6, fontStyle:"italic" }}>{lang==="zh" ? "长按并上下拖动可更改用餐时段" : "hold & drag up/down to change meal time"}</div>
       )}
       {isDragging && (
-        <div style={{ textAlign:"center", fontSize:10, color:pinkColor, marginTop:6, fontWeight:"600" }}>release to drop</div>
+        <div style={{ textAlign:"center", fontSize:10, color:pinkColor, marginTop:6, fontWeight:"600" }}>{lang==="zh" ? "松开以放下" : "release to drop"}</div>
       )}
     </div>
   );
@@ -1327,11 +1334,12 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
   const numInputStyle = { width:"100%", background:"transparent", border:"none", outline:"none", textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontWeight:"700", color:textColor, fontSize:17 };
   // "Detected" only makes sense for AI-sourced entries; Coach/manual entries are already
   // filled in, so the title reads as a confirmation step instead of an AI claim.
-  const titleWord = isWorkout ? "Workout Detected" : (entry.source === "ai" ? `${slotLabel(slot, lang)} Detected` : `Confirm ${slotLabel(slot, lang)}`);
+  const Lt = L||((en,zh)=>lang==="zh"?zh:en);
+  const titleWord = isWorkout ? Lt("Workout Detected","已识别运动") : (entry.source === "ai" ? Lt(`${slotLabel(slot, lang)} Detected`,`已识别${slotLabel(slot, lang)}`) : Lt(`Confirm ${slotLabel(slot, lang)}`,`确认${slotLabel(slot, lang)}`));
   return (
     <div className="fade" style={{ background:bg, border:`1px solid ${border}`, borderRadius:18, padding:16, marginTop:12 }}>
       <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:titleColor, marginBottom:12 }}>
-        {isWorkout ? "⌚ Workout Detected" : `🍽 ${titleWord}`}
+        {isWorkout ? `⌚ ${titleWord}` : `🍽 ${titleWord}`}
       </div>
 
       {!isWorkout && onSlotChange && (
@@ -1350,10 +1358,10 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
           <input
             value={isWorkout ? (entry.activity||"") : (entry.name||"")}
             onChange={e => onUpdate({ [isWorkout?"activity":"name"]: e.target.value })}
-            placeholder={isWorkout ? "Workout name" : "Meal name"}
+            placeholder={isWorkout ? Lt("Workout name","运动名称") : Lt("Meal name","餐食名称")}
             style={{ width:"100%", background:"transparent", border:"none", outline:"none", borderBottom:`1px dashed ${C.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", marginBottom:4, color:textColor, padding:"2px 0" }}
           />
-          {isWorkout && entry.duration && <div style={{ fontSize:12, color:textMuted, marginTop:4 }}>Duration: {entry.duration}{entry.heartRate?` · ♥ ${entry.heartRate}`:""}</div>}
+          {isWorkout && entry.duration && <div style={{ fontSize:12, color:textMuted, marginTop:4 }}>{Lt("Duration","时长")}: {entry.duration}{entry.heartRate?` · ♥ ${entry.heartRate}`:""}</div>}
           <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6 }}>
             {isWorkout && <span style={{ fontSize:14, color:workoutAccent, fontWeight:"800" }}>−</span>}
             <input
@@ -1387,8 +1395,8 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
       {hasItems && (
         <div style={{ marginBottom:14, background:subCardBg, borderRadius:12, padding:"10px 12px", border:isDark?"none":`1px solid ${C.border}` }}>
           <div onClick={() => setItemsExpanded(!itemsExpanded)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", marginBottom: itemsExpanded ? 8 : 0 }}>
-            <span style={{ fontSize:10, color:textMuted, fontWeight:"700", letterSpacing:"0.05em" }}>BREAKDOWN BY COMPONENT</span>
-            <span style={{ fontSize:10, color:textMuted }}>{itemsExpanded ? "▲ minimize" : "▼ expand"}</span>
+            <span style={{ fontSize:10, color:textMuted, fontWeight:"700", letterSpacing:"0.05em" }}>{Lt("BREAKDOWN BY COMPONENT","按成分细分")}</span>
+            <span style={{ fontSize:10, color:textMuted }}>{itemsExpanded ? Lt("▲ minimize","▲ 收起") : Lt("▼ expand","▼ 展开")}</span>
           </div>
           {itemsExpanded && entry.items.slice().sort((a,b)=>(b.calories||0)-(a.calories||0)).map((it,idx) => (
             <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom: idx < entry.items.length-1 ? `1px dashed ${C.border}66` : "none" }}>
@@ -1401,8 +1409,8 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
       {!isWorkout && (
         <React.Fragment>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
-            {[["Protein","protein",entry.protein,proteinColor],["Carbs","carbs",entry.carbs,carbsColor],["Fat","fat",entry.fat,fatColor]].map(([l,key,v,c]) => (
-              <div key={l} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
+            {[[Lt("Protein","蛋白质"),"protein",entry.protein,proteinColor],[Lt("Carbs","碳水"),"carbs",entry.carbs,carbsColor],[Lt("Fat","脂肪"),"fat",entry.fat,fatColor]].map(([l,key,v,c]) => (
+              <div key={key} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
                 <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
                 <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:2 }}>
                   <input type="number" value={v||0} onChange={e => onUpdate({ [key]: Number(e.target.value)||0 })} style={numInputStyle} />
@@ -1412,8 +1420,8 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
             ))}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
-            {[["Sugar","sugar",entry.sugar,C.sugar,"g"],["Sodium","sodium",entry.sodium,C.sodium,"mg"],["Fiber","fiber",entry.fiber,C.fiber,"g"]].map(([l,key,v,c,unit]) => (
-              <div key={l} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
+            {[[Lt("Sugar","糖"),"sugar",entry.sugar,C.sugar,"g"],[Lt("Sodium","钠"),"sodium",entry.sodium,C.sodium,"mg"],[Lt("Fiber","纤维"),"fiber",entry.fiber,C.fiber,"g"]].map(([l,key,v,c,unit]) => (
+              <div key={key} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
                 <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
                 <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:2 }}>
                   <input type="number" value={v||0} onChange={e => onUpdate({ [key]: Number(e.target.value)||0 })} style={numInputStyle} />
@@ -1432,20 +1440,21 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
               onOccasion={val => onUpdate({ flag_occasion: val })}
               onLocation={val => onUpdate({ flag_location: val })}
               onComment={val => onUpdate({ flag_comment: val })}
-              C={C} L={L || ((en,zh)=>lang==="zh"?zh:en)}
+              C={C} L={Lt}
             />
           </div>
         </React.Fragment>
       )}
       <div style={{ display:"flex", gap:8 }}>
-        <button className="ghost-btn" style={{ flex:1 }} onClick={onCancel} disabled={saving}>Discard</button>
+        <button className="ghost-btn" style={{ flex:1 }} onClick={onCancel} disabled={saving}>{Lt("Discard","放弃")}</button>
         <button className="pink-btn" style={{ flex:2, background:isWorkout?`linear-gradient(135deg,${workoutAccent},${workoutDeep})`:undefined, boxShadow:isWorkout?`0 4px 20px ${workoutAccent}47`:undefined }} onClick={onConfirm} disabled={saving}>
-          {saving ? "Saving..." : "✓ Add to Log"}
+          {saving ? Lt("Saving...","保存中...") : Lt("✓ Add to Log","✓ 添加记录")}
         </button>
       </div>
     </div>
   );
 });
+
 
 // ── Simple SVG bar chart: consumed vs burned per day, with target line ──
 const TrendChart = React.memo(function TrendChart({ days, target, theme, C }) {
@@ -2229,99 +2238,99 @@ const COACH_CATEGORIES = [
 const COACH_FOODS = [
   { id:"ckt", name:"Char Kway Teow", name_zh:"炒粿条", category:"chinese", portion:"1 plate (350g)", kcal:650, protein:18, carbs:78, fat:28, fiber:3, sugar:6, sodium:980,
     visual:{ type:"noodles" },
-    components:[{ name:"Flat rice noodles", kcal:220, grams:150, portionAdjust:true },{ name:"Cooking oil / lard", kcal:210 },{ name:"Prawns & egg", kcal:130 },{ name:"Bean sprouts, chives, sauce", kcal:90 }],
-    tip:"Most of the calories come from the oil the noodles are fried in, not the noodles themselves — ask for less oil to cut ~150 kcal. It's also one of the saltier dishes in this library, at close to half a day's typical sodium.",
+    components:[{ name:"Flat rice noodles", name_zh:"河粉", kcal:220, grams:150, portionAdjust:true },{ name:"Cooking oil / lard", name_zh:"食用油/猪油", kcal:210 },{ name:"Prawns & egg", name_zh:"虾仁与鸡蛋", kcal:130 },{ name:"Bean sprouts, chives, sauce", name_zh:"豆芽、韭菜、酱汁", kcal:90 }],
+    tips:[{ macro:"fat", text:"Most of the calories come from the frying oil, not the noodles — ask for less oil to cut ~150 kcal.", text_zh:"大部分热量来自炒制用的油，而非粿条本身——要求少油可减少约150千卡。" }, { macro:"sodium", text:"One of the saltier dishes here, at close to half a day's typical sodium target.", text_zh:"这是较咸的菜肴之一，钠含量接近一天目标的一半。" }],
     portionComponent:"Flat rice noodles", addons:[COACH_ADDONS.egg] },
   { id:"hokkienmee", name:"Hokkien Mee", name_zh:"福建面", category:"chinese", portion:"1 plate (350g)", kcal:600, protein:22, carbs:65, fat:26, fiber:3, sugar:4, sodium:1050,
     visual:{ type:"noodles" },
-    components:[{ name:"Yellow noodles", kcal:180, grams:150, portionAdjust:true },{ name:"Prawn & pork stock, lard", kcal:240 },{ name:"Prawns, squid, pork belly", kcal:140 },{ name:"Sambal & garnish", kcal:40 }],
-    tip:"The dark, glossy sauce is largely lard-based stock — a lean-meat version cuts a meaningful chunk of fat. The sodium here is mostly from that same stock, not the noodles.",
+    components:[{ name:"Yellow noodles", name_zh:"黄面", kcal:180, grams:150, portionAdjust:true },{ name:"Prawn & pork stock, lard", name_zh:"虾骨猪骨高汤、猪油", kcal:240 },{ name:"Prawns, squid, pork belly", name_zh:"虾、鱿鱼、五花肉", kcal:140 },{ name:"Sambal & garnish", name_zh:"参巴酱与配料", kcal:40 }],
+    tips:[{ macro:"fat", text:"The glossy sauce is largely lard-based stock — a lean-meat version cuts a meaningful chunk of fat.", text_zh:"油亮的酱汁主要是猪油高汤——换成瘦肉版本能明显减少脂肪。" }, { macro:"sodium", text:"That same stock is also the main source of sodium here, not the noodles.", text_zh:"钠含量也主要来自这锅高汤，而非面条本身。" }],
     portionComponent:"Yellow noodles", addons:[COACH_ADDONS.egg, COACH_ADDONS.sambal] },
   { id:"wantanmee", name:"Wantan Mee (dry)", name_zh:"云吞面", category:"chinese", portion:"1 bowl (300g)", kcal:480, protein:20, carbs:60, fat:16, fiber:3, sugar:5, sodium:890,
     visual:{ type:"noodles" },
-    components:[{ name:"Egg noodles", kcal:210, grams:150, portionAdjust:true },{ name:"Oil & dark soy toss", kcal:90 },{ name:"Char siu & wantan dumplings", kcal:150 },{ name:"Vegetables & garnish", kcal:30 }],
-    tip:"The soup version usually runs lighter than the dry version, since dry mee is tossed in oil and dark soy sauce instead.",
+    components:[{ name:"Egg noodles", name_zh:"鸡蛋面", kcal:210, grams:150, portionAdjust:true },{ name:"Oil & dark soy toss", name_zh:"油与黑酱油拌料", kcal:90 },{ name:"Char siu & wantan dumplings", name_zh:"叉烧与云吞", kcal:150 },{ name:"Vegetables & garnish", name_zh:"蔬菜与配料", kcal:30 }],
+    tips:[{ macro:"sodium", text:"The dry version is tossed in oil and dark soy sauce — the soup version runs lighter on sodium.", text_zh:"干捞版是用油和黑酱油拌制的——汤版的钠含量更低。" }],
     portionComponent:"Egg noodles", addons:[COACH_ADDONS.egg] },
   { id:"chickenrice", name:"Hainanese Chicken Rice", name_zh:"海南鸡饭", category:"chinese", portion:"1 plate (rice + 100g chicken)", kcal:590, protein:32, carbs:68, fat:20, fiber:2, sugar:3, sodium:760,
     visual:{ type:"rice" },
-    components:[{ name:"Oiled rice", kcal:280, grams:150, portionAdjust:true },{ name:"Steamed chicken (100g)", kcal:200 },{ name:"Skin & chili oil", kcal:110 }],
-    tip:"Removing the skin saves ~80–100 kcal with almost no protein loss.",
+    components:[{ name:"Oiled rice", name_zh:"油饭", kcal:280, grams:150, portionAdjust:true },{ name:"Steamed chicken (100g)", name_zh:"蒸鸡肉（100克）", kcal:200 },{ name:"Skin & chili oil", name_zh:"鸡皮与辣椒油", kcal:110 }],
+    tips:[{ macro:"fat", text:"Removing the skin saves ~80–100 kcal with almost no protein loss.", text_zh:"去掉鸡皮可省下约80至100千卡，蛋白质几乎不受影响。" }],
     portionComponent:"Oiled rice", addons:[COACH_ADDONS.chiliSauce] },
   { id:"nasilemak", name:"Nasi Lemak (standard)", name_zh:"椰浆饭", category:"malay", portion:"1 plate (rice + egg + anchovies + sambal)", kcal:640, protein:16, carbs:78, fat:28, fiber:4, sugar:5, sodium:820,
     visual:{ type:"rice" },
-    components:[{ name:"Coconut rice", kcal:320, grams:150, portionAdjust:true },{ name:"Fried egg", kcal:90 },{ name:"Fried anchovies & peanuts", kcal:150 },{ name:"Sambal", kcal:80 }],
-    tip:"The coconut milk rice carries about half the calories — a smaller rice portion keeps the flavour with less impact.",
+    components:[{ name:"Coconut rice", name_zh:"椰浆米饭", kcal:320, grams:150, portionAdjust:true },{ name:"Fried egg", name_zh:"煎蛋", kcal:90 },{ name:"Fried anchovies & peanuts", name_zh:"江鱼仔与花生", kcal:150 },{ name:"Sambal", name_zh:"参巴酱", kcal:80 }],
+    tips:[{ macro:"fat", text:"The coconut milk rice carries about half the calories here — a smaller rice portion keeps the flavour with less impact.", text_zh:"椰浆米饭占了大约一半的热量——减少一些饭量，仍保留风味但影响更小。" }],
     portionComponent:"Coconut rice", addons:[COACH_ADDONS.egg, COACH_ADDONS.sambal] },
   { id:"rendang", name:"Beef Rendang (with rice)", name_zh:"仁当牛肉", category:"malay", portion:"1 plate (150g beef + 1 bowl rice)", kcal:720, protein:34, carbs:82, fat:30, fiber:4, sugar:6, sodium:680,
     visual:{ type:"rice" },
-    components:[{ name:"Rice", kcal:260, grams:150, portionAdjust:true },{ name:"Beef rendang (150g)", kcal:380 },{ name:"Coconut gravy", kcal:80 }],
-    tip:"Rendang itself is slow-cooked with little added salt compared to fried dishes — most of the sodium here actually comes from the rice and side sambal, not the beef.",
+    components:[{ name:"Rice", name_zh:"米饭", kcal:260, grams:150, portionAdjust:true },{ name:"Beef rendang (150g)", name_zh:"仁当牛肉（150克）", kcal:380 },{ name:"Coconut gravy", name_zh:"椰浆酱汁", kcal:80 }],
+    tips:[{ macro:"sodium", text:"Rendang itself is slow-cooked with little added salt — most of the sodium here comes from the rice and side sambal, not the beef.", text_zh:"仁当牛肉本身慢炖加盐不多——这里的钠主要来自米饭和参巴酱，而非牛肉本身。" }],
     portionComponent:"Rice" },
   { id:"satay", name:"Satay (chicken, 5 sticks)", name_zh:"沙爹", category:"malay", portion:"5 sticks + peanut sauce", kcal:420, protein:28, carbs:18, fat:26, fiber:3, sugar:9, sodium:540,
     visual:{ type:"skewer" },
-    components:[{ name:"Grilled chicken (5 sticks)", kcal:220 },{ name:"Peanut sauce (3 tbsp)", kcal:160 },{ name:"Ketupat/rice cake", kcal:40 }],
-    tip:"The peanut sauce is dense in calories and sugar — dipping lightly instead of pouring saves the most on both.",
+    components:[{ name:"Grilled chicken (5 sticks)", name_zh:"烤鸡肉串（5串）", kcal:220 },{ name:"Peanut sauce (3 tbsp)", name_zh:"沙爹花生酱（3汤匙）", kcal:160 },{ name:"Ketupat/rice cake", name_zh:"马来粽/米糕", kcal:40 }],
+    tips:[{ macro:"fat", text:"The peanut sauce is dense in fat — dipping lightly instead of pouring saves the most.", text_zh:"沙爹花生酱脂肪密度高——蘸取少量而非整勺淋上，能省下最多。" }, { macro:"sugar", text:"It also carries meaningful sugar — the same light-dipping habit cuts that too.", text_zh:"它同时含有不少糖分——同样蘸取少量也能减少糖分摄入。" }],
     addons:[COACH_ADDONS.peanutSauce] },
   { id:"roticanai", name:"Roti Canai (plain, 1 pc)", name_zh:"印度煎饼", category:"indian", portion:"1 piece + curry dip", kcal:340, protein:7, carbs:38, fat:18, fiber:2, sugar:3, sodium:480,
     visual:{ type:"flatbread" },
-    components:[{ name:"Dough & ghee layers", kcal:260 },{ name:"Curry dip (small bowl)", kcal:80 }],
-    tip:"Almost 80% of this is the ghee folded into the dough during frying, not the flour.",
+    components:[{ name:"Dough & ghee layers", name_zh:"面团与酥油层", kcal:260 },{ name:"Curry dip (small bowl)", name_zh:"咖喱酱（小碗）", kcal:80 }],
+    tips:[{ macro:"fat", text:"Almost 80% of this is the ghee folded into the dough during frying, not the flour.", text_zh:"近80%的热量来自煎制时揉入面团的酥油，而非面粉本身。" }],
     addons:[COACH_ADDONS.curryDip] },
   { id:"biryani", name:"Chicken Briyani", name_zh:"印度香饭", category:"indian", portion:"1 plate (rice + chicken piece)", kcal:680, protein:30, carbs:85, fat:24, fiber:3, sugar:5, sodium:890,
     visual:{ type:"rice" },
-    components:[{ name:"Ghee rice", kcal:340, grams:150, portionAdjust:true },{ name:"Chicken piece", kcal:260 },{ name:"Fried onions & spices", kcal:80 }],
-    tip:"Similar rule to nasi lemak: the rice is cooked in ghee and stock, so it's not calorie-neutral like plain rice — a smaller rice portion matters more here than trimming the chicken.",
+    components:[{ name:"Ghee rice", name_zh:"酥油饭", kcal:340, grams:150, portionAdjust:true },{ name:"Chicken piece", name_zh:"鸡肉块", kcal:260 },{ name:"Fried onions & spices", name_zh:"炸洋葱与香料", kcal:80 }],
+    tips:[{ macro:"fat", text:"Like nasi lemak, the rice here is cooked in ghee and stock — a smaller rice portion matters more than trimming the chicken.", text_zh:"和椰浆饭同理，这里的饭是用酥油和高汤烹煮的——减少饭量比减少鸡肉更有效。" }],
     portionComponent:"Ghee rice", addons:[COACH_ADDONS.egg] },
   { id:"tosai", name:"Plain Thosai", name_zh:"印度薄饼", category:"indian", portion:"1 piece + sambar + chutney", kcal:280, protein:8, carbs:48, fat:6, fiber:3, sugar:2, sodium:420,
     visual:{ type:"flatbread" },
-    components:[{ name:"Fermented rice-lentil crepe", kcal:220 },{ name:"Sambar & chutney", kcal:60 }],
-    tip:"One of the lighter options here — fermented batter keeps it low-fat, but easy to undo with extra ghee brushed on the pan." },
+    components:[{ name:"Fermented rice-lentil crepe", name_zh:"发酵米豆煎饼", kcal:220 },{ name:"Sambar & chutney", name_zh:"参巴豆汤与酸辣酱", kcal:60 }],
+    tips:[{ macro:"fat", text:"One of the lighter options here — fermented batter keeps it low-fat, but easy to undo with extra ghee brushed on the pan.", text_zh:"这是较清淡的选择之一——发酵面糊本身低脂，但煎锅上多刷的酥油很容易抵消这个优点。" }] },
   { id:"spag_bol", name:"Spaghetti Bolognese", name_zh:"意式肉酱面", category:"western", portion:"1 plate (300g)", kcal:560, protein:26, carbs:68, fat:18, fiber:5, sugar:8, sodium:780,
     visual:{ type:"pasta" },
-    components:[{ name:"Spaghetti", kcal:240, grams:150, portionAdjust:true },{ name:"Meat & tomato sauce", kcal:260 },{ name:"Parmesan & oil", kcal:60 }],
-    tip:"The tomato-based sauce actually adds decent fiber compared to cream-based pastas — it's the more balanced pasta choice of the two here.",
+    components:[{ name:"Spaghetti", name_zh:"意大利面", kcal:240, grams:150, portionAdjust:true },{ name:"Meat & tomato sauce", name_zh:"肉酱与番茄汁", kcal:260 },{ name:"Parmesan & oil", name_zh:"帕玛森芝士与橄榄油", kcal:60 }],
+    tips:[{ macro:"fiber", text:"The tomato-based sauce adds decent fiber compared to cream-based pastas — the more balanced pasta choice of the two here.", text_zh:"番茄基底酱汁比奶油基底提供更多纤维——在这两款意面中是更均衡的选择。" }],
     portionComponent:"Spaghetti" },
   { id:"carbonara", name:"Spaghetti Carbonara", name_zh:"培根蛋面", category:"western", portion:"1 plate (300g)", kcal:680, protein:24, carbs:62, fat:34, fiber:3, sugar:4, sodium:820,
     visual:{ type:"pasta" },
-    components:[{ name:"Spaghetti", kcal:260, grams:150, portionAdjust:true },{ name:"Cream/egg & cheese sauce", kcal:260 },{ name:"Bacon/pancetta", kcal:160 }],
-    tip:"The cream-and-cheese sauce is the heaviest part — a tomato-based pasta of the same size runs ~200 kcal lighter.",
+    components:[{ name:"Spaghetti", name_zh:"意大利面", kcal:260, grams:150, portionAdjust:true },{ name:"Cream/egg & cheese sauce", name_zh:"奶油蛋芝士酱", kcal:260 },{ name:"Bacon/pancetta", name_zh:"培根/意式培根", kcal:160 }],
+    tips:[{ macro:"fat", text:"The cream-and-cheese sauce is the heaviest part — a tomato-based pasta of the same size runs ~200 kcal lighter.", text_zh:"奶油芝士酱是热量最重的部分——同样份量的番茄基底意面能减少约200千卡。" }],
     portionComponent:"Spaghetti" },
   { id:"margherita", name:"Margherita Pizza (2 slices)", name_zh:"玛格丽特披萨", category:"western", portion:"2 slices from a 12\" pizza", kcal:440, protein:18, carbs:52, fat:18, fiber:3, sugar:6, sodium:760,
     visual:{ type:"pizza" },
-    components:[{ name:"Dough base", kcal:180 },{ name:"Mozzarella & cheese", kcal:190 },{ name:"Tomato sauce & basil", kcal:70 }],
-    tip:"Cheese is the main sodium contributor here, more than the crust — a thin-crust, less-cheese slice cuts sodium more than skipping the crust would." },
+    components:[{ name:"Dough base", name_zh:"饼底", kcal:180 },{ name:"Mozzarella & cheese", name_zh:"马苏里拉芝士", kcal:190 },{ name:"Tomato sauce & basil", name_zh:"番茄酱与罗勒", kcal:70 }],
+    tips:[{ macro:"sodium", text:"Cheese is the main sodium contributor here, more than the crust — a thin-crust, less-cheese slice cuts sodium more.", text_zh:"芝士才是这里钠含量的主要来源，比饼皮更多——选薄饼皮、少芝士的一片更能减少钠摄入。" }] },
   { id:"burger", name:"Cheeseburger (fast food)", name_zh:"芝士汉堡", category:"fastfood", portion:"1 regular burger", kcal:520, protein:26, carbs:40, fat:28, fiber:2, sugar:7, sodium:980,
     visual:{ type:"burger" },
-    components:[{ name:"Bun", kcal:130 },{ name:"Beef patty", kcal:230 },{ name:"Cheese & sauce", kcal:160 }],
-    tip:"A regular cheeseburger already carries close to half a typical day's sodium target — easy to underestimate since it doesn't taste especially salty." },
+    components:[{ name:"Bun", name_zh:"面包", kcal:130 },{ name:"Beef patty", name_zh:"牛肉饼", kcal:230 },{ name:"Cheese & sauce", name_zh:"芝士与酱料", kcal:160 }],
+    tips:[{ macro:"sodium", text:"A regular cheeseburger already carries close to half a typical day's sodium target — easy to underestimate since it doesn't taste especially salty.", text_zh:"一个普通芝士汉堡的钠含量已接近一天目标的一半——因为吃起来不觉得特别咸，很容易被低估。" }] },
   { id:"friedchicken", name:"Fried Chicken (2pc, fast food)", name_zh:"炸鸡", category:"fastfood", portion:"2 pieces (thigh + drumstick)", kcal:590, protein:38, carbs:22, fat:38, fiber:1, sugar:1, sodium:1120,
     visual:{ type:"fried" },
-    components:[{ name:"Chicken meat", kcal:260 },{ name:"Breading & skin", kcal:200 },{ name:"Frying oil absorbed", kcal:130 }],
-    tip:"Removing the breading and skin roughly halves the fat and cuts a good chunk of sodium too, while keeping most of the protein." },
+    components:[{ name:"Chicken meat", name_zh:"鸡肉", kcal:260 },{ name:"Breading & skin", name_zh:"面衣与鸡皮", kcal:200 },{ name:"Frying oil absorbed", name_zh:"吸收的炸油", kcal:130 }],
+    tips:[{ macro:"fat", text:"Removing the breading and skin roughly halves the fat, while keeping most of the protein.", text_zh:"去掉外皮和面衣能减少约一半的脂肪，蛋白质则大多保留。" }, { macro:"sodium", text:"It also cuts a good chunk of sodium, since most of it sits in that same breading and skin.", text_zh:"同时也能大幅降低钠含量，因为大部分钠都在面衣和鸡皮里。" }] },
   { id:"frenchfries", name:"French Fries (regular)", name_zh:"薯条", category:"fastfood", portion:"1 regular serving (115g)", kcal:365, protein:4, carbs:48, fat:17, fiber:4, sugar:1, sodium:380,
     visual:{ type:"fries" },
-    components:[{ name:"Potato", kcal:180 },{ name:"Frying oil absorbed", kcal:155 },{ name:"Salt seasoning", kcal:0 }],
-    tip:"Low in sugar compared to most snacks, but the fryer salt adds up fast — a large size roughly doubles the sodium, not just the calories." },
+    components:[{ name:"Potato", name_zh:"马铃薯", kcal:180 },{ name:"Frying oil absorbed", name_zh:"吸收的炸油", kcal:155 },{ name:"Salt seasoning", name_zh:"盐调味", kcal:0 }],
+    tips:[{ macro:"sugar", text:"Low in sugar compared to most snacks.", text_zh:"比起大多数零食，糖分不高。" }, { macro:"sodium", text:"But the fryer salt adds up fast — a large size roughly doubles the sodium, not just the calories.", text_zh:"但炸物用盐加得很快——大份不只是热量翻倍，钠含量也几乎翻倍。" }] },
   { id:"apple", name:"Apple", name_zh:"苹果", category:"fruits", portion:"1 medium (180g)", kcal:95, protein:0.5, carbs:25, fat:0.3, fiber:4.4, sugar:19, sodium:2,
     visual:{ type:"fruit", variant:"apple" },
-    tip:"The fiber here slows down how fast the sugar hits your bloodstream compared to juice — eating it whole beats drinking it blended." },
+    tips:[{ macro:"fiber", text:"The fiber here slows down how fast the sugar hits your bloodstream compared to juice — eating it whole beats drinking it blended.", text_zh:"苹果中的纤维能减缓糖分进入血液的速度，比果汁更温和——直接吃整颗，比打成果汁更好。" }] },
   { id:"banana", name:"Banana", name_zh:"香蕉", category:"fruits", portion:"1 medium (120g)", kcal:105, protein:1.3, carbs:27, fat:0.4, fiber:3.1, sugar:14, sodium:1,
     visual:{ type:"fruit", variant:"banana" } },
   { id:"watermelon", name:"Watermelon", name_zh:"西瓜", category:"fruits", portion:"1 wedge (250g)", kcal:75, protein:1.5, carbs:19, fat:0.4, fiber:1, sugar:15, sodium:3,
     visual:{ type:"fruit", variant:"watermelon" },
-    tip:"Low fiber for a fruit, and the sugar is concentrated — easy to eat two or three wedges without feeling full, which adds up faster than it seems." },
+    tips:[{ macro:"fiber", text:"Low fiber for a fruit — doesn't fill you up the way a higher-fiber fruit would.", text_zh:"作为水果，纤维偏低——不像高纤维水果那样容易有饱腹感。" }, { macro:"sugar", text:"The sugar is concentrated, so it's easy to eat two or three wedges without feeling full — it adds up faster than it seems.", text_zh:"糖分很集中，很容易一口气吃两三块都不觉得饱——热量累积得比想象中快。" }] },
   { id:"papaya", name:"Papaya", name_zh:"木瓜", category:"fruits", portion:"1 cup diced (150g)", kcal:60, protein:0.9, carbs:15, fat:0.2, fiber:2.6, sugar:11, sodium:5,
     visual:{ type:"fruit", variant:"citrus" } },
   { id:"mango", name:"Mango", name_zh:"芒果", category:"fruits", portion:"1 medium (200g)", kcal:120, protein:1.3, carbs:30, fat:0.6, fiber:3, sugar:27, sodium:3,
     visual:{ type:"fruit", variant:"citrus" },
-    tip:"One of the sweeter fruits by far — a whole mango carries close to a can of soda's worth of sugar. Great in moderation, but worth counting like a dessert-adjacent choice, not a free snack." },
+    tips:[{ macro:"sugar", text:"One of the sweeter fruits by far — a whole mango carries close to a can of soda's worth of sugar. Great in moderation, but worth counting like a dessert, not a free snack.", text_zh:"芒果是甜度较高的水果之一——一整颗的糖分接近一罐汽水。适量享用没问题，但最好当作接近甜点的选择来计算，而非无负担的零食。" }] },
   { id:"orange", name:"Orange", name_zh:"橙子", category:"fruits", portion:"1 medium (150g)", kcal:70, protein:1.4, carbs:18, fat:0.2, fiber:3.6, sugar:14, sodium:0,
     visual:{ type:"fruit", variant:"citrus" } },
   { id:"p_thigh", name:"Chicken Thigh (deboned, grilled)", name_zh:"去骨鸡腿", category:"protein", portion:"1 piece (120g)", kcal:185, protein:22, carbs:0, fat:11, fiber:0, sugar:0, sodium:65,
     visual:{ type:"meat" } },
   { id:"p_breast", name:"Chicken Breast (grilled)", name_zh:"鸡胸肉", category:"protein", portion:"1 piece (150g)", kcal:165, protein:31, carbs:0, fat:4, fiber:0, sugar:0, sodium:70,
     visual:{ type:"meat" },
-    tip:"Leaner than thigh meat for the same weight — a straight swap in a mixed dish cuts fat without losing much protein." },
+    tips:[{ macro:"fat", text:"Leaner than thigh meat for the same weight — a straight swap in a mixed dish cuts fat without losing much protein.", text_zh:"同等重量下比鸡腿肉更精瘦——在混合菜肴中直接替换，能减少脂肪又不太影响蛋白质。" }] },
   { id:"p_fish", name:"Fish Fillet (dory / mackerel, grilled)", name_zh:"鱼柳", category:"protein", portion:"1 fillet (120g)", kcal:140, protein:26, carbs:0, fat:4, fiber:0, sugar:0, sodium:75,
     visual:{ type:"fish" } },
   { id:"p_tofu", name:"Firm Tofu", name_zh:"豆腐", category:"protein", portion:"1 block (100g)", kcal:80, protein:9, carbs:2, fat:5, fiber:1, sugar:0, sodium:10,
@@ -2330,12 +2339,12 @@ const COACH_FOODS = [
     visual:{ type:"egg" } },
   { id:"v_carrot", name:"Carrot (cooked)", name_zh:"胡萝卜", category:"veg", portion:"1 medium (80g)", kcal:34, protein:0.8, carbs:8, fat:0.2, fiber:2.3, sugar:5.4, sodium:55,
     visual:{ type:"veg", variant:"carrot" },
-    tip:"One of the lowest-sodium vegetables here since it's usually just boiled or steamed, not stir-fried in sauce." },
+    tips:[{ macro:"sodium", text:"One of the lowest-sodium vegetables here, since it's usually just boiled or steamed, not stir-fried in sauce.", text_zh:"这是钠含量最低的蔬菜之一，因为通常只是水煮或蒸熟，而非用酱汁炒制。" }] },
   { id:"v_broccoli", name:"Broccoli (cooked)", name_zh:"西兰花", category:"veg", portion:"1 cup (90g)", kcal:31, protein:2.6, carbs:6, fat:0.3, fiber:2.8, sugar:1.6, sodium:30,
     visual:{ type:"veg", variant:"broccoli" } },
   { id:"v_cabbage", name:"Cabbage (stir-fried)", name_zh:"炒卷心菜", category:"veg", portion:"3 tbsp (100g)", kcal:45, protein:1.3, carbs:6, fat:2, fiber:2, sugar:3, sodium:190,
     visual:{ type:"veg", variant:"leafy" },
-    tip:"The sodium here comes from the soy sauce or belacan used in stir-frying — the cabbage itself is naturally low-sodium." },
+    tips:[{ macro:"sodium", text:"The sodium here comes from the soy sauce or belacan used in stir-frying — the cabbage itself is naturally low-sodium.", text_zh:"这里的钠来自炒制时用的酱油或峇拉煎——卷心菜本身钠含量其实很低。" }] },
   { id:"v_kailan", name:"Kailan / Spinach (stir-fried)", name_zh:"炒芥兰/菠菜", category:"veg", portion:"3 tbsp (100g)", kcal:40, protein:2, carbs:4, fat:2.5, fiber:2.5, sugar:1, sodium:210,
     visual:{ type:"veg", variant:"leafy" } },
   { id:"v_longbean", name:"Long Beans (stir-fried)", name_zh:"炒豆角", category:"veg", portion:"3 tbsp (100g)", kcal:55, protein:2.2, carbs:7, fat:2.5, fiber:2.7, sugar:3, sodium:160,
@@ -2343,6 +2352,32 @@ const COACH_FOODS = [
 ];
 
 const COACH_MACRO_EMOJI = { kcal:"🔥", protein:"🥩", carbs:"🍞", fat:"🥑", fiber:"🌾", sugar:"🍬", sodium:"🧂" };
+const COACH_MACRO_LABELS = {
+  protein: { en:"Protein", zh:"蛋白质" }, carbs: { en:"Carbs", zh:"碳水" }, fat: { en:"Fat", zh:"脂肪" },
+  sugar: { en:"Sugar", zh:"糖" }, sodium: { en:"Sodium", zh:"钠" }, fiber: { en:"Fiber", zh:"纤维" },
+};
+// Renders a Coach tip as rows grouped by macro (e.g. "🍬 Sugar: order less sweet...") instead of
+// one paragraph — reused by both Diet Coach and Drink Coach cards.
+function CoachTipRows({ tips, C, lang }) {
+  if (!tips || tips.length === 0) return null;
+  return (
+    <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:6 }}>
+      {tips.map((t, i) => {
+        const meta = COACH_MACRO_LABELS[t.macro];
+        const color = C[t.macro] || C.gold;
+        return (
+          <div key={i} style={{ fontSize:12, background:C.pinkGlow, borderRadius:8, padding:"8px 10px", lineHeight:1.4, display:"flex", gap:6 }}>
+            <span style={{ flexShrink:0 }}>{COACH_MACRO_EMOJI[t.macro] || "💡"}</span>
+            <span>
+              {meta && <strong style={{ color }}>{lang==="zh"?meta.zh:meta.en}: </strong>}
+              <span style={{ color:C.text }}>{lang==="zh" ? (t.text_zh||t.text) : t.text}</span>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function CoachMacroPill({ kind, label, value, unit, color, textDim }) {
   return (
@@ -2401,7 +2436,6 @@ function CoachDishIcon({ visual, C, size = 46 }) {
   );
 }
 
-const COACH_PORTION_TABS = [{ key:0.5, label:"0.5x" }, { key:1, label:"1x" }, { key:1.5, label:"1.5x" }];
 
 function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
   const [multiplier, setMultiplier] = useState(1);
@@ -2456,11 +2490,13 @@ function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
 
       {portionComp && (
         <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
-          <div style={{ fontSize:11, color:C.textMuted, marginBottom:6 }}>{portionComp.name} {L("portion","份量")}</div>
-          <div style={{ display:"flex", gap:6 }}>
-            {COACH_PORTION_TABS.map(t => (
-              <button key={t.key} onClick={(e)=>{e.stopPropagation(); setMultiplier(t.key);}} style={{ flex:1, fontSize:11.5, fontWeight:600, padding:"6px 0", borderRadius:8, border:`1px solid ${multiplier===t.key?C.pink:C.border}`, background:multiplier===t.key?C.pinkGlow:"transparent", color:multiplier===t.key?C.pink:C.textMuted, cursor:"pointer" }}>{t.label}</button>
-            ))}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:C.surface, borderRadius:8, padding:"7px 10px" }}>
+            <span style={{ fontSize:12, color:C.text }}>{lang==="zh" ? (portionComp.name_zh||portionComp.name) : portionComp.name} <span style={{ color:C.textDim }}>({L("portion","份量")})</span></span>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <button onClick={(e)=>{e.stopPropagation(); setMultiplier(Math.max(0, Math.round((multiplier-0.5)*10)/10));}} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textMuted, cursor:"pointer", fontSize:13, lineHeight:1 }}>−</button>
+              <span style={{ fontSize:12.5, fontWeight:700, color:C.text, minWidth:26, textAlign:"center" }}>{multiplier}x</span>
+              <button onClick={(e)=>{e.stopPropagation(); setMultiplier(Math.min(2, Math.round((multiplier+0.5)*10)/10));}} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.pink}`, background:"transparent", color:C.pink, cursor:"pointer", fontSize:13, lineHeight:1 }}>+</button>
+            </div>
           </div>
         </div>
       )}
@@ -2504,7 +2540,7 @@ function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
             const lineGrams = isPortionLine && c.grams ? Math.round(c.grams*multiplier) : null;
             return (
               <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"3px 0", color:C.textMuted }}>
-                <span>{c.name}{isPortionLine && <span style={{ color:C.pink }}> (×{multiplier}{lineGrams?`, ${lineGrams}g`:""})</span>}</span>
+                <span>{lang==="zh" ? (c.name_zh||c.name) : c.name}{isPortionLine && <span style={{ color:C.pink }}> (×{multiplier}{lineGrams?`, ${lineGrams}g`:""})</span>}</span>
                 <span style={{ color:C.text, fontWeight:600 }}>{lineKcal} kcal</span>
               </div>
             );
@@ -2515,9 +2551,7 @@ function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
               <span style={{ fontWeight:600 }}>{a.unitKcal*addonQty[a.name]} kcal</span>
             </div>
           ))}
-          {food.tip && (
-            <div style={{ marginTop:8, fontSize:12, color:C.gold, background:C.pinkGlow, borderRadius:8, padding:"8px 10px", lineHeight:1.4 }}>💡 {food.tip}</div>
-          )}
+          <CoachTipRows tips={food.tips} C={C} lang={lang} />
         </div>
       )}
     </div>
@@ -2597,6 +2631,24 @@ const DRINK_CATEGORIES = [
 // Sugar-level adjuster — reuses the same "adjust relative to one listed
 // component" idea as Diet Coach's rice/noodle portion adjuster, just with
 // levels that match how people actually order these drinks locally.
+// Container sizes — researched against real-world common serving sizes rather than
+// guessed: Malaysian canned drinks are standardized at 325ml (not the 330/355ml seen
+// elsewhere), kopitiam tea/coffee glasses run ~250ml, a regular takeaway hot/cold cup
+// is commonly 300-350ml, and bubble tea's global standard "regular" size is 500ml.
+const CONTAINER_SIZES = {
+  cup: { label: "Cup", label_zh: "杯", ml: 250 },
+  takeaway: { label: "Takeaway Cup", label_zh: "外带杯", ml: 350 },
+  large: { label: "Large Cup", label_zh: "大杯", ml: 500 },
+  can: { label: "Can", label_zh: "罐装", ml: 325 },
+  bottle: { label: "Bottle", label_zh: "瓶装", ml: 500 },
+};
+const CATEGORY_CONTAINERS = {
+  tea: ["cup", "takeaway", "large"],
+  coffee: ["cup", "takeaway"],
+  local: ["cup", "takeaway", "large"],
+  soda: ["can", "bottle"],
+};
+
 const SUGAR_LEVELS = [
   { key: 1, label: "Normal", label_zh: "正常" },
   { key: 0.75, label: "Less Sweet", label_zh: "少甜" },
@@ -2609,17 +2661,17 @@ const DRINK_COACH_ITEMS = [
   { id:"teh_tarik", name:"Teh Tarik", name_zh:"拉茶", category:"tea", portion:"1 cup (250ml)", kcal:120, protein:2, carbs:20, fat:4, fiber:0, sugar:18, sodium:45,
     visual:{ type:"hotcup" },
     sugarKcal: 70, sugarG: 16,
-    tip:"Most of the sugar here comes from the condensed milk, not just added sugar — ordering it 'kurang manis' cuts a real amount, not just a token gesture." },
+    tips:[{ macro:"sugar", text:"Most of the sugar here comes from the condensed milk, not just added sugar — ordering it less sweet cuts a real amount, not just a token gesture.", text_zh:"这里的糖分大多来自炼乳，而不只是额外加的糖——点“少甜”确实能减少实际糖量，而不只是象征性的。" }] },
   { id:"teh_o", name:"Teh O", name_zh:"红茶", category:"tea", portion:"1 cup (250ml)", kcal:70, protein:0.5, carbs:17, fat:0, fiber:0, sugar:16, sodium:10,
     visual:{ type:"hotcup" }, sugarKcal:65, sugarG:16 },
   { id:"iced_lemon_tea", name:"Iced Lemon Tea", name_zh:"柠檬茶", category:"tea", portion:"1 glass (300ml)", kcal:110, protein:0, carbs:28, fat:0, fiber:0, sugar:26, sodium:5,
     visual:{ type:"icedcup" }, sugarKcal:100, sugarG:26 },
   { id:"green_tea", name:"Green Tea (unsweetened)", name_zh:"绿茶（无糖）", category:"tea", portion:"1 bottle (350ml)", kcal:0, protein:0, carbs:0, fat:0, fiber:0, sugar:0, sodium:5,
     visual:{ type:"icedcup" },
-    tip:"Zero sugar by default — the easy swap when you want something with flavour but no added sugar." },
+    tips:[{ macro:"sugar", text:"Zero sugar by default — the easy swap when you want something with flavour but no added sugar.", text_zh:"默认零糖——想喝点有味道又不想加糖时，这是最简单的选择。" }] },
   { id:"bubble_tea", name:"Bubble Milk Tea", name_zh:"珍珠奶茶", category:"tea", portion:"1 cup (500ml)", kcal:320, protein:3, carbs:68, fat:6, fiber:0, sugar:55, sodium:60,
     visual:{ type:"icedcup" }, sugarKcal:180, sugarG:40,
-    tip:"The pearls add their own sugar and carbs on top of the tea itself — a 500ml cup can carry as much sugar as two cans of soda." },
+    tips:[{ macro:"sugar", text:"The pearls add their own sugar on top of the tea itself — a 500ml cup can carry as much sugar as two cans of soda.", text_zh:"珍珠本身也带有糖分，叠加在茶本身之上——一杯500毫升的珍珠奶茶，糖分可能相当于两罐汽水。" }, { macro:"carbs", text:"They add meaningful carbs too, separate from the sugar — worth counting both, not just the sweetness.", text_zh:"珍珠也带来不少碳水，与糖分是分开计算的——两者都值得留意，不只是甜度。" }] },
 
   // ── Coffee ───────────────────────────────────────────
   { id:"kopi", name:"Kopi", name_zh:"咖啡（加炼乳）", category:"coffee", portion:"1 cup (250ml)", kcal:140, protein:3, carbs:22, fat:5, fiber:0, sugar:20, sodium:40,
@@ -2630,33 +2682,33 @@ const DRINK_COACH_ITEMS = [
     visual:{ type:"hotcup" }, sugarKcal:70, sugarG:16 },
   { id:"iced_americano", name:"Iced Americano", name_zh:"美式冰咖啡", category:"coffee", portion:"1 cup (350ml)", kcal:15, protein:0.5, carbs:3, fat:0, fiber:0, sugar:0, sodium:10,
     visual:{ type:"icedcup" },
-    tip:"The lowest-calorie way to get a caffeine fix here — no added sugar to begin with." },
+    tips:[{ macro:"sugar", text:"The lowest-calorie way to get a caffeine fix here — no added sugar to begin with.", text_zh:"这是获取咖啡因最低热量的选择——本身就没有加糖。" }] },
   { id:"cappuccino", name:"Cappuccino", name_zh:"卡布奇诺", category:"coffee", portion:"1 cup (250ml)", kcal:110, protein:6, carbs:10, fat:5, fiber:0, sugar:9, sodium:80,
     visual:{ type:"hotcup" },
-    tip:"Most of the calories and sugar here are from the milk itself, not added syrup — there isn't much to trim by asking for less sweet." },
+    tips:[{ macro:"fat", text:"Most of the calories here are from the milk itself, not added syrup — there isn't much to trim by asking for less sweet.", text_zh:"这里的热量大多来自牛奶本身，而不是加的糖浆——要求少甜其实省不了多少。" }] },
 
   // ── Local ────────────────────────────────────────────
   { id:"milo", name:"Milo", name_zh:"美禄", category:"local", portion:"1 cup (250ml)", kcal:190, protein:5, carbs:30, fat:6, fiber:0, sugar:26, sodium:90,
     visual:{ type:"hotcup" }, sugarKcal:110, sugarG:24 },
   { id:"bandung", name:"Bandung", name_zh:"万汶玫瑰奶", category:"local", portion:"1 glass (250ml)", kcal:180, protein:2, carbs:34, fat:4, fiber:0, sugar:32, sodium:40,
     visual:{ type:"icedcup" }, sugarKcal:140, sugarG:30,
-    tip:"The rose syrup carries almost all of the sugar here — the milk itself is a much smaller share." },
+    tips:[{ macro:"sugar", text:"The rose syrup carries almost all of the sugar here — the milk itself is a much smaller share.", text_zh:"玫瑰糖浆几乎是这里糖分的全部来源——牛奶本身的占比小很多。" }] },
   { id:"sugarcane", name:"Sugar Cane Juice (Tebu)", name_zh:"甘蔗汁", category:"local", portion:"1 cup (350ml)", kcal:150, protein:0, carbs:38, fat:0, fiber:0, sugar:36, sodium:15,
     visual:{ type:"icedcup" },
-    tip:"100% natural sugar straight from the cane — no syrup added, but the sugar total still runs close to a can of soda." },
+    tips:[{ macro:"sugar", text:"100% natural sugar straight from the cane — no syrup added, but the sugar total still runs close to a can of soda.", text_zh:"100%来自甘蔗本身的天然糖分——没有额外加糖浆，但总糖量仍接近一罐汽水。" }] },
   { id:"soymilk", name:"Soy Milk (sweetened)", name_zh:"豆浆（加糖）", category:"local", portion:"1 cup (300ml)", kcal:130, protein:7, carbs:16, fat:4, fiber:1, sugar:14, sodium:60,
     visual:{ type:"icedcup" }, sugarKcal:60, sugarG:14,
-    tip:"One of the few drinks here with real protein — worth keeping on the list even at normal sweetness." },
+    tips:[{ macro:"protein", text:"One of the few drinks here with real protein — worth keeping on the list even at normal sweetness.", text_zh:"这里少数含有真正蛋白质的饮品之一——即使正常甜度，也值得列入选择。" }] },
   { id:"cincau", name:"Grass Jelly Drink (Cincau)", name_zh:"仙草冰", category:"local", portion:"1 glass (300ml)", kcal:140, protein:1, carbs:34, fat:0, fiber:1, sugar:30, sodium:20,
     visual:{ type:"icedcup" }, sugarKcal:110, sugarG:28 },
 
   // ── Soda ─────────────────────────────────────────────
   { id:"cola", name:"Cola", name_zh:"可乐", category:"soda", portion:"1 can (330ml)", kcal:140, protein:0, carbs:39, fat:0, fiber:0, sugar:39, sodium:15,
     visual:{ type:"can" },
-    tip:"Essentially all of this is added sugar — there's no 'less sweet' option for a sealed can." },
+    tips:[{ macro:"sugar", text:"Essentially all of this is added sugar — there's no 'less sweet' option for a sealed can.", text_zh:"这几乎全是额外添加的糖——密封罐装饮料没有“少甜”这个选项。" }] },
   { id:"isotonic", name:"Isotonic Drink (100 Plus)", name_zh:"运动饮料", category:"soda", portion:"1 can (325ml)", kcal:90, protein:0, carbs:22, fat:0, fiber:0, sugar:22, sodium:100,
     visual:{ type:"can" },
-    tip:"Lighter than most sodas, but still worth counting as a sugary drink outside of actual post-exercise rehydration." },
+    tips:[{ macro:"sugar", text:"Lighter than most sodas, but still worth counting as a sugary drink outside of actual post-exercise rehydration.", text_zh:"比大多数汽水清淡，但除了运动后真正需要补水的情况，仍应算作含糖饮料来计算。" }] },
   { id:"sprite", name:"Lemon-Lime Soda", name_zh:"雪碧", category:"soda", portion:"1 can (330ml)", kcal:140, protein:0, carbs:35, fat:0, fiber:0, sugar:35, sodium:40,
     visual:{ type:"can" } },
   { id:"rootbeer", name:"Root Beer", name_zh:"沙士", category:"soda", portion:"1 can (330ml)", kcal:150, protein:0, carbs:40, fat:0, fiber:0, sugar:40, sodium:30,
@@ -2666,15 +2718,41 @@ const DRINK_COACH_ITEMS = [
 ];
 
 function DrinkCard({ drink, C, lang, L, onAdd }) {
+  const baseMlMatch = drink.portion.match(/(\d+)\s*ml/);
+  const baseMl = baseMlMatch ? parseInt(baseMlMatch[1], 10) : 250;
+  const containerKeys = CATEGORY_CONTAINERS[drink.category] || ["cup"];
+  // Default to whichever container size is closest to this drink's own listed portion,
+  // so nothing changes until the person actually picks a different size.
+  const defaultContainerKey = containerKeys.reduce((best, key) =>
+    Math.abs(CONTAINER_SIZES[key].ml - baseMl) < Math.abs(CONTAINER_SIZES[best].ml - baseMl) ? key : best
+  , containerKeys[0]);
+  const [containerKey, setContainerKey] = useState(defaultContainerKey);
   const [level, setLevel] = useState(1);
+
+  const containerMl = CONTAINER_SIZES[containerKey].ml;
+  const ratio = containerMl / baseMl;
   const hasSugarAdjust = drink.sugarKcal != null;
   const mult = hasSugarAdjust ? level : 1;
-  const deltaKcal = hasSugarAdjust ? drink.sugarKcal * (mult - 1) : 0;
-  const deltaSugar = hasSugarAdjust ? drink.sugarG * (mult - 1) : 0;
-  const kcal = Math.round(drink.kcal + deltaKcal);
-  const sugar = Math.max(0, Math.round(drink.sugar + deltaSugar));
-  const isAdjusted = hasSugarAdjust && level !== 1;
+
+  // Container size scales everything proportionally first; sugar level then only
+  // adjusts the syrup/condensed-milk portion on top of that already-scaled baseline.
+  const baseKcalAtSize = drink.kcal * ratio;
+  const sugarKcalAtSize = hasSugarAdjust ? drink.sugarKcal * ratio : 0;
+  const kcal = Math.round(baseKcalAtSize + (hasSugarAdjust ? sugarKcalAtSize * (mult - 1) : 0));
+
+  const baseSugarAtSize = drink.sugar * ratio;
+  const sugarGAtSize = hasSugarAdjust ? drink.sugarG * ratio : 0;
+  const sugar = Math.max(0, Math.round(baseSugarAtSize + (hasSugarAdjust ? sugarGAtSize * (mult - 1) : 0)));
+
+  const protein = Math.round(drink.protein * ratio * 10) / 10;
+  const carbs = Math.round(drink.carbs * ratio * 10) / 10;
+  const fat = Math.round(drink.fat * ratio * 10) / 10;
+  const fiber = Math.round(drink.fiber * ratio * 10) / 10;
+  const sodium = Math.round(drink.sodium * ratio);
+
+  const isAdjusted = containerKey !== defaultContainerKey || (hasSugarAdjust && level !== 1);
   const dishName = lang === "zh" ? drink.name_zh : drink.name;
+  const sizeLabel = lang==="zh" ? CONTAINER_SIZES[containerKey].label_zh : CONTAINER_SIZES[containerKey].label;
   // Icon color varies by category so tea/coffee/local/soda read as visually distinct
   // even when they share the same cup/can archetype — all theme-driven, no fixed hex.
   const iconColor = { tea: C.green, coffee: C.gold, local: C.carbs, soda: C.pink }[drink.category] || C.pink;
@@ -2685,7 +2763,7 @@ function DrinkCard({ drink, C, lang, L, onAdd }) {
         <CoachDishIcon visual={{ ...drink.visual, color: iconColor }} C={C} />
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{dishName}</div>
-          <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{lang==="zh"?drink.name:drink.name_zh} · {drink.portion}</div>
+          <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{lang==="zh"?drink.name:drink.name_zh} · {sizeLabel} ({containerMl}ml)</div>
         </div>
         <div style={{ textAlign:"right", flexShrink:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"flex-end" }}>
@@ -2697,15 +2775,34 @@ function DrinkCard({ drink, C, lang, L, onAdd }) {
       </div>
 
       <div style={{ display:"flex", marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-        <CoachMacroPill kind="protein" label={L("Protein","蛋白质")} value={drink.protein} unit="g" color={C.protein} textDim={C.textDim} />
-        <CoachMacroPill kind="carbs" label={L("Carbs","碳水")} value={drink.carbs} unit="g" color={C.carbs} textDim={C.textDim} />
-        <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={drink.fat} unit="g" color={C.fat} textDim={C.textDim} />
+        <CoachMacroPill kind="protein" label={L("Protein","蛋白质")} value={protein} unit="g" color={C.protein} textDim={C.textDim} />
+        <CoachMacroPill kind="carbs" label={L("Carbs","碳水")} value={carbs} unit="g" color={C.carbs} textDim={C.textDim} />
+        <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={fat} unit="g" color={C.fat} textDim={C.textDim} />
       </div>
       <div style={{ display:"flex", marginTop:6 }}>
         <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={sugar} unit="g" color={C.sugar} textDim={C.textDim} />
-        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={drink.sodium} unit="mg" color={C.sodium} textDim={C.textDim} />
-        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={drink.fiber} unit="g" color={C.fiber} textDim={C.textDim} />
+        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={sodium} unit="mg" color={C.sodium} textDim={C.textDim} />
+        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={fiber} unit="g" color={C.fiber} textDim={C.textDim} />
       </div>
+
+      {containerKeys.length > 1 && (
+        <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:11, color:C.textMuted, marginBottom:6 }}>{L("Serving size","份量")}</div>
+          <div style={{ display:"flex", gap:6 }}>
+            {containerKeys.map(key => (
+              <button key={key} onClick={() => setContainerKey(key)} style={{
+                flex:1, fontSize:10.5, fontWeight:600, padding:"6px 2px", borderRadius:8,
+                border:`1px solid ${containerKey===key?C.pink:C.border}`,
+                background:containerKey===key?C.pinkGlow:"transparent",
+                color:containerKey===key?C.pink:C.textMuted, cursor:"pointer",
+              }}>
+                {lang==="zh"?CONTAINER_SIZES[key].label_zh:CONTAINER_SIZES[key].label}<br/>
+                <span style={{ fontSize:9.5, opacity:0.8 }}>{CONTAINER_SIZES[key].ml}ml</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hasSugarAdjust && (
         <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
@@ -2725,12 +2822,10 @@ function DrinkCard({ drink, C, lang, L, onAdd }) {
         </div>
       )}
 
-      {drink.tip && (
-        <div style={{ marginTop:10, fontSize:12, color:C.gold, background:C.pinkGlow, borderRadius:8, padding:"8px 10px", lineHeight:1.4 }}>💡 {drink.tip}</div>
-      )}
+      <CoachTipRows tips={drink.tips} C={C} lang={lang} />
 
       <button
-        onClick={() => onAdd(drink, { kcal, sugar, level })}
+        onClick={() => onAdd(drink, { kcal, protein, carbs, fat, fiber, sugar, sodium, containerMl, sizeLabel, level })}
         style={{ marginTop:10, width:"100%", padding:"9px 0", borderRadius:10, border:`1px solid ${C.pink}`, background:C.pinkGlow, color:C.pink, fontSize:12.5, fontWeight:700, cursor:"pointer" }}
       >
         {L("+ Add as drink","+ 添加为饮品")}
@@ -2784,6 +2879,156 @@ function DrinkCoachModal({ onClose, onAdd, C, lang, L }) {
           )}
           {filtered.map(drink => (
             <DrinkCard key={drink.id} drink={drink} C={C} lang={lang} L={L} onAdd={onAdd} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// WORKOUT COACH — same pattern as Diet/Drink Coach. Calorie estimates use the
+// standard MET formula (kcal = MET × weight(kg) × hours) against the person's
+// actual logged weight, not a flat guess. Time-based activities (cardio, yoga,
+// sports) take a duration in minutes; set-based ones (gym, power training)
+// assume ~90 seconds of work+rest per set, which is the usual ballpark for a
+// working set, then apply the same MET formula to that per-set duration.
+// ════════════════════════════════════════════════════════════
+const WORKOUT_CATEGORIES = [
+  { key: "cardio", label: "Cardio", label_zh: "有氧运动", emoji: "🏃" },
+  { key: "gym", label: "Gym", label_zh: "健身房", emoji: "🏋️" },
+  { key: "power", label: "Power Training", label_zh: "力量训练", emoji: "💪" },
+  { key: "other", label: "Others", label_zh: "其他", emoji: "⚡" },
+];
+
+const SET_DURATION_HOURS = 90 / 3600; // ~90 seconds of work + brief rest per set
+
+const WORKOUT_COACH_ITEMS = [
+  // ── Cardio (time-based) ─────────────────────────────
+  { id:"running", name:"Running (moderate pace)", name_zh:"跑步（中等配速）", category:"cardio", mode:"time", met:8.3 },
+  { id:"brisk_walk", name:"Brisk Walking", name_zh:"快走", category:"cardio", mode:"time", met:5.0 },
+  { id:"cycling", name:"Cycling (moderate)", name_zh:"骑自行车（中等强度）", category:"cardio", mode:"time", met:7.5 },
+  { id:"swimming", name:"Swimming (moderate)", name_zh:"游泳（中等强度）", category:"cardio", mode:"time", met:6.0 },
+  { id:"jump_rope", name:"Jump Rope", name_zh:"跳绳", category:"cardio", mode:"time", met:10.0 },
+
+  // ── Gym (set-based, general resistance) ─────────────
+  { id:"bench_press", name:"Bench Press", name_zh:"卧推", category:"gym", mode:"sets", met:5.0 },
+  { id:"lat_pulldown", name:"Lat Pulldown / Pull-ups", name_zh:"高位下拉/引体向上", category:"gym", mode:"sets", met:5.0 },
+  { id:"leg_press", name:"Leg Press", name_zh:"腿举", category:"gym", mode:"sets", met:5.0 },
+  { id:"pushups", name:"Push-ups", name_zh:"俯卧撑", category:"gym", mode:"sets", met:4.0 },
+  { id:"shoulder_press", name:"Dumbbell Shoulder Press", name_zh:"哑铃肩推", category:"gym", mode:"sets", met:5.0 },
+
+  // ── Power Training (set-based, higher intensity) ────
+  { id:"deadlift", name:"Deadlift", name_zh:"硬拉", category:"power", mode:"sets", met:6.0 },
+  { id:"back_squat", name:"Back Squat", name_zh:"深蹲", category:"power", mode:"sets", met:6.0 },
+  { id:"olympic_lift", name:"Olympic Lifts (Clean & Jerk)", name_zh:"奥林匹克举重（抓举/挺举）", category:"power", mode:"sets", met:7.0 },
+  { id:"kettlebell", name:"Kettlebell Swings", name_zh:"壶铃摆荡", category:"power", mode:"sets", met:8.0 },
+  { id:"sprints", name:"Sprint Intervals", name_zh:"冲刺间歇训练", category:"power", mode:"sets", met:10.0 },
+
+  // ── Others (time-based) ──────────────────────────────
+  { id:"yoga", name:"Yoga", name_zh:"瑜伽", category:"other", mode:"time", met:2.5 },
+  { id:"badminton", name:"Badminton (casual)", name_zh:"羽毛球（休闲）", category:"other", mode:"time", met:4.5 },
+  { id:"basketball", name:"Basketball (casual)", name_zh:"篮球（休闲）", category:"other", mode:"time", met:6.0 },
+  { id:"dancing", name:"Dancing", name_zh:"跳舞", category:"other", mode:"time", met:4.5 },
+  { id:"hiking", name:"Hiking", name_zh:"徒步", category:"other", mode:"time", met:6.0 },
+];
+
+function WorkoutCoachCard({ item, C, lang, L, weightKg, onAdd }) {
+  const isTime = item.mode === "time";
+  const [minutes, setMinutes] = useState(20);
+  const [sets, setSets] = useState(3);
+  const w = weightKg || 70;
+  const kcal = isTime
+    ? Math.round(item.met * w * (minutes / 60))
+    : Math.round(item.met * w * SET_DURATION_HOURS * sets);
+  const name = lang === "zh" ? item.name_zh : item.name;
+
+  return (
+    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px" }}>
+      <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+        <WorkoutIllustration description={item.name} color={C.workoutAccent} size={46} />
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{name}</div>
+          <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{lang==="zh"?item.name:item.name_zh}</div>
+        </div>
+        <div style={{ textAlign:"right", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"flex-end" }}>
+            <span style={{ fontSize:14 }}>🔥</span>
+            <span style={{ fontSize:17, fontWeight:800, color:C.workoutAccent }}>{kcal}</span>
+          </div>
+          <div style={{ fontSize:10, color:C.textDim }}>kcal</div>
+        </div>
+      </div>
+
+      <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:C.surface, borderRadius:8, padding:"7px 10px" }}>
+          <span style={{ fontSize:12, color:C.text }}>{isTime ? L("Duration","时长") : L("Sets","组数")}</span>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <button onClick={() => isTime ? setMinutes(Math.max(5, minutes-5)) : setSets(Math.max(1, sets-1))} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textMuted, cursor:"pointer", fontSize:13, lineHeight:1 }}>−</button>
+            <span style={{ fontSize:12.5, fontWeight:700, color:C.text, minWidth:44, textAlign:"center" }}>{isTime ? `${minutes} ${L("min","分钟")}` : `${sets} ${L("sets","组")}`}</span>
+            <button onClick={() => isTime ? setMinutes(Math.min(120, minutes+5)) : setSets(Math.min(10, sets+1))} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.workoutAccent}`, background:"transparent", color:C.workoutAccent, cursor:"pointer", fontSize:13, lineHeight:1 }}>+</button>
+          </div>
+        </div>
+        <div style={{ fontSize:10, color:C.textDim, marginTop:6, fontStyle:"italic" }}>
+          {L(`Estimated from your logged weight (${w}kg)`,`根据您记录的体重（${w}kg）估算`)}
+        </div>
+      </div>
+
+      <button
+        onClick={() => onAdd(item, { kcal, minutes, sets, mode: item.mode })}
+        style={{ marginTop:10, width:"100%", padding:"9px 0", borderRadius:10, border:`1px solid ${C.workoutAccent}`, background:`${C.workoutAccent}18`, color:C.workoutAccent, fontSize:12.5, fontWeight:700, cursor:"pointer" }}
+      >
+        {L("+ Log this workout","+ 记录此运动")}
+      </button>
+    </div>
+  );
+}
+
+function WorkoutCoachModal({ onClose, onAdd, C, lang, L, weightKg }) {
+  const [activeCategory, setActiveCategory] = useState("cardio");
+  const [search, setSearch] = useState("");
+
+  const filtered = WORKOUT_COACH_ITEMS.filter(item => {
+    const inCat = item.category === activeCategory;
+    const q = search.trim().toLowerCase();
+    const matches = !q || item.name.toLowerCase().includes(q) || item.name_zh.includes(search.trim());
+    return inCat && matches;
+  });
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:1200, display:"flex", flexDirection:"column" }}>
+      <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${C.border}`, boxSizing:"border-box" }}>
+        <div style={{ fontSize:18, fontWeight:800, color:C.text, fontFamily:"'DM Sans',sans-serif" }}>💪 {L("Workout Coach","运动教练")}</div>
+        <button onClick={onClose} style={{ background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:34, height:34, color:C.text, fontSize:18, cursor:"pointer", lineHeight:1, flexShrink:0 }}>×</button>
+      </div>
+
+      <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"12px 16px 0", boxSizing:"border-box" }}>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder={L("Search an activity…","搜索运动…")}
+          className="inp"
+          style={{ width:"100%", boxSizing:"border-box", marginBottom:12 }}
+        />
+        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:12 }}>
+          {WORKOUT_CATEGORIES.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => setActiveCategory(cat.key)}
+              style={{ flexShrink:0, padding:"7px 12px", borderRadius:999, border:`1px solid ${activeCategory===cat.key?C.workoutAccent:C.border}`, background:activeCategory===cat.key?C.workoutAccent:"transparent", color:activeCategory===cat.key?"#fff":C.textMuted, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}
+            >
+              {cat.emoji} {lang==="zh"?cat.label_zh:cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto" }}>
+        <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"0 16px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:10 }}>
+          {filtered.length === 0 && (
+            <div style={{ textAlign:"center", color:C.textDim, fontSize:13, padding:"30px 0" }}>{L("No items found here yet.","这里还没有相关项目。")}</div>
+          )}
+          {filtered.map(item => (
+            <WorkoutCoachCard key={item.id} item={item} C={C} lang={lang} L={L} weightKg={weightKg} onAdd={onAdd} />
           ))}
         </div>
       </div>
@@ -2882,9 +3127,7 @@ function NutriLogPro({ session, onLogout }) {
   const [aiDailyLimit, setAiDailyLimit] = useState(() => parseInt(localStorage.getItem("nutrilog_ai_daily_limit")||"15", 10));
   const [showSettings, setShowSettings] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
-  const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
   const [paletteSettingsOpen, setPaletteSettingsOpen] = useState(false);
-  const [languageSettingsOpen, setLanguageSettingsOpen] = useState(false);
   const [cutoffSettingsOpen, setCutoffSettingsOpen] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [drinkMenuOpen, setDrinkMenuOpen] = useState(null);
@@ -3568,19 +3811,38 @@ function NutriLogPro({ session, onLogout }) {
   const logDrinkFromCoach = (drink, computed) => {
     const dishName = lang === "zh" ? drink.name_zh : drink.name;
     const level = SUGAR_LEVELS.find(l => l.key === computed.level);
-    const name = (level && level.key !== 1) ? `${dishName} (${lang==="zh"?level.label_zh:level.label})` : dishName;
-    const mlMatch = drink.portion.match(/(\d+)\s*ml/);
+    const extras = [];
+    extras.push(`${computed.sizeLabel} ${computed.containerMl}ml`);
+    if (level && level.key !== 1) extras.push(lang==="zh"?level.label_zh:level.label);
+    const name = `${dishName} (${extras.join(", ")})`;
     setCustomDrinkName(name);
-    setCustomDrinkMl(mlMatch ? mlMatch[1] : "250");
+    setCustomDrinkMl(String(computed.containerMl));
     setCustomDrinkCal(String(computed.kcal));
-    setCustomDrinkProt(String(drink.protein));
-    setCustomDrinkCarb(String(drink.carbs));
-    setCustomDrinkFat(String(drink.fat));
+    setCustomDrinkProt(String(computed.protein));
+    setCustomDrinkCarb(String(computed.carbs));
+    setCustomDrinkFat(String(computed.fat));
     setCustomDrinkSugar(String(computed.sugar));
-    setCustomDrinkSodium(String(drink.sodium));
+    setCustomDrinkSodium(String(computed.sodium));
     setDrinkRatePer100ml(null);
     setShowDrinkCoach(false);
     setWaterEntryMethod("manual");
+  };
+
+  // Workout tab's 4-quadrant chooser — same pattern as Meal/Water. null = still choosing.
+  // "confirm" gates the PendingCard review screen for Workout Coach entries, same as
+  // how Meal's Diet Coach reuses "photo" to gate its own PendingCard.
+  const [workoutEntryMethod, setWorkoutEntryMethod] = useState(null); // null | "steps" | "text" | "manual" | "confirm"
+  const [showWorkoutCoach, setShowWorkoutCoach] = useState(false);
+  const logWorkoutFromCoach = (item, computed) => {
+    const name = lang === "zh" ? item.name_zh : item.name;
+    const durationLabel = computed.mode === "time" ? `${computed.minutes} ${L("min","分钟")}` : `${computed.sets} ${L("sets","组")}`;
+    setPendingEntry({
+      type: "workout", source: "coach",
+      activity: name, calories: computed.kcal, duration: durationLabel, heartRate: null,
+      image: null, description: name
+    });
+    setShowWorkoutCoach(false);
+    setWorkoutEntryMethod("confirm");
   };
 
   // AI Text Search's autocomplete: matches typed description against saved favorites, so a
@@ -3798,7 +4060,7 @@ function NutriLogPro({ session, onLogout }) {
 
   const saveWeight = async () => {
     const kg = parseFloat(weightInput);
-    if (!kg || kg<=0 || kg>400) { setError("Enter a valid weight in kg."); return; }
+    if (!kg || kg<=0 || kg>400) { setError(L("Enter a valid weight in kg.","请输入有效的体重（kg）。")); return; }
     try {
       await DataAPI.setWeight(userId, today, kg);
       setTodayWeight(kg);
@@ -3808,12 +4070,12 @@ function NutriLogPro({ session, onLogout }) {
       const end = new Date(); const start = new Date(); start.setDate(start.getDate()-180);
       const hist = await DataAPI.getWeightRange(userId, localDateKey(start), localDateKey(end));
       setWeightHistory(hist);
-    } catch (err) { setError("Failed to save weight: " + err.message); }
+    } catch (err) { setError(L("Failed to save weight: ","保存体重失败：") + err.message); }
   };
 
   const addBackdatedEntry = async () => {
     const amount = parseFloat(backdateAmount);
-    if (!amount || amount<=0) { setError("Enter a valid amount."); return; }
+    if (!amount || amount<=0) { setError(L("Enter a valid amount.","请输入有效的数值。")); return; }
     const macros = {
       protein: parseFloat(backdateProtein)||0, carbs: parseFloat(backdateCarbs)||0, fat: parseFloat(backdateFat)||0,
       sugar_g: parseFloat(backdateSugar)||0, sodium_mg: parseFloat(backdateSodium)||0, fiber_g: parseFloat(backdateFiber)||0
@@ -3844,7 +4106,7 @@ function NutriLogPro({ session, onLogout }) {
       setBackdateDesc(""); setBackdateAmount(""); setBackdateCalories("");
       setBackdateProtein(""); setBackdateCarbs(""); setBackdateFat("");
       setBackdateSugar(""); setBackdateSodium(""); setBackdateFiber("");
-    } catch (err) { setError("Failed to add entry: " + err.message); }
+    } catch (err) { setError(L("Failed to add entry: ","添加记录失败：") + err.message); }
   };
 
   const exportCSV = () => {
@@ -3895,7 +4157,7 @@ function NutriLogPro({ session, onLogout }) {
         setHistRangeData(d => ({ ...d, workouts: (d.workouts||[]).map(w => w.id===editingItem.id ? {...w,...editingItem} : w) }));
       }
       setEditingItem(null);
-    } catch (err) { setError("Failed to update: " + err.message); }
+    } catch (err) { setError(L("Failed to update: ","更新失败：") + err.message); }
   };
 
   const pct = (v,t) => Math.min(100, Math.round((v/t)*100));
@@ -4527,19 +4789,13 @@ function NutriLogPro({ session, onLogout }) {
                   <div className="card fade" style={{ position:"absolute", top:"calc(100% + 8px)", right:0, zIndex:50, width:280, maxHeight:"70vh", overflowY:"auto", padding:14, background:C.card, borderColor:C.border, boxShadow:"0 8px 28px rgba(0,0,0,0.22)" }}>
                     <div style={{ fontSize:11, color:C.textMuted, marginBottom:12 }}>{T("logged_in_as")} <strong style={{color:C.text}}>{userEmail}</strong></div>
 
-                    <div onClick={() => setThemeSettingsOpen(!themeSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0" }}>
-                      <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_theme").toUpperCase()}</span>
-                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
-                        <span style={{ fontSize:11, color:C.textMuted }}>{theme==="dark" ? `🌙 ${T("settings_theme_dark")}` : `☀️ ${T("settings_theme_light")}`}</span>
-                        <span style={{ fontSize:10, color:C.textMuted }}>{themeSettingsOpen ? "▲" : "▼"}</span>
-                      </span>
-                    </div>
-                    {themeSettingsOpen && (
-                      <div className="fade" style={{ display:"flex", gap:8, marginTop:8, marginBottom:14 }}>
+                    <div style={{ padding:"8px 0" }}>
+                      <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:8 }}>{T("settings_theme").toUpperCase()}</div>
+                      <div style={{ display:"flex", gap:8 }}>
                         <button onClick={() => setTheme("dark")} className={theme==="dark"?"":"ghost-btn"} style={theme==="dark"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>🌙 {T("settings_theme_dark")}</button>
                         <button onClick={() => setTheme("light")} className={theme==="light"?"":"ghost-btn"} style={theme==="light"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>☀️ {T("settings_theme_light")}</button>
                       </div>
-                    )}
+                    </div>
 
                     <div onClick={() => setPaletteSettingsOpen(!paletteSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_color").toUpperCase()}</span>
@@ -4562,19 +4818,13 @@ function NutriLogPro({ session, onLogout }) {
                       </div>
                     )}
 
-                    <div onClick={() => setLanguageSettingsOpen(!languageSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
-                      <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_language").toUpperCase()}</span>
-                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
-                        <span style={{ fontSize:11, color:C.textMuted }}>{lang==="en" ? "English" : "中文"}</span>
-                        <span style={{ fontSize:10, color:C.textMuted }}>{languageSettingsOpen ? "▲" : "▼"}</span>
-                      </span>
-                    </div>
-                    {languageSettingsOpen && (
-                      <div className="fade" style={{ display:"flex", gap:8, marginTop:8, marginBottom:14 }}>
+                    <div style={{ padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
+                      <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:8 }}>{T("settings_language").toUpperCase()}</div>
+                      <div style={{ display:"flex", gap:8 }}>
                         <button onClick={() => setLang("en")} className={lang==="en"?"":"ghost-btn"} style={lang==="en"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>English</button>
                         <button onClick={() => setLang("zh")} className={lang==="zh"?"":"ghost-btn"} style={lang==="zh"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>中文</button>
                       </div>
-                    )}
+                    </div>
 
                     <div onClick={() => setAiSettingsOpen(!aiSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_ai_settings").toUpperCase()}</span>
@@ -4699,7 +4949,7 @@ function NutriLogPro({ session, onLogout }) {
                     {baseTargets.display_name || T("main_welcome")}
                   </div>
                 </div>
-                <button onClick={openTargetModal} title="Edit profile" style={{ background:C.pinkDeep, border:`1px solid ${C.border}`, borderRadius:12, color:C.pink, fontSize:16, cursor:"pointer", padding:"7px 11px", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>👤</button>
+                <button onClick={openTargetModal} title={L("Edit profile","编辑个人资料")} style={{ background:C.pinkDeep, border:`1px solid ${C.border}`, borderRadius:12, color:C.pink, fontSize:16, cursor:"pointer", padding:"7px 11px", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>👤</button>
               </div>
               <div style={{ borderTop:`1px solid ${C.border}`, marginTop:12, paddingTop:10, fontStyle:"italic", textAlign:"center", fontSize:12, color:C.textMuted }}>
                 "{lang==="zh" ? (todayQuote.quote_zh||todayQuote.quote) : todayQuote.quote}"{todayQuote.author ? <React.Fragment> — <strong style={{ color:C.pink }}>{todayQuote.author}</strong></React.Fragment> : null}
@@ -5679,72 +5929,127 @@ function NutriLogPro({ session, onLogout }) {
                 })()}
               </div>
             )}
-            {favWorkouts.length > 0 && (
-              <div className="card" style={{ padding:12, marginBottom:14 }}>
-                <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif" }}>★ {L("MY FAVORITES","我的收藏")}</div>
-                <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
-                  {favWorkouts.map(fav => (
-                    <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteWorkout(fav)}>
-                      <span>{fav.activity || fav.name} (−{Math.round(fav.calories)} kcal)</span>
-                      <span onClick={(e)=>{e.stopPropagation(); removeFavorite("workout", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
+            {workoutEntryMethod === null ? (
+              <React.Fragment>
+                <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
+                  <div style={{ fontSize:10.5, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:10, textAlign:"center" }}>{L("HOW WOULD YOU LIKE TO LOG THIS?","您想如何记录？")}</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod("steps")} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76, borderColor:C.workoutAccent, color:C.workoutAccent }}>
+                      <span style={{ fontSize:20 }}>🚶</span>
+                      <span>{L("Steps","步数")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod("text")} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76, borderColor:C.pink, color:C.pink }}>
+                      <span style={{ fontSize:20 }}>✨</span>
+                      <span>{L("AI Text Search","AI 文字识别")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setShowWorkoutCoach(true)} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76 }}>
+                      <span style={{ fontSize:20 }}>💪</span>
+                      <span>{L("Workout Coach","运动教练")}</span>
+                    </button>
+                    <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod("manual")} style={{ padding:"16px 8px", fontSize:12.5, fontWeight:"700", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, minHeight:76 }}>
+                      <span style={{ fontSize:20 }}>✍️</span>
+                      <span>{L("Manual Entry","手动输入")}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {favWorkouts.length > 0 && (
+                  <div className="card" style={{ padding:12, marginBottom:14 }}>
+                    <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif" }}>★ {L("MY FAVORITES","我的收藏")}</div>
+                    <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
+                      {favWorkouts.map(fav => (
+                        <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteWorkout(fav)}>
+                          <span>{fav.activity || fav.name} (−{Math.round(fav.calories)} kcal)</span>
+                          <span onClick={(e)=>{e.stopPropagation(); removeFavorite("workout", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent, marginBottom:10 }}>🏃 {L("Active Workouts Logged","已记录运动")}</div>
+                  {(dayData.workouts||[]).length===0 ? (
+                    <div style={{ fontSize:13, fontStyle:"italic", color:C.textDim, paddingLeft:10 }}>{L("No workouts logged for today","今天还没有记录运动")}</div>
+                  ) : (dayData.workouts||[]).map(w => (
+                    <div key={w.id} className="card" style={{ padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10, borderColor:`${C.workoutAccent}59` }}>
+                      <WorkoutIllustration description={w.activity+" "+(w.description||"")} color={C.workoutAccent} size={44} />
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text }}>{w.activity}</div>
+                        {w.description && w.description !== w.activity && <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>{w.description}</div>}
+                        <div style={{ fontSize:12, fontStyle:"italic", color:C.textMuted }}>{w.duration}{w.logged_at?` · ${new Date(w.logged_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`:""}</div>
+                      </div>
+                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.workoutAccent }}>−{Math.round(w.calories)}</div>
+                      <div style={{ display:"flex", gap:6 }}>
+                        <button onClick={() => saveFavorite("workout", { name:w.activity, activity:w.activity, calories:w.calories, duration:w.duration, description:w.description })} title={L("Save as favorite","收藏")} style={{ background:"none", border:"none", color: favWorkouts.some(f=>f.activity===w.activity && f.calories===w.calories) ? C.workoutAccent : C.textDim, fontSize:15, cursor:"pointer", padding:"6px" }}>{favWorkouts.some(f=>f.activity===w.activity && f.calories===w.calories) ? "★" : "☆"}</button>
+                        <button onClick={() => setEditingItem({...w,type:"workout"})} style={{ background:"none", border:"none", color:C.textDim, fontSize:14, cursor:"pointer", padding:"6px" }}>✏️</button>
+                        <button onClick={() => removeWorkout(w.id)} style={{ background:"none", border:"none", color:C.textDim, fontSize:18, cursor:"pointer" }}>×</button>
+                      </div>
                     </div>
                   ))}
                 </div>
+              </React.Fragment>
+            ) : workoutEntryMethod === "confirm" ? (
+              pendingEntry && pendingEntry.type==="workout" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => { setPendingEntry(null); setWorkoutEntryMethod(null); }} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} theme={theme} C={C} saving={savingEntry} lang={lang} L={L} />
+            ) : workoutEntryMethod === "steps" ? (
+              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59` }}>
+                <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+                <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                  <input className="inp" type="number" placeholder={L("Steps today (e.g. 8000)","今日步数 (例如：8000)")} value={stepCount} onChange={e=>setStepCount(e.target.value)} style={{ flex:1 }} />
+                  <button className="ghost-btn" style={{ flexShrink:0, fontSize:12, padding:"10px 14px" }} onClick={applyStepConversion}>↳ {L("Convert to kcal","换算为千卡")}</button>
+                </div>
+                {stepCount && parseFloat(stepCount)>0 && (
+                  <div style={{ fontSize:11, color:C.textMuted, marginBottom:8, fontStyle:"italic" }}>{L(`≈ ${Math.round(parseFloat(stepCount) * 0.04)} kcal from walking (rough estimate, ~0.04 kcal/step)`, `≈ 步行消耗 ${Math.round(parseFloat(stepCount) * 0.04)} 千卡 (粗略估算，约 0.04 千卡/步)`)}</div>
+                )}
+                <div style={{ display:"flex", gap:8 }}>
+                  <input className="inp" placeholder={L("Burned kcal","消耗千卡")} type="number" value={manualBurn} onChange={e=>setManualBurn(e.target.value)} style={{ flex:1 }} />
+                  <button className="pink-btn" style={{ background:`linear-gradient(135deg,${C.workoutAccent},${C.workoutDeep})`, boxShadow:`0 4px 20px ${C.workoutAccent}47`, flexShrink:0 }} onClick={addManualBurn}>+ {L("Log Workout","记录运动")}</button>
+                  <button className="ghost-btn" title={L("Save as favorite for quick re-logging","收藏以便快速再次记录")} style={{ padding:"10px 14px", borderColor:C.workoutAccent, color:C.workoutAccent, fontSize:16, flexShrink:0 }}
+                    onClick={() => {
+                      const cal = parseFloat(manualBurn);
+                      if (!cal||cal<=0) { setError(L("Enter burned kcal before saving a favorite.","请先输入消耗千卡数再收藏。")); return; }
+                      saveFavorite("workout", { name: manualWorkoutDesc.trim()||"Manual workout", activity: manualWorkoutDesc.trim()||"Manual workout", calories: cal, duration:"—", description: manualWorkoutDesc.trim()||null });
+                    }}>☆</button>
+                </div>
+              </div>
+            ) : workoutEntryMethod === "text" ? (
+              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59` }}>
+                <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+                <div style={{ display:"flex", gap:8, marginBottom:4, alignItems:"center" }}>
+                  {manualWorkoutDesc.trim() && <WorkoutIllustration description={manualWorkoutDesc} color={C.workoutAccent} size={40} />}
+                  <input className="inp" placeholder={L("What did you do? (e.g. push ups 30 times, jogging 30 mins)","做了什么运动？(例如：俯卧撑30次，慢跑30分钟)")} value={manualWorkoutDesc} onChange={e=>setManualWorkoutDesc(e.target.value)} style={{ flex:2 }} onKeyDown={e=>e.key==="Enter"&&suggestWorkoutCalories()} />
+                  <button className="ghost-btn" onClick={suggestWorkoutCalories} disabled={isSuggestingWorkout} style={{ padding:"10px 14px", borderColor:C.workoutAccent, color:C.workoutAccent, minWidth:"56px", display:"flex", justifyContent:"center", alignItems:"center", flexShrink:0 }}>
+                    {isSuggestingWorkout ? <div className="spin" style={{ width:14, height:14, border:`2px solid ${C.border}`, borderTopColor:C.workoutAccent, borderRadius:"50%" }} /> : "✨"}
+                  </button>
+                </div>
+                <div style={{ fontSize:10, color:C.textMuted, marginBottom:10, fontStyle:"italic" }}>{L("Type any activity — pushups, jogging, HIIT, swimming, cycling — tap ✨ for an estimate, or just type the kcal yourself below.","输入任意运动 —— 俯卧撑、慢跑、HIIT、游泳、骑行 —— 点击 ✨ 获取估算，或直接在下方输入千卡数。")}</div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <input className="inp" placeholder={L("Burned kcal","消耗千卡")} type="number" value={manualBurn} onChange={e=>setManualBurn(e.target.value)} style={{ flex:1 }} />
+                  <button className="pink-btn" style={{ background:`linear-gradient(135deg,${C.workoutAccent},${C.workoutDeep})`, boxShadow:`0 4px 20px ${C.workoutAccent}47`, flexShrink:0 }} onClick={addManualBurn}>+ {L("Log Workout","记录运动")}</button>
+                  <button className="ghost-btn" title={L("Save as favorite for quick re-logging","收藏以便快速再次记录")} style={{ padding:"10px 14px", borderColor:C.workoutAccent, color:C.workoutAccent, fontSize:16, flexShrink:0 }}
+                    onClick={() => {
+                      const cal = parseFloat(manualBurn);
+                      if (!cal||cal<=0) { setError(L("Enter burned kcal before saving a favorite.","请先输入消耗千卡数再收藏。")); return; }
+                      saveFavorite("workout", { name: manualWorkoutDesc.trim()||"Manual workout", activity: manualWorkoutDesc.trim()||"Manual workout", calories: cal, duration:"—", description: manualWorkoutDesc.trim()||null });
+                    }}>☆</button>
+                </div>
+              </div>
+            ) : (
+              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59` }}>
+                <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+                <input className="inp" placeholder={L("Activity name (optional)","运动名称（可选）")} value={manualWorkoutDesc} onChange={e=>setManualWorkoutDesc(e.target.value)} style={{ marginBottom:8, width:"100%", boxSizing:"border-box" }} />
+                <div style={{ display:"flex", gap:8 }}>
+                  <input className="inp" placeholder={L("Burned kcal","消耗千卡")} type="number" value={manualBurn} onChange={e=>setManualBurn(e.target.value)} style={{ flex:1 }} />
+                  <button className="pink-btn" style={{ background:`linear-gradient(135deg,${C.workoutAccent},${C.workoutDeep})`, boxShadow:`0 4px 20px ${C.workoutAccent}47`, flexShrink:0 }} onClick={addManualBurn}>+ {L("Log Workout","记录运动")}</button>
+                  <button className="ghost-btn" title={L("Save as favorite for quick re-logging","收藏以便快速再次记录")} style={{ padding:"10px 14px", borderColor:C.workoutAccent, color:C.workoutAccent, fontSize:16, flexShrink:0 }}
+                    onClick={() => {
+                      const cal = parseFloat(manualBurn);
+                      if (!cal||cal<=0) { setError(L("Enter burned kcal before saving a favorite.","请先输入消耗千卡数再收藏。")); return; }
+                      saveFavorite("workout", { name: manualWorkoutDesc.trim()||"Manual workout", activity: manualWorkoutDesc.trim()||"Manual workout", calories: cal, duration:"—", description: manualWorkoutDesc.trim()||null });
+                    }}>☆</button>
+                </div>
               </div>
             )}
-            <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59` }}>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent, marginBottom:10 }}>🏃 {L("Log a Workout","记录运动")}</div>
-              <div style={{ display:"flex", gap:8, marginBottom:4, alignItems:"center" }}>
-                {manualWorkoutDesc.trim() && <WorkoutIllustration description={manualWorkoutDesc} color={C.workoutAccent} size={40} />}
-                <input className="inp" placeholder={L("What did you do? (e.g. push ups 30 times, jogging 30 mins)","做了什么运动？(例如：俯卧撑30次，慢跑30分钟)")} value={manualWorkoutDesc} onChange={e=>setManualWorkoutDesc(e.target.value)} style={{ flex:2 }} onKeyDown={e=>e.key==="Enter"&&suggestWorkoutCalories()} />
-                <button className="ghost-btn" onClick={suggestWorkoutCalories} disabled={isSuggestingWorkout} style={{ padding:"10px 14px", borderColor:C.workoutAccent, color:C.workoutAccent, minWidth:"56px", display:"flex", justifyContent:"center", alignItems:"center", flexShrink:0 }}>
-                  {isSuggestingWorkout ? <div className="spin" style={{ width:14, height:14, border:`2px solid ${C.border}`, borderTopColor:C.workoutAccent, borderRadius:"50%" }} /> : "✨"}
-                </button>
-              </div>
-              <div style={{ fontSize:10, color:C.textMuted, marginBottom:10, fontStyle:"italic" }}>{L("Type any activity — pushups, jogging, HIIT, swimming, cycling — tap ✨ for an estimate, or just type the kcal yourself below.","输入任意运动 —— 俯卧撑、慢跑、HIIT、游泳、骑行 —— 点击 ✨ 获取估算，或直接在下方输入千卡数。")}</div>
-
-              <div style={{ height:1, background:C.border, margin:"10px 0" }} />
-
-              <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-                <input className="inp" type="number" placeholder={L("Steps today (e.g. 8000)","今日步数 (例如：8000)")} value={stepCount} onChange={e=>setStepCount(e.target.value)} style={{ flex:1 }} />
-                <button className="ghost-btn" style={{ flexShrink:0, fontSize:12, padding:"10px 14px" }} onClick={applyStepConversion}>↳ {L("Convert to kcal","换算为千卡")}</button>
-              </div>
-              {stepCount && parseFloat(stepCount)>0 && (
-                <div style={{ fontSize:11, color:C.textMuted, marginBottom:8, fontStyle:"italic" }}>{L(`≈ ${Math.round(parseFloat(stepCount) * 0.04)} kcal from walking (rough estimate, ~0.04 kcal/step)`, `≈ 步行消耗 ${Math.round(parseFloat(stepCount) * 0.04)} 千卡 (粗略估算，约 0.04 千卡/步)`)}</div>
-              )}
-              <div style={{ display:"flex", gap:8 }}>
-                <input className="inp" placeholder={L("Burned kcal","消耗千卡")} type="number" value={manualBurn} onChange={e=>setManualBurn(e.target.value)} style={{ flex:1 }} />
-                <button className="pink-btn" style={{ background:`linear-gradient(135deg,${C.workoutAccent},${C.workoutDeep})`, boxShadow:`0 4px 20px ${C.workoutAccent}47`, flexShrink:0 }} onClick={addManualBurn}>+ {L("Log Workout","记录运动")}</button>
-                <button className="ghost-btn" title={L("Save as favorite for quick re-logging","收藏以便快速再次记录")} style={{ padding:"10px 14px", borderColor:C.workoutAccent, color:C.workoutAccent, fontSize:16, flexShrink:0 }}
-                  onClick={() => {
-                    const cal = parseFloat(manualBurn);
-                    if (!cal||cal<=0) { setError(L("Enter burned kcal before saving a favorite.","请先输入消耗千卡数再收藏。")); return; }
-                    saveFavorite("workout", { name: manualWorkoutDesc.trim()||"Manual workout", activity: manualWorkoutDesc.trim()||"Manual workout", calories: cal, duration:"—", description: manualWorkoutDesc.trim()||null });
-                  }}>☆</button>
-              </div>
-            </div>
-            {pendingEntry && pendingEntry.type==="workout" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => setPendingEntry(null)} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} theme={theme} C={C} saving={savingEntry} lang={lang} />}
-            <div style={{ marginTop:20 }}>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent, marginBottom:10 }}>🏃 {L("Active Workouts Logged","已记录运动")}</div>
-              {(dayData.workouts||[]).length===0 ? (
-                <div style={{ fontSize:13, fontStyle:"italic", color:C.textDim, paddingLeft:10 }}>{L("No workouts logged for today","今天还没有记录运动")}</div>
-              ) : (dayData.workouts||[]).map(w => (
-                <div key={w.id} className="card" style={{ padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10, borderColor:`${C.workoutAccent}59` }}>
-                  <WorkoutIllustration description={w.activity+" "+(w.description||"")} color={C.workoutAccent} size={44} />
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text }}>{w.activity}</div>
-                    {w.description && w.description !== w.activity && <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>{w.description}</div>}
-                    <div style={{ fontSize:12, fontStyle:"italic", color:C.textMuted }}>{w.duration}{w.logged_at?` · ${new Date(w.logged_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`:""}</div>
-                  </div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.workoutAccent }}>−{Math.round(w.calories)}</div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <button onClick={() => saveFavorite("workout", { name:w.activity, activity:w.activity, calories:w.calories, duration:w.duration, description:w.description })} title={L("Save as favorite","收藏")} style={{ background:"none", border:"none", color: favWorkouts.some(f=>f.activity===w.activity && f.calories===w.calories) ? C.workoutAccent : C.textDim, fontSize:15, cursor:"pointer", padding:"6px" }}>{favWorkouts.some(f=>f.activity===w.activity && f.calories===w.calories) ? "★" : "☆"}</button>
-                    <button onClick={() => setEditingItem({...w,type:"workout"})} style={{ background:"none", border:"none", color:C.textDim, fontSize:14, cursor:"pointer", padding:"6px" }}>✏️</button>
-                    <button onClick={() => removeWorkout(w.id)} style={{ background:"none", border:"none", color:C.textDim, fontSize:18, cursor:"pointer" }}>×</button>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 
@@ -6580,6 +6885,14 @@ function NutriLogPro({ session, onLogout }) {
           onClose={() => setShowDrinkCoach(false)}
           onAdd={logDrinkFromCoach}
           C={C} lang={lang} L={L}
+        />
+      )}
+
+      {showWorkoutCoach && (
+        <WorkoutCoachModal
+          onClose={() => setShowWorkoutCoach(false)}
+          onAdd={logWorkoutFromCoach}
+          C={C} lang={lang} L={L} weightKg={currentWeightForCalc}
         />
       )}
 
