@@ -571,6 +571,30 @@ function calcBMI(weightKg, heightCm) {
   else { category = "Obese range"; key = "obese"; }
   return { value: Math.round(bmi*10)/10, category, key };
 }
+// Reverse of per-component grams editing: change the TOTAL calories, and every component's
+// grams+kcal plus every macro scales down (or up) by the same ratio to match. fieldNames lets
+// the same function serve both PendingCard's field names (sugar/sodium/fiber) and the saved-meal
+// edit modal's DB column names (sugar_g/sodium_mg/fiber_g).
+function scaleMealToTotal(data, newTotal, fieldNames) {
+  const { sugarKey="sugar", sodiumKey="sodium", fiberKey="fiber" } = fieldNames || {};
+  const oldTotal = data.calories || 0;
+  const roundedNew = Math.max(0, Math.round(newTotal || 0));
+  if (!oldTotal || oldTotal <= 0) return { ...data, calories: roundedNew };
+  const ratio = roundedNew / oldTotal;
+  const scaledItems = Array.isArray(data.items) ? data.items.map(it => ({
+    ...it,
+    calories: Math.round((it.calories||0) * ratio),
+    grams_estimate: it.grams_estimate ? Math.round(it.grams_estimate * ratio) : it.grams_estimate,
+  })) : data.items;
+  const out = { ...data, calories: roundedNew, items: scaledItems };
+  out.protein = Math.round((data.protein||0) * ratio * 10) / 10;
+  out.carbs = Math.round((data.carbs||0) * ratio * 10) / 10;
+  out.fat = Math.round((data.fat||0) * ratio * 10) / 10;
+  out[sugarKey] = Math.round((data[sugarKey]||0) * ratio * 10) / 10;
+  out[sodiumKey] = Math.round((data[sodiumKey]||0) * ratio);
+  out[fiberKey] = Math.round((data[fiberKey]||0) * ratio * 10) / 10;
+  return out;
+}
 // Maps a BMI category key to the palette color key that should represent it.
 const BMI_CATEGORY_COLOR_KEY = { under:"water", healthy:"green", over:"caution", obese:"red" };
 // ── Recommended daily water intake, personalized by body weight (~33ml/kg, standard guidance) ──
@@ -1311,7 +1335,7 @@ const MealCard = React.memo(function MealCard({ meal, onRemove, onEdit, readonly
   );
 });
 
-const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel, onUpdate, onRetryAI, analyzeStatusMsg, slot, onSlotChange, theme, C, saving, lang, L }) {
+const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel, onUpdate, onRetryAI, analyzeStatusMsg, slot, onSlotChange, theme, C, saving, lang, L, onAddIngredients, addingIngredients }) {
   const isWorkout = entry.type === "workout";
   const isDark = theme !== "light";
   const bg = C.surface;
@@ -1329,6 +1353,9 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
   const fatColor = C.fat;
   const hasItems = !isWorkout && Array.isArray(entry.items) && entry.items.length > 0;
   const [itemsExpanded, setItemsExpanded] = useState(true);
+  const caloriesFocusRef = useRef(null);
+  const [stagedIngredients, setStagedIngredients] = useState([]);
+  const [ingredientInput, setIngredientInput] = useState("");
   const isLoading = entry.aiStatus === "loading";
   const isError = entry.aiStatus === "error";
   const numInputStyle = { width:"100%", background:"transparent", border:"none", outline:"none", textAlign:"center", fontFamily:"'DM Sans',sans-serif", fontWeight:"700", color:textColor, fontSize:17 };
@@ -1365,13 +1392,28 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
           <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6 }}>
             {isWorkout && <span style={{ fontSize:14, color:workoutAccent, fontWeight:"800" }}>−</span>}
             <input
-              type="number" value={entry.calories||0}
-              onChange={e => onUpdate({ calories: Number(e.target.value)||0 })}
+              type="number" value={entry.calories === "" ? "" : (entry.calories ?? 0)}
+              onFocus={() => { caloriesFocusRef.current = entry.calories === "" ? 0 : entry.calories; }}
+              onChange={e => onUpdate({ calories: e.target.value === "" ? "" : Number(e.target.value) })}
+              onBlur={() => {
+                if (isWorkout) { if (entry.calories === "") onUpdate({ calories: 0 }); return; }
+                const before = caloriesFocusRef.current;
+                const after = entry.calories === "" ? 0 : entry.calories;
+                if (entry.calories === "") { onUpdate({ calories: 0 }); return; }
+                if (before && after && before !== after && before > 0) {
+                  onUpdate(scaleMealToTotal({ ...entry, calories: before }, after));
+                }
+              }}
               style={{ width:70, background:"transparent", border:"none", outline:"none", borderBottom:`1px dashed ${C.border}`, fontSize:14, color:isWorkout?workoutAccent:mealAccent, fontFamily:"'DM Sans',sans-serif", fontWeight:"800", padding:"2px 0" }}
             />
             <span style={{ fontSize:13, color:textMuted }}>kcal</span>
             {entry.confidence && <span style={{ fontSize:11, color:textDim, marginLeft:4, fontStyle:"italic" }}>({entry.confidence} confidence)</span>}
           </div>
+          {!isWorkout && (hasItems || entry.protein || entry.carbs || entry.fat) && (
+            <div style={{ fontSize:10, color:textDim, fontStyle:"italic", marginTop:2 }}>
+              {Lt("Editing this scales every component & macro to match","编辑此项会按比例调整所有成分与营养素")}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1411,7 +1453,11 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
                   const originalIndex = entry.items.indexOf(it);
                   const newItems = entry.items.slice();
                   newItems[originalIndex] = { ...it, grams_estimate: newGrams, calories: newItemKcal };
-                  onUpdate({ items: newItems, calories: Math.max(0, Math.round((entry.calories||0) + deltaKcal)) });
+                  const newTotal = Math.max(0, Math.round((entry.calories||0) + deltaKcal));
+                  // Macros are locked from direct typing, but they still follow quantity edits —
+                  // scaled by the same ratio the total just moved by, not left stale.
+                  const scaledMacros = scaleMealToTotal({ ...entry, items: null }, newTotal);
+                  onUpdate({ ...scaledMacros, items: newItems, calories: newTotal });
                 };
                 return (
                   <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom: idx < entry.items.length-1 ? `1px dashed ${C.border}66` : "none" }}>
@@ -1434,8 +1480,54 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
                 );
               })}
               <div style={{ fontSize:10, color:textDim, fontStyle:"italic", marginTop:6 }}>
-                {Lt("Edit a component's grams to scale its calories and update the total.","编辑成分克数可按比例调整其热量并更新总量。")}
+                {Lt("Edit a component's grams to scale its calories and macros, and update the total.","编辑成分克数可按比例调整其热量、营养素，并更新总量。")}
               </div>
+            </React.Fragment>
+          )}
+        </div>
+      )}
+
+      {!isWorkout && onAddIngredients && (
+        <div style={{ marginBottom:14, background:subCardBg, borderRadius:12, padding:"10px 12px", border:isDark?"none":`1px solid ${C.border}` }}>
+          <div style={{ fontSize:10, color:textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{Lt("ADD AN INGREDIENT","添加食材")}</div>
+          <div style={{ fontSize:10.5, color:textDim, fontStyle:"italic", marginBottom:8, lineHeight:1.4 }}>
+            {Lt("Missed something, or the AI got an item wrong? Add it here — e.g. \"1 boiled egg\" or \"coffee instead of water\".","漏记了什么，或 AI 认错了某样东西？在这里添加 —— 例如「1颗水煮蛋」或「其实是咖啡，不是水」。")}
+          </div>
+          <div style={{ display:"flex", gap:8, marginBottom: stagedIngredients.length ? 8 : 0 }}>
+            <input
+              className="inp" value={ingredientInput}
+              placeholder={Lt("e.g. 1 boiled egg","例如：1颗水煮蛋")}
+              onChange={e => setIngredientInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && ingredientInput.trim()) { setStagedIngredients([...stagedIngredients, ingredientInput.trim()]); setIngredientInput(""); } }}
+              style={{ flex:1 }}
+            />
+            <button
+              className="ghost-btn" style={{ padding:"10px 14px", borderColor:mealAccent, color:mealAccent, flexShrink:0 }}
+              onClick={() => { if (ingredientInput.trim()) { setStagedIngredients([...stagedIngredients, ingredientInput.trim()]); setIngredientInput(""); } }}
+            >+</button>
+          </div>
+          {stagedIngredients.length > 0 && (
+            <React.Fragment>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+                {stagedIngredients.map((ing, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:5, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, borderRadius:999, padding:"4px 10px", fontSize:11.5, color:textColor }}>
+                    {ing}
+                    <span onClick={() => setStagedIngredients(stagedIngredients.filter((_,idx)=>idx!==i))} style={{ color:textDim, cursor:"pointer", fontSize:13 }}>×</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                className="pink-btn" style={{ width:"100%", padding:"9px", fontSize:12.5, opacity:addingIngredients?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                disabled={addingIngredients}
+                onClick={async () => {
+                  const ok = await onAddIngredients(stagedIngredients);
+                  if (ok) setStagedIngredients([]);
+                }}
+              >
+                {addingIngredients
+                  ? <React.Fragment><span className="spin" style={{ width:12, height:12, border:"2px solid rgba(255,255,255,0.4)", borderTopColor:"#fff", borderRadius:"50%" }} />{Lt("Estimating...","估算中...")}</React.Fragment>
+                  : Lt(`✨ Run AI & add ${stagedIngredients.length} to total`,`✨ 运行 AI 并将 ${stagedIngredients.length} 项加入总量`)}
+              </button>
             </React.Fragment>
           )}
         </div>
@@ -1447,22 +1539,25 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
               <div key={key} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
                 <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
                 <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:2 }}>
-                  <input type="number" value={v||0} onChange={e => onUpdate({ [key]: Number(e.target.value)||0 })} style={numInputStyle} />
+                  <span style={{ ...numInputStyle, width:"auto" }}>{Math.round((v||0)*10)/10}</span>
                   <span style={{ fontSize:11, color:c }}>g</span>
                 </div>
               </div>
             ))}
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
             {[[Lt("Sugar","糖"),"sugar",entry.sugar,C.sugar,"g"],[Lt("Sodium","钠"),"sodium",entry.sodium,C.sodium,"mg"],[Lt("Fiber","纤维"),"fiber",entry.fiber,C.fiber,"g"]].map(([l,key,v,c,unit]) => (
               <div key={key} style={{ background:subCardBg, borderRadius:12, padding:"8px", textAlign:"center", border:isDark?"none":`1px solid ${C.border}` }}>
                 <div style={{ fontSize:10, color:textMuted, fontWeight:"700" }}>{l.toUpperCase()}</div>
                 <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:2 }}>
-                  <input type="number" value={v||0} onChange={e => onUpdate({ [key]: Number(e.target.value)||0 })} style={numInputStyle} />
+                  <span style={{ ...numInputStyle, width:"auto" }}>{Math.round((v||0)*10)/10}</span>
                   <span style={{ fontSize:11, color:c }}>{unit}</span>
                 </div>
               </div>
             ))}
+          </div>
+          <div style={{ fontSize:10, color:textDim, fontStyle:"italic", marginBottom:14 }}>
+            {Lt("Macros are locked here — adjust total kcal, component grams, or add an ingredient instead.","此处营养素已锁定 —— 请通过调整总热量、成分克数或添加食材来调整。")}
           </div>
           <div style={{ marginBottom:14 }}>
             <MealFlagEditor
@@ -2487,6 +2582,12 @@ function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
   const protein = food.protein + addonDelta.protein;
   const carbs = food.carbs + portionDeltaKcal/4 + addonDelta.carbs;
   const fat = food.fat + addonDelta.fat;
+  // Sugar/sodium/fiber aren't itemized per-component the way kcal/protein/carbs/fat are, so they
+  // scale by the overall kcal ratio as an approximation — same principle scaleMealToTotal uses.
+  const kcalRatio = food.kcal > 0 ? kcal / food.kcal : 1;
+  const sugar = Math.round(food.sugar * kcalRatio * 10) / 10;
+  const sodium = Math.round(food.sodium * kcalRatio);
+  const fiber = Math.round(food.fiber * kcalRatio * 10) / 10;
   const isAdjusted = multiplier !== 1 || Object.values(addonQty).some(q => q > 0);
   const setAddon = (name, qty) => setAddonQty(prev => ({ ...prev, [name]: Math.max(0, Math.min(2, qty)) }));
 
@@ -2517,9 +2618,9 @@ function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
         <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={Math.round(fat)} unit="g" color={C.fat} textDim={C.textDim} />
       </div>
       <div style={{ display:"flex", marginTop:6 }}>
-        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={food.fiber} unit="g" color={C.fiber} textDim={C.textDim} />
-        <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={food.sugar} unit="g" color={C.sugar} textDim={C.textDim} />
-        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={food.sodium} unit="mg" color={C.sodium} textDim={C.textDim} />
+        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={fiber} unit="g" color={C.fiber} textDim={C.textDim} />
+        <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={sugar} unit="g" color={C.sugar} textDim={C.textDim} />
+        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={sodium} unit="mg" color={C.sodium} textDim={C.textDim} />
       </div>
 
       {portionComp && (
@@ -2554,7 +2655,7 @@ function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
       )}
 
       <button
-        onClick={(e) => { e.stopPropagation(); onLogThis(food, { kcal:Math.round(kcal), protein:Math.round(protein), carbs:Math.round(carbs), fat:Math.round(fat), fiber:food.fiber, sugar:food.sugar, sodium:food.sodium, multiplier, addonQty }); }}
+        onClick={(e) => { e.stopPropagation(); onLogThis(food, { kcal:Math.round(kcal), protein:Math.round(protein), carbs:Math.round(carbs), fat:Math.round(fat), fiber, sugar, sodium, multiplier, addonQty }); }}
         style={{ marginTop:12, width:"100%", padding:"9px 0", borderRadius:10, border:`1px solid ${C.pink}`, background:C.pinkGlow, color:C.pink, fontSize:12.5, fontWeight:700, cursor:"pointer" }}
       >
         {L("+ Add as meal","+ 添加为一餐")}
@@ -2921,6 +3022,114 @@ function DrinkCoachModal({ onClose, onAdd, C, lang, L }) {
 }
 
 // ════════════════════════════════════════════════════════════
+// COACH CONFIRM CARD — the review step for both Diet Coach and Drink Coach, deliberately kept
+// as a static summary (icon, name, kcal, macros, read-only breakdown) rather than another
+// editable form. Portion/add-on adjustments happen back in the Coach card itself via its
+// discrete steppers (0.5x/1x/1.5x, pieces) — this screen doesn't re-open that editing surface,
+// unlike AI Photo's free-form gram entry. Used for both meal and drink confirmation.
+// ════════════════════════════════════════════════════════════
+function CoachConfirmCard({ kind, food, drink, computed, slot, onSlotChange, flagged, onFlagToggle, occasion, onOccasion, location, onLocation, comment, onComment, onConfirm, onCancel, saving, C, lang, L }) {
+  const isDrink = kind === "drink";
+  const item = isDrink ? drink : food;
+  const dishName = lang === "zh" ? item.name_zh : item.name;
+  const accentColor = isDrink ? C.water : C.pink;
+
+  let breakdownLines = [];
+  if (!isDrink) {
+    if (Array.isArray(item.components)) {
+      breakdownLines = item.components.map(c => {
+        const isPortionLine = c.portionAdjust;
+        const lineKcal = isPortionLine ? Math.round(c.kcal * computed.multiplier) : c.kcal;
+        return { label: lang==="zh"?(c.name_zh||c.name):c.name, sub: isPortionLine ? `×${computed.multiplier}` : "", kcal: lineKcal };
+      });
+    }
+    (item.addons||[]).forEach(a => {
+      const qty = (computed.addonQty||{})[a.name] || 0;
+      if (qty > 0) breakdownLines.push({ label: `+ ${lang==="zh"?a.name_zh:a.name}`, sub: `×${qty}`, kcal: a.unitKcal*qty });
+    });
+  } else {
+    const level = SUGAR_LEVELS.find(l => l.key === computed.level);
+    breakdownLines = [
+      { label: L("Serving size","份量"), value: `${computed.sizeLabel} · ${computed.containerMl}ml` },
+      ...(level ? [{ label: L("Sugar level","甜度"), value: lang==="zh"?level.label_zh:level.label }] : []),
+    ];
+  }
+
+  return (
+    <div className="fade" style={{ background:C.surface, border:`1px solid ${accentColor}59`, borderRadius:18, padding:16, marginTop:12 }}>
+      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:accentColor, marginBottom:12 }}>
+        {isDrink ? "🥤" : "🍽"} {isDrink ? L("Confirm Drink","确认饮品") : L(`Confirm ${slotLabel(slot, lang)}`,`确认${slotLabel(slot, lang)}`)}
+      </div>
+
+      {!isDrink && onSlotChange && (
+        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:14 }}>
+          {SLOTS.map(s => (
+            <button key={s} className={`slot-btn ${slot===s?"on":""}`} onClick={() => onSlotChange(s)} style={{ flexShrink:0 }}>
+              {SLOT_ICONS[s]} {slotLabel(s, lang)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:12, marginBottom:14, alignItems:"center" }}>
+        <CoachDishIcon visual={item.visual} C={C} size={54} />
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.text }}>{dishName}</div>
+          <div style={{ fontSize:12, color:C.textMuted }}>{lang==="zh"?item.name:item.name_zh}</div>
+        </div>
+        <div style={{ textAlign:"right", flexShrink:0 }}>
+          <div style={{ fontSize:20, fontWeight:800, color:accentColor }}>{Math.round(computed.kcal)}</div>
+          <div style={{ fontSize:10, color:C.textDim }}>kcal</div>
+        </div>
+      </div>
+
+      <div style={{ display:"flex", marginBottom:6 }}>
+        <CoachMacroPill kind="protein" label={L("Protein","蛋白质")} value={Math.round(computed.protein)} unit="g" color={C.protein} textDim={C.textDim} />
+        <CoachMacroPill kind="carbs" label={L("Carbs","碳水")} value={Math.round(computed.carbs)} unit="g" color={C.carbs} textDim={C.textDim} />
+        <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={Math.round(computed.fat)} unit="g" color={C.fat} textDim={C.textDim} />
+      </div>
+      <div style={{ display:"flex", marginBottom:14 }}>
+        <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={Math.round(computed.sugar)} unit="g" color={C.sugar} textDim={C.textDim} />
+        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={Math.round(computed.sodium)} unit="mg" color={C.sodium} textDim={C.textDim} />
+        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={Math.round(computed.fiber||0)} unit="g" color={C.fiber} textDim={C.textDim} />
+      </div>
+
+      {breakdownLines.length > 0 && (
+        <div style={{ marginBottom:14, background:`${C.border}22`, borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{L("BREAKDOWN","明细")}</div>
+          {breakdownLines.map((line, i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", fontSize:12, borderBottom: i<breakdownLines.length-1?`1px dashed ${C.border}66`:"none" }}>
+              <span style={{ color:C.text }}>{line.label} {line.sub && <span style={{ color:accentColor }}>{line.sub}</span>}</span>
+              <span style={{ color:C.textMuted, fontWeight:600 }}>{line.kcal != null ? `${line.kcal} kcal` : line.value}</span>
+            </div>
+          ))}
+          <div style={{ fontSize:10, color:C.textDim, fontStyle:"italic", marginTop:6 }}>
+            {L("To adjust, discard and reopen the coach to change portion or add-ons.","如需调整，请放弃并重新打开教练以更改份量或配料。")}
+          </div>
+        </div>
+      )}
+
+      {!isDrink && (
+        <div style={{ marginBottom:14 }}>
+          <MealFlagEditor
+            flagged={flagged} occasion={occasion} location={location} comment={comment}
+            onToggle={onFlagToggle} onOccasion={onOccasion} onLocation={onLocation} onComment={onComment}
+            C={C} L={L}
+          />
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:8 }}>
+        <button className="ghost-btn" style={{ flex:1 }} onClick={onCancel} disabled={saving}>{L("Discard","放弃")}</button>
+        <button className="pink-btn" style={{ flex:2, background: isDrink ? `linear-gradient(135deg,${C.water},${C.waterDeep})` : undefined, boxShadow: isDrink ? `0 4px 20px ${C.water}47` : undefined }} onClick={onConfirm} disabled={saving}>
+          {saving ? L("Saving...","保存中...") : `✓ ${L("Add to Log","添加记录")}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
 // WORKOUT COACH — same pattern as Diet/Drink Coach. Calorie estimates use the
 // standard MET formula (kcal = MET × weight(kg) × hours) against the person's
 // actual logged weight, not a flat guess. Time-based activities (cardio, yoga,
@@ -3168,6 +3377,45 @@ function NutriLogPro({ session, onLogout }) {
   const [aboutTab, setAboutTab] = useState("about");
 
   const [editingItem, setEditingItem] = useState(null);
+  const editCaloriesFocusRef = useRef(null);
+  const [editIngredientStaged, setEditIngredientStaged] = useState([]);
+  const [editIngredientInput, setEditIngredientInput] = useState("");
+  const [addingEditIngredients, setAddingEditIngredients] = useState(false);
+  const addIngredientsToEditingItem = async (descriptions) => {
+    if (!editingItem || !descriptions || descriptions.length === 0) return false;
+    setAddingEditIngredients(true);
+    setError(null);
+    try {
+      const raw = await callGemini({
+        contents: [{ role:"user", parts:[{ text:
+          `For each of these food items a person is adding to an existing meal, estimate its nutrition. Items (in order): ${JSON.stringify(descriptions)}. Output ONLY a raw JSON array, no code fences, one object per item in the same order: [{"item":string,"calories":number,"grams_estimate":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number}]`
+        }] }]
+      });
+      const parsed = JSON.parse(raw.replace(/```json|```/gi,"").trim());
+      if (!Array.isArray(parsed)) throw new Error("Unexpected AI response");
+      const newItems = [...(Array.isArray(editingItem.items) ? editingItem.items : []), ...parsed];
+      const add = parsed.reduce((acc,p) => ({
+        calories: acc.calories+(p.calories||0), protein: acc.protein+(p.protein||0), carbs: acc.carbs+(p.carbs||0),
+        fat: acc.fat+(p.fat||0), sugar: acc.sugar+(p.sugar||0), sodium: acc.sodium+(p.sodium||0), fiber: acc.fiber+(p.fiber||0)
+      }), { calories:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
+      setEditingItem(prev => ({
+        ...prev, items: newItems,
+        calories: Math.round((prev.calories||0) + add.calories),
+        protein: Math.round(((prev.protein||0) + add.protein)*10)/10,
+        carbs: Math.round(((prev.carbs||0) + add.carbs)*10)/10,
+        fat: Math.round(((prev.fat||0) + add.fat)*10)/10,
+        sugar_g: Math.round(((prev.sugar_g||0) + add.sugar)*10)/10,
+        sodium_mg: Math.round((prev.sodium_mg||0) + add.sodium),
+        fiber_g: Math.round(((prev.fiber_g||0) + add.fiber)*10)/10,
+      }));
+      return true;
+    } catch (err) {
+      setError(friendlyGeminiError(err));
+      return false;
+    } finally {
+      setAddingEditIngredients(false);
+    }
+  };
 
 
   const [historyDate, setHistoryDate] = useState(todayKey());
@@ -3818,49 +4066,113 @@ function NutriLogPro({ session, onLogout }) {
     }
   }, [entryPhoto, autoSearchAfterPhoto]);
 
-  // Diet Coach — reference library, opened from the meal-logging method chooser.
-  // "Log this meal" builds the same pendingEntry shape AI analysis produces, so it lands on
-  // the identical PendingCard review screen — full macros, flags, slot picker, edit-before-save.
+  // Macros are locked from direct typing on AI Photo / Diet Coach entries (see PendingCard) —
+  // this is the one path that's still allowed to change them, since it's grounded in a fresh
+  // AI estimate for the specific thing that was actually missed or misidentified, not a guess.
+  const [addingIngredients, setAddingIngredients] = useState(false);
+  const addIngredientsToPendingEntry = async (descriptions) => {
+    if (!pendingEntry || !descriptions || descriptions.length === 0) return false;
+    setAddingIngredients(true);
+    setError(null);
+    try {
+      const raw = await callGemini({
+        contents: [{ role:"user", parts:[{ text:
+          `For each of these food items a person is adding to an existing meal, estimate its nutrition. Items (in order): ${JSON.stringify(descriptions)}. Output ONLY a raw JSON array, no code fences, one object per item in the same order: [{"item":string,"calories":number,"grams_estimate":number,"protein":number,"carbs":number,"fat":number,"sugar":number,"sodium":number,"fiber":number}]`
+        }] }]
+      });
+      const parsed = JSON.parse(raw.replace(/```json|```/gi,"").trim());
+      if (!Array.isArray(parsed)) throw new Error("Unexpected AI response");
+      const newItems = [...(Array.isArray(pendingEntry.items) ? pendingEntry.items : []), ...parsed];
+      const add = parsed.reduce((acc,p) => ({
+        calories: acc.calories+(p.calories||0), protein: acc.protein+(p.protein||0), carbs: acc.carbs+(p.carbs||0),
+        fat: acc.fat+(p.fat||0), sugar: acc.sugar+(p.sugar||0), sodium: acc.sodium+(p.sodium||0), fiber: acc.fiber+(p.fiber||0)
+      }), { calories:0, protein:0, carbs:0, fat:0, sugar:0, sodium:0, fiber:0 });
+      updatePendingEntry({
+        items: newItems,
+        calories: Math.round((pendingEntry.calories||0) + add.calories),
+        protein: Math.round(((pendingEntry.protein||0) + add.protein)*10)/10,
+        carbs: Math.round(((pendingEntry.carbs||0) + add.carbs)*10)/10,
+        fat: Math.round(((pendingEntry.fat||0) + add.fat)*10)/10,
+        sugar: Math.round(((pendingEntry.sugar||0) + add.sugar)*10)/10,
+        sodium: Math.round((pendingEntry.sodium||0) + add.sodium),
+        fiber: Math.round(((pendingEntry.fiber||0) + add.fiber)*10)/10,
+      });
+      return true;
+    } catch (err) {
+      setError(friendlyGeminiError(err));
+      return false;
+    } finally {
+      setAddingIngredients(false);
+    }
+  };
+
+  // Diet Coach — reference library, opened from the meal-logging method chooser. Deliberately
+  // simple: adjustments (portion ×0.5/1/1.5, addon pieces) happen back in the Coach card via its
+  // discrete steppers, not here — this screen is a static summary, like a logged food card, not
+  // another editable form. That's the whole point versus AI Photo's free-form gram editing.
   const [showDietCoach, setShowDietCoach] = useState(false);
+  const [pendingCoachMeal, setPendingCoachMeal] = useState(null); // { food, computed } | null
   const logFoodFromCoach = (food, computed) => {
+    setPendingCoachMeal({ food, computed });
+    setShowDietCoach(false);
+    setMealEntryMethod("coachConfirm");
+  };
+  const confirmCoachMeal = async () => {
+    if (!pendingCoachMeal) return;
+    const { food, computed } = pendingCoachMeal;
     const dishName = lang === "zh" ? food.name_zh : food.name;
     const extras = [];
     if (computed.multiplier !== 1) extras.push(`${computed.multiplier}x ${food.portionComponent || ""}`.trim());
     Object.entries(computed.addonQty || {}).forEach(([name, qty]) => { if (qty > 0) extras.push(`${name} x${qty}`); });
-    setPendingEntry({
-      type: "meal", source: "coach",
-      name: extras.length ? `${dishName} (${extras.join(", ")})` : dishName,
-      calories: computed.kcal, protein: computed.protein, carbs: computed.carbs, fat: computed.fat,
-      sugar: computed.sugar, sodium: computed.sodium, fiber: computed.fiber,
-      confidence: "manual", image: null, items: null,
-      flagged: false, flag_occasion: null, flag_location: null, flag_comment: null
-    });
-    setShowDietCoach(false);
-    setMealEntryMethod("photo");
+    const name = extras.length ? `${dishName} (${extras.join(", ")})` : dishName;
+    try {
+      const meal = await DataAPI.addMeal(userId, {
+        log_date: today, slot: activeSlot, name, calories: computed.kcal,
+        protein: computed.protein, carbs: computed.carbs, fat: computed.fat,
+        sugar_g: computed.sugar, sodium_mg: computed.sodium, fiber_g: computed.fiber,
+        confidence: "coach", image_url: null, items: null, logged_at: new Date().toISOString(),
+        flagged: !!coachMealFlagged, flag_occasion: coachMealFlagged ? (coachMealFlagOccasion||null) : null,
+        flag_location: coachMealFlagged ? (coachMealFlagLocation||null) : null, flag_comment: coachMealFlagged ? (coachMealFlagComment||null) : null
+      });
+      setDayData(d => ({ ...d, meals: [...d.meals, meal] }));
+      setPendingCoachMeal(null); setMealEntryMethod(null);
+      setCoachMealFlagged(false); setCoachMealFlagOccasion(null); setCoachMealFlagLocation(""); setCoachMealFlagComment("");
+    } catch (err) { setError(L("Failed to add meal: ","添加餐食失败：") + err.message); }
   };
+  const [coachMealFlagged, setCoachMealFlagged] = useState(false);
+  const [coachMealFlagOccasion, setCoachMealFlagOccasion] = useState(null);
+  const [coachMealFlagLocation, setCoachMealFlagLocation] = useState("");
+  const [coachMealFlagComment, setCoachMealFlagComment] = useState("");
 
   // Water tab's 4-quadrant chooser — same pattern as Meal. null = still choosing.
   const [waterEntryMethod, setWaterEntryMethod] = useState(null); // null | "quick" | "text" | "manual"
   const [showDrinkCoach, setShowDrinkCoach] = useState(false);
+  const [pendingCoachDrink, setPendingCoachDrink] = useState(null); // { drink, computed } | null
   const logDrinkFromCoach = (drink, computed) => {
+    setPendingCoachDrink({ drink, computed });
+    setShowDrinkCoach(false);
+    setWaterEntryMethod("coachConfirm");
+  };
+  const confirmCoachDrink = async () => {
+    if (!pendingCoachDrink) return;
+    const { drink, computed } = pendingCoachDrink;
     const dishName = lang === "zh" ? drink.name_zh : drink.name;
     const level = SUGAR_LEVELS.find(l => l.key === computed.level);
-    const extras = [];
-    extras.push(`${computed.sizeLabel} ${computed.containerMl}ml`);
+    const extras = [`${computed.sizeLabel} ${computed.containerMl}ml`];
     if (level && level.key !== 1) extras.push(lang==="zh"?level.label_zh:level.label);
     const name = `${dishName} (${extras.join(", ")})`;
-    setCustomDrinkName(name);
-    setCustomDrinkMl(String(computed.containerMl));
-    setCustomDrinkCal(String(computed.kcal));
-    setCustomDrinkProt(String(computed.protein));
-    setCustomDrinkCarb(String(computed.carbs));
-    setCustomDrinkFat(String(computed.fat));
-    setCustomDrinkSugar(String(computed.sugar));
-    setCustomDrinkSodium(String(computed.sodium));
-    setDrinkRatePer100ml(null);
-    setShowDrinkCoach(false);
-    setWaterEntryMethod("manual");
+    try {
+      const d = await DataAPI.addDrink(userId, {
+        log_date: today, drink_type: name, amount_ml: computed.containerMl,
+        calories: computed.kcal, protein: computed.protein, carbs: computed.carbs, fat: computed.fat,
+        sugar_g: computed.sugar, sodium_mg: computed.sodium, fiber_g: computed.fiber||0,
+        logged_at: new Date().toISOString()
+      });
+      setDayData(prev => ({ ...prev, drinks: [...(prev.drinks||[]), d] }));
+      setPendingCoachDrink(null); setWaterEntryMethod(null);
+    } catch (err) { setError(L("Failed to log drink: ","记录饮品失败：") + err.message); }
   };
+
 
   // Workout tab's 4-quadrant chooser — same pattern as Meal/Water. null = still choosing.
   // "confirm" gates the PendingCard review screen for Workout Coach entries, same as
@@ -3888,6 +4200,8 @@ function NutriLogPro({ session, onLogout }) {
     setWorkoutEntryMethod(null);
     setPendingEntry(null);
     setEntryPhoto(null);
+    setPendingCoachMeal(null);
+    setPendingCoachDrink(null);
   }, [activeTab]);
 
   // AI Text Search's autocomplete: matches typed description against saved favorites, so a
@@ -4187,7 +4501,7 @@ function NutriLogPro({ session, onLogout }) {
     if (!editingItem) return;
     try {
       if (editingItem.type === "meal") {
-        await DataAPI.updateMeal(editingItem.id, { name: editingItem.name, calories: editingItem.calories, protein: editingItem.protein, carbs: editingItem.carbs, fat: editingItem.fat, sugar_g: editingItem.sugar_g, sodium_mg: editingItem.sodium_mg, fiber_g: editingItem.fiber_g, flagged: !!editingItem.flagged, flag_occasion: editingItem.flagged ? (editingItem.flag_occasion||null) : null, flag_location: editingItem.flagged ? (editingItem.flag_location||null) : null, flag_comment: editingItem.flagged ? (editingItem.flag_comment||null) : null });
+        await DataAPI.updateMeal(editingItem.id, { name: editingItem.name, calories: editingItem.calories, protein: editingItem.protein, carbs: editingItem.carbs, fat: editingItem.fat, sugar_g: editingItem.sugar_g, sodium_mg: editingItem.sodium_mg, fiber_g: editingItem.fiber_g, items: Array.isArray(editingItem.items) ? editingItem.items : null, flagged: !!editingItem.flagged, flag_occasion: editingItem.flagged ? (editingItem.flag_occasion||null) : null, flag_location: editingItem.flagged ? (editingItem.flag_location||null) : null, flag_comment: editingItem.flagged ? (editingItem.flag_comment||null) : null });
         // Kept in sync across all three local copies of meal data (today's live day, the day
         // currently open in History, and the rolling 180-day range used by Gallery/analytics) —
         // otherwise an edit made from History would only land in the DB and silently not show
@@ -4201,7 +4515,7 @@ function NutriLogPro({ session, onLogout }) {
         setHistDayData(d => ({ ...d, workouts: (d.workouts||[]).map(w => w.id===editingItem.id ? {...w,...editingItem} : w) }));
         setHistRangeData(d => ({ ...d, workouts: (d.workouts||[]).map(w => w.id===editingItem.id ? {...w,...editingItem} : w) }));
       }
-      setEditingItem(null);
+      setEditingItem(null); setEditIngredientStaged([]); setEditIngredientInput("");
     } catch (err) { setError(L("Failed to update: ","更新失败：") + err.message); }
   };
 
@@ -5658,10 +5972,21 @@ function NutriLogPro({ session, onLogout }) {
                   </div>
                 </div>
             ) : mealEntryMethod === "photo" ? (
-              pendingEntry && pendingEntry.type==="meal" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={backToMethodChooser} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} slot={activeSlot} onSlotChange={setActiveSlot} theme={theme} C={C} saving={savingEntry} lang={lang} L={L} />
+              pendingEntry && pendingEntry.type==="meal" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={backToMethodChooser} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} slot={activeSlot} onSlotChange={setActiveSlot} theme={theme} C={C} saving={savingEntry} lang={lang} L={L} onAddIngredients={addIngredientsToPendingEntry} addingIngredients={addingIngredients} />
+            ) : mealEntryMethod === "coachConfirm" ? (
+              pendingCoachMeal && <CoachConfirmCard
+                kind="meal" food={pendingCoachMeal.food} computed={pendingCoachMeal.computed}
+                slot={activeSlot} onSlotChange={setActiveSlot}
+                flagged={coachMealFlagged} onFlagToggle={() => setCoachMealFlagged(!coachMealFlagged)}
+                occasion={coachMealFlagOccasion} onOccasion={setCoachMealFlagOccasion}
+                location={coachMealFlagLocation} onLocation={setCoachMealFlagLocation}
+                comment={coachMealFlagComment} onComment={setCoachMealFlagComment}
+                onConfirm={confirmCoachMeal} onCancel={() => { setPendingCoachMeal(null); setMealEntryMethod(null); }}
+                C={C} lang={lang} L={L}
+              />
             ) : (
-              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
-                <button className="ghost-btn" onClick={backToMethodChooser} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+              <div className="card" style={{ padding:"14px 14px", marginBottom:14, position:"relative" }}>
+                <button onClick={backToMethodChooser} style={{ position:"absolute", top:10, right:10, background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:26, height:26, color:C.text, fontSize:15, cursor:"pointer", lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                 <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:14 }}>
                   {SLOTS.map(s => (<button key={s} className={`slot-btn ${activeSlot===s?"on":""}`} onClick={() => setActiveSlot(s)} style={{ flexShrink:0 }}>{SLOT_ICONS[s]} {slotLabel(s, lang)}</button>))}
                 </div>
@@ -5812,9 +6137,15 @@ function NutriLogPro({ session, onLogout }) {
                     </button>
                   </div>
                 </div>
+            ) : waterEntryMethod === "coachConfirm" ? (
+              pendingCoachDrink && <CoachConfirmCard
+                kind="drink" drink={pendingCoachDrink.drink} computed={pendingCoachDrink.computed}
+                onConfirm={confirmCoachDrink} onCancel={() => { setPendingCoachDrink(null); setWaterEntryMethod(null); }}
+                C={C} lang={lang} L={L}
+              />
             ) : waterEntryMethod === "quick" ? (
-              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
-                <button className="ghost-btn" onClick={()=>setWaterEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+              <div className="card" style={{ padding:"14px 14px", marginBottom:14, position:"relative" }}>
+                <button onClick={()=>setWaterEntryMethod(null)} style={{ position:"absolute", top:10, right:10, background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:26, height:26, color:C.text, fontSize:15, cursor:"pointer", lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                 <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{L("QUICK ADD WATER","快速添加饮水")}</div>
                 <div style={{ display:"flex", gap:6 }}>
                   <button onClick={() => adjustWater(-250)} className="ghost-btn" style={{ padding:"5px 8px", flex:0.8, fontSize:14 }}>−250</button>
@@ -5824,8 +6155,8 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
               </div>
             ) : (
-              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
-                <button className="ghost-btn" onClick={()=>setWaterEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+              <div className="card" style={{ padding:"14px 14px", marginBottom:14, position:"relative" }}>
+                <button onClick={()=>setWaterEntryMethod(null)} style={{ position:"absolute", top:10, right:10, background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:26, height:26, color:C.text, fontSize:15, cursor:"pointer", lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                 <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:8 }}>{L("CUSTOM DRINK","自定义饮品")}</div>
                 <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                   <input className="inp" placeholder={L("Drink name (e.g. Bubble tea)","饮品名称 (例如：珍珠奶茶)")} value={customDrinkName} onChange={e=>{setCustomDrinkName(e.target.value); setDrinkRatePer100ml(null);}} style={{ flex:2 }} />
@@ -5992,8 +6323,8 @@ function NutriLogPro({ session, onLogout }) {
             ) : workoutEntryMethod === "confirm" ? (
               pendingEntry && pendingEntry.type==="workout" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => { setPendingEntry(null); setWorkoutEntryMethod(null); }} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} theme={theme} C={C} saving={savingEntry} lang={lang} L={L} />
             ) : workoutEntryMethod === "steps" ? (
-              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59` }}>
-                <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59`, position:"relative" }}>
+                <button onClick={()=>setWorkoutEntryMethod(null)} style={{ position:"absolute", top:10, right:10, background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:26, height:26, color:C.text, fontSize:15, cursor:"pointer", lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                 <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                   <input className="inp" type="number" placeholder={L("Steps today (e.g. 8000)","今日步数 (例如：8000)")} value={stepCount} onChange={e=>setStepCount(e.target.value)} style={{ flex:1 }} />
                   <button className="ghost-btn" style={{ flexShrink:0, fontSize:12, padding:"10px 14px" }} onClick={applyStepConversion}>↳ {L("Convert to kcal","换算为千卡")}</button>
@@ -6013,8 +6344,8 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
               </div>
             ) : workoutEntryMethod === "text" ? (
-              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59` }}>
-                <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59`, position:"relative" }}>
+                <button onClick={()=>setWorkoutEntryMethod(null)} style={{ position:"absolute", top:10, right:10, background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:26, height:26, color:C.text, fontSize:15, cursor:"pointer", lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                 <div style={{ display:"flex", gap:8, marginBottom:4, alignItems:"center" }}>
                   {manualWorkoutDesc.trim() && <WorkoutIllustration description={manualWorkoutDesc} color={C.workoutAccent} size={40} />}
                   <input className="inp" placeholder={L("What did you do? (e.g. push ups 30 times, jogging 30 mins)","做了什么运动？(例如：俯卧撑30次，慢跑30分钟)")} value={manualWorkoutDesc} onChange={e=>setManualWorkoutDesc(e.target.value)} style={{ flex:2 }} onKeyDown={e=>e.key==="Enter"&&suggestWorkoutCalories()} />
@@ -6035,8 +6366,8 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
               </div>
             ) : (
-              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59` }}>
-                <button className="ghost-btn" onClick={()=>setWorkoutEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+              <div className="card-primary" style={{ padding:"14px 14px", marginBottom:14, border:`1px solid ${C.workoutAccent}59`, position:"relative" }}>
+                <button onClick={()=>setWorkoutEntryMethod(null)} style={{ position:"absolute", top:10, right:10, background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:26, height:26, color:C.text, fontSize:15, cursor:"pointer", lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                 <input className="inp" placeholder={L("Activity name (optional)","运动名称（可选）")} value={manualWorkoutDesc} onChange={e=>setManualWorkoutDesc(e.target.value)} style={{ marginBottom:8, width:"100%", boxSizing:"border-box" }} />
                 <div style={{ display:"flex", gap:8 }}>
                   <input className="inp" placeholder={L("Burned kcal","消耗千卡")} type="number" value={manualBurn} onChange={e=>setManualBurn(e.target.value)} style={{ flex:1 }} />
@@ -6789,34 +7120,152 @@ function NutriLogPro({ session, onLogout }) {
               </div>
               <div>
                 <label style={{ fontSize:11, fontWeight:"700", color:C.textMuted, display:"block", marginBottom:4 }}>🔥 {L("Calories (kcal)","热量 (kcal)")}</label>
-                <input className="inp" type="number" value={editingItem.calories||""} onChange={e=>setEditingItem({...editingItem,calories:parseFloat(e.target.value)||0})} />
+                <input
+                  className="inp" type="number" value={editingItem.calories === "" ? "" : (editingItem.calories ?? 0)}
+                  onFocus={() => { editCaloriesFocusRef.current = editingItem.calories === "" ? 0 : editingItem.calories; }}
+                  onChange={e=>setEditingItem({...editingItem,calories: e.target.value === "" ? "" : parseFloat(e.target.value)})}
+                  onBlur={() => {
+                    if (editingItem.calories === "") { setEditingItem({...editingItem, calories:0}); return; }
+                    const before = editCaloriesFocusRef.current;
+                    const after = editingItem.calories;
+                    if (editingItem.type==="meal" && before && after && before !== after && before > 0) {
+                      setEditingItem(scaleMealToTotal({ ...editingItem, calories: before }, after, { sugarKey:"sugar_g", sodiumKey:"sodium_mg", fiberKey:"fiber_g" }));
+                    }
+                  }}
+                />
+                {editingItem.type==="meal" && (Array.isArray(editingItem.items) && editingItem.items.length > 0 || editingItem.protein || editingItem.carbs || editingItem.fat) && (
+                  <div style={{ fontSize:10, color:C.textDim, fontStyle:"italic", marginTop:4 }}>
+                    {L("Editing this scales every component & macro to match","编辑此项会按比例调整所有成分与营养素")}
+                  </div>
+                )}
               </div>
-              {editingItem.type==="meal" && (
-                <React.Fragment>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                    <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🥩 {L("PRO (g)","蛋白质 (g)")}</label><input className="inp" type="number" value={editingItem.protein||0} onChange={e=>setEditingItem({...editingItem,protein:parseFloat(e.target.value)||0})} /></div>
-                    <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🍞 {L("CARB (g)","碳水 (g)")}</label><input className="inp" type="number" value={editingItem.carbs||0} onChange={e=>setEditingItem({...editingItem,carbs:parseFloat(e.target.value)||0})} /></div>
-                    <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🥑 {L("FAT (g)","脂肪 (g)")}</label><input className="inp" type="number" value={editingItem.fat||0} onChange={e=>setEditingItem({...editingItem,fat:parseFloat(e.target.value)||0})} /></div>
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                    <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🍬 {L("SUGAR (g)","糖 (g)")}</label><input className="inp" type="number" value={editingItem.sugar_g||0} onChange={e=>setEditingItem({...editingItem,sugar_g:parseFloat(e.target.value)||0})} /></div>
-                    <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🧂 {L("SODIUM (mg)","钠 (mg)")}</label><input className="inp" type="number" value={editingItem.sodium_mg||0} onChange={e=>setEditingItem({...editingItem,sodium_mg:parseFloat(e.target.value)||0})} /></div>
-                    <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🌾 {L("FIBER (g)","纤维 (g)")}</label><input className="inp" type="number" value={editingItem.fiber_g||0} onChange={e=>setEditingItem({...editingItem,fiber_g:parseFloat(e.target.value)||0})} /></div>
-                  </div>
-                  <MealFlagEditor
-                    flagged={!!editingItem.flagged}
-                    occasion={editingItem.flag_occasion}
-                    location={editingItem.flag_location}
-                    comment={editingItem.flag_comment}
-                    onToggle={() => setEditingItem({...editingItem, flagged: !editingItem.flagged})}
-                    onOccasion={val => setEditingItem({...editingItem, flag_occasion: val})}
-                    onLocation={val => setEditingItem({...editingItem, flag_location: val})}
-                    onComment={val => setEditingItem({...editingItem, flag_comment: val})}
-                    C={C} L={L}
-                  />
-                </React.Fragment>
-
+              {editingItem.type==="meal" && Array.isArray(editingItem.items) && editingItem.items.length > 0 && (
+                <div style={{ background:`${C.border}22`, borderRadius:12, padding:"10px 12px" }}>
+                  <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{L("BREAKDOWN BY COMPONENT","按成分细分")}</div>
+                  {editingItem.items.slice().sort((a,b)=>(b.calories||0)-(a.calories||0)).map((it, idx) => {
+                    const canEditGrams = it.grams_estimate != null && it.grams_estimate > 0;
+                    const editGrams = (newGramsStr) => {
+                      const newGrams = parseFloat(newGramsStr);
+                      if (!newGrams || newGrams < 0) return;
+                      const rate = it.calories / it.grams_estimate;
+                      const newItemKcal = Math.round(rate * newGrams);
+                      const deltaKcal = newItemKcal - (it.calories || 0);
+                      const originalIndex = editingItem.items.indexOf(it);
+                      const newItems = editingItem.items.slice();
+                      newItems[originalIndex] = { ...it, grams_estimate: newGrams, calories: newItemKcal };
+                      const newTotal = Math.max(0, Math.round((editingItem.calories||0) + deltaKcal));
+                      const scaledMacros = scaleMealToTotal({ ...editingItem, items: null }, newTotal, { sugarKey:"sugar_g", sodiumKey:"sodium_mg", fiberKey:"fiber_g" });
+                      setEditingItem({ ...scaledMacros, items: newItems, calories: newTotal });
+                    };
+                    return (
+                      <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom: idx < editingItem.items.length-1 ? `1px dashed ${C.border}66` : "none" }}>
+                        <span style={{ fontSize:12, color:C.text, textTransform:"capitalize", display:"flex", alignItems:"center", gap:3 }}>
+                          {it.item}
+                          {canEditGrams && (
+                            <span style={{ display:"inline-flex", alignItems:"center", gap:2, color:C.textMuted }}>
+                              (~<input
+                                type="number" defaultValue={Math.round(it.grams_estimate)}
+                                onBlur={e => editGrams(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") { editGrams(e.target.value); e.target.blur(); } }}
+                                style={{ width:36, background:"transparent", border:"none", borderBottom:`1px dashed ${C.border}`, outline:"none", color:C.text, fontSize:12, textAlign:"center", padding:0 }}
+                              />g)
+                            </span>
+                          )}
+                          {!canEditGrams && it.grams_estimate && ` (~${Math.round(it.grams_estimate)}g)`}
+                        </span>
+                        <span style={{ fontSize:12, color:C.pink, fontWeight:"700" }}>{Math.round(it.calories||0)} kcal</span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
+              {editingItem.type==="meal" && (
+                <div style={{ background:`${C.border}22`, borderRadius:12, padding:"10px 12px" }}>
+                  <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{L("ADD AN INGREDIENT","添加食材")}</div>
+                  <div style={{ display:"flex", gap:8, marginBottom: (editIngredientStaged||[]).length ? 8 : 0 }}>
+                    <input
+                      className="inp" value={editIngredientInput}
+                      placeholder={L("e.g. 1 boiled egg","例如：1颗水煮蛋")}
+                      onChange={e => setEditIngredientInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && editIngredientInput.trim()) { setEditIngredientStaged([...(editIngredientStaged||[]), editIngredientInput.trim()]); setEditIngredientInput(""); } }}
+                      style={{ flex:1 }}
+                    />
+                    <button
+                      className="ghost-btn" style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, flexShrink:0 }}
+                      onClick={() => { if (editIngredientInput.trim()) { setEditIngredientStaged([...(editIngredientStaged||[]), editIngredientInput.trim()]); setEditIngredientInput(""); } }}
+                    >+</button>
+                  </div>
+                  {(editIngredientStaged||[]).length > 0 && (
+                    <React.Fragment>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+                        {editIngredientStaged.map((ing, i) => (
+                          <div key={i} style={{ display:"flex", alignItems:"center", gap:5, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, borderRadius:999, padding:"4px 10px", fontSize:11.5, color:C.text }}>
+                            {ing}
+                            <span onClick={() => setEditIngredientStaged(editIngredientStaged.filter((_,idx)=>idx!==i))} style={{ color:C.textDim, cursor:"pointer", fontSize:13 }}>×</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        className="pink-btn" style={{ width:"100%", padding:"9px", fontSize:12.5, opacity:addingEditIngredients?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                        disabled={addingEditIngredients}
+                        onClick={async () => { const ok = await addIngredientsToEditingItem(editIngredientStaged); if (ok) setEditIngredientStaged([]); }}
+                      >
+                        {addingEditIngredients
+                          ? <React.Fragment><span className="spin" style={{ width:12, height:12, border:"2px solid rgba(255,255,255,0.4)", borderTopColor:"#fff", borderRadius:"50%" }} />{L("Estimating...","估算中...")}</React.Fragment>
+                          : L(`✨ Run AI & add ${editIngredientStaged.length} to total`,`✨ 运行 AI 并将 ${editIngredientStaged.length} 项加入总量`)}
+                      </button>
+                    </React.Fragment>
+                  )}
+                </div>
+              )}
+              {editingItem.type==="meal" && (() => {
+                const macrosLocked = editingItem.confidence && editingItem.confidence !== "manual";
+                return (
+                  <React.Fragment>
+                    {macrosLocked ? (
+                      <React.Fragment>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                          {[[L("PRO","蛋白质"),editingItem.protein,C.protein,"g"],[L("CARB","碳水"),editingItem.carbs,C.carbs,"g"],[L("FAT","脂肪"),editingItem.fat,C.fat,"g"]].map(([l,v,c,u]) => (
+                            <div key={l}><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{l} ({u})</label><div className="inp" style={{ color:c, fontWeight:"700", textAlign:"center" }}>{Math.round((v||0)*10)/10}</div></div>
+                          ))}
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                          {[[L("SUGAR","糖"),editingItem.sugar_g,C.sugar,"g"],[L("SODIUM","钠"),editingItem.sodium_mg,C.sodium,"mg"],[L("FIBER","纤维"),editingItem.fiber_g,C.fiber,"g"]].map(([l,v,c,u]) => (
+                            <div key={l}><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>{l} ({u})</label><div className="inp" style={{ color:c, fontWeight:"700", textAlign:"center" }}>{Math.round((v||0)*10)/10}</div></div>
+                          ))}
+                        </div>
+                        <div style={{ fontSize:10, color:C.textDim, fontStyle:"italic" }}>
+                          {L("Macros are locked here — adjust total kcal, component grams, or add an ingredient instead.","此处营养素已锁定 —— 请通过调整总热量、成分克数或添加食材来调整。")}
+                        </div>
+                      </React.Fragment>
+                    ) : (
+                      <React.Fragment>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                          <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🥩 {L("PRO (g)","蛋白质 (g)")}</label><input className="inp" type="number" value={editingItem.protein === "" ? "" : (editingItem.protein ?? 0)} onChange={e=>setEditingItem({...editingItem,protein: e.target.value === "" ? "" : parseFloat(e.target.value)})} onBlur={()=>{ if(editingItem.protein==="") setEditingItem({...editingItem,protein:0}); }} /></div>
+                          <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🍞 {L("CARB (g)","碳水 (g)")}</label><input className="inp" type="number" value={editingItem.carbs === "" ? "" : (editingItem.carbs ?? 0)} onChange={e=>setEditingItem({...editingItem,carbs: e.target.value === "" ? "" : parseFloat(e.target.value)})} onBlur={()=>{ if(editingItem.carbs==="") setEditingItem({...editingItem,carbs:0}); }} /></div>
+                          <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🥑 {L("FAT (g)","脂肪 (g)")}</label><input className="inp" type="number" value={editingItem.fat === "" ? "" : (editingItem.fat ?? 0)} onChange={e=>setEditingItem({...editingItem,fat: e.target.value === "" ? "" : parseFloat(e.target.value)})} onBlur={()=>{ if(editingItem.fat==="") setEditingItem({...editingItem,fat:0}); }} /></div>
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                          <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🍬 {L("SUGAR (g)","糖 (g)")}</label><input className="inp" type="number" value={editingItem.sugar_g === "" ? "" : (editingItem.sugar_g ?? 0)} onChange={e=>setEditingItem({...editingItem,sugar_g: e.target.value === "" ? "" : parseFloat(e.target.value)})} onBlur={()=>{ if(editingItem.sugar_g==="") setEditingItem({...editingItem,sugar_g:0}); }} /></div>
+                          <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🧂 {L("SODIUM (mg)","钠 (mg)")}</label><input className="inp" type="number" value={editingItem.sodium_mg === "" ? "" : (editingItem.sodium_mg ?? 0)} onChange={e=>setEditingItem({...editingItem,sodium_mg: e.target.value === "" ? "" : parseFloat(e.target.value)})} onBlur={()=>{ if(editingItem.sodium_mg==="") setEditingItem({...editingItem,sodium_mg:0}); }} /></div>
+                          <div><label style={{ fontSize:10, color:C.textMuted, fontWeight:"700", display:"block", marginBottom:4 }}>🌾 {L("FIBER (g)","纤维 (g)")}</label><input className="inp" type="number" value={editingItem.fiber_g === "" ? "" : (editingItem.fiber_g ?? 0)} onChange={e=>setEditingItem({...editingItem,fiber_g: e.target.value === "" ? "" : parseFloat(e.target.value)})} onBlur={()=>{ if(editingItem.fiber_g==="") setEditingItem({...editingItem,fiber_g:0}); }} /></div>
+                        </div>
+                      </React.Fragment>
+                    )}
+                    <MealFlagEditor
+                      flagged={!!editingItem.flagged}
+                      occasion={editingItem.flag_occasion}
+                      location={editingItem.flag_location}
+                      comment={editingItem.flag_comment}
+                      onToggle={() => setEditingItem({...editingItem, flagged: !editingItem.flagged})}
+                      onOccasion={val => setEditingItem({...editingItem, flag_occasion: val})}
+                      onLocation={val => setEditingItem({...editingItem, flag_location: val})}
+                      onComment={val => setEditingItem({...editingItem, flag_comment: val})}
+                      C={C} L={L}
+                    />
+                  </React.Fragment>
+                );
+              })()}
               {editingItem.type==="workout" && (
                 <React.Fragment>
                   <div><label style={{ fontSize:11, fontWeight:"700", color:C.textMuted, display:"block", marginBottom:4 }}>📝 {L("Description","描述")}</label><input className="inp" value={editingItem.description||""} onChange={e=>setEditingItem({...editingItem,description:e.target.value})} placeholder={L("What did you do?","做了什么？")} /></div>
@@ -6828,7 +7277,7 @@ function NutriLogPro({ session, onLogout }) {
               )}
             </div>
             <div style={{ display:"flex", gap:8 }}>
-              <button className="ghost-btn" style={{ flex:1 }} onClick={() => setEditingItem(null)}>{T("common_cancel")}</button>
+              <button className="ghost-btn" style={{ flex:1 }} onClick={() => { setEditingItem(null); setEditIngredientStaged([]); setEditIngredientInput(""); }}>{T("common_cancel")}</button>
               <button className="pink-btn" style={{ flex:1.5 }} onClick={commitEdit}>{L("Save Changes","保存修改")}</button>
             </div>
           </div>
