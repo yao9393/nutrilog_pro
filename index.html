@@ -1386,7 +1386,7 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
             value={isWorkout ? (entry.activity||"") : (entry.name||"")}
             onChange={e => onUpdate({ [isWorkout?"activity":"name"]: e.target.value })}
             placeholder={isWorkout ? Lt("Workout name","运动名称") : Lt("Meal name","餐食名称")}
-            style={{ width:"100%", background:"transparent", border:"none", outline:"none", borderBottom:`1px dashed ${C.border}`, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", marginBottom:4, color:textColor, padding:"2px 0" }}
+            style={{ width:"100%", boxSizing:"border-box", background:C.surface, border:`1px solid ${C.border}`, outline:"none", borderRadius:10, fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:"700", marginBottom:4, color:textColor, padding:"8px 10px" }}
           />
           {isWorkout && entry.duration && <div style={{ fontSize:12, color:textMuted, marginTop:4 }}>{Lt("Duration","时长")}: {entry.duration}{entry.heartRate?` · ♥ ${entry.heartRate}`:""}</div>}
           <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6 }}>
@@ -1404,7 +1404,7 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
                   onUpdate(scaleMealToTotal({ ...entry, calories: before }, after));
                 }
               }}
-              style={{ width:70, background:"transparent", border:"none", outline:"none", borderBottom:`1px dashed ${C.border}`, fontSize:14, color:isWorkout?workoutAccent:mealAccent, fontFamily:"'DM Sans',sans-serif", fontWeight:"800", padding:"2px 0" }}
+              style={{ width:74, boxSizing:"border-box", background:C.surface, border:`1px solid ${C.border}`, outline:"none", borderRadius:8, fontSize:14, color:isWorkout?workoutAccent:mealAccent, fontFamily:"'DM Sans',sans-serif", fontWeight:"800", padding:"4px 8px" }}
             />
             <span style={{ fontSize:13, color:textMuted }}>kcal</span>
             {entry.confidence && <span style={{ fontSize:11, color:textDim, marginLeft:4, fontStyle:"italic" }}>({entry.confidence} confidence)</span>}
@@ -1469,7 +1469,7 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
                             type="number" defaultValue={Math.round(it.grams_estimate)}
                             onBlur={e => editGrams(e.target.value)}
                             onKeyDown={e => { if (e.key === "Enter") { editGrams(e.target.value); e.target.blur(); } }}
-                            style={{ width:36, background:"transparent", border:"none", borderBottom:`1px dashed ${C.border}`, outline:"none", color:textColor, fontSize:12, textAlign:"center", padding:0 }}
+                            style={{ width:38, boxSizing:"border-box", background:C.surface, border:`1px solid ${C.border}`, borderRadius:5, outline:"none", color:textColor, fontSize:12, textAlign:"center", padding:"1px 3px" }}
                           />g)
                         </span>
                       )}
@@ -2353,15 +2353,32 @@ const COACH_ADDONS = {
   curryDip: { name: "Extra Curry Dip", name_zh: "加咖喱酱", unitKcal: 40, unitProtein: 1, unitCarbs: 4, unitFat: 2 },
 };
 
-const COACH_CATEGORIES = [
+// Diet Coach is split into two tabs: Measurement (how much is "1 piece" or "1 glass" of a
+// common ingredient, in real grams/ml) shown first, and Food Library (whole dishes) second.
+// Measurement exists because dish add-ons like "extra egg" were being counted in loose pieces —
+// grounding those in actual grams/ml gives more accurate math and teaches portion sense directly.
+const COACH_SECTIONS = [
+  { key: "measurement", label: "Measurement", label_zh: "份量对照", emoji: "📏" },
+  { key: "library", label: "Food Library", label_zh: "食物图鉴", emoji: "📖" },
+];
+
+const FOOD_LIBRARY_CATEGORIES = [
+  { key: "kopitiam", label: "Kopitiam", label_zh: "咖啡店", emoji: "☕" },
   { key: "chinese", label: "Chinese", label_zh: "中式", emoji: "🥢" },
   { key: "malay", label: "Malay", label_zh: "马来式", emoji: "🍛" },
+  { key: "nasikandar", label: "Nasi Kandar", label_zh: "槟城饭", emoji: "🍽️" },
   { key: "indian", label: "Indian", label_zh: "印度式", emoji: "🍚" },
+  { key: "streetfood", label: "Street Food", label_zh: "街边小吃", emoji: "🥟" },
   { key: "western", label: "Western", label_zh: "西式", emoji: "🍝" },
   { key: "fastfood", label: "Fast Food", label_zh: "快餐", emoji: "🍟" },
   { key: "fruits", label: "Fruits", label_zh: "水果", emoji: "🍎" },
+];
+
+const MEASUREMENT_CATEGORIES = [
   { key: "protein", label: "Protein & Eggs", label_zh: "蛋白质与蛋类", emoji: "🍗" },
   { key: "veg", label: "Vegetables", label_zh: "蔬菜", emoji: "🥦" },
+  { key: "sauce", label: "Sauces & Condiments", label_zh: "酱料与调味品", emoji: "🥄" },
+  { key: "grain", label: "Grains & Staples", label_zh: "谷物与主食", emoji: "🍚" },
 ];
 
 const COACH_FOODS = [
@@ -2457,6 +2474,9 @@ const COACH_FOODS = [
     visual:{ type:"fruit", variant:"citrus" } },
   { id:"p_thigh", name:"Chicken Thigh (deboned, grilled)", name_zh:"去骨鸡腿", category:"protein", portion:"1 piece (120g)", kcal:185, protein:22, carbs:0, fat:11, fiber:0, sugar:0, sodium:65,
     visual:{ type:"meat" } },
+  { id:"p_drumstick", name:"Chicken Drumstick (bone-in, grilled)", name_zh:"鸡小腿（带骨）", category:"protein", portion:"1 piece (90g)", kcal:112, protein:13, carbs:0, fat:7, fiber:0, sugar:0, sodium:60,
+    visual:{ type:"meat" },
+    tips:[{ macro:"protein", text:"A drumstick is smaller than it looks once you account for the bone — closer to 90g of actual meat than a full thigh's 120g.", text_zh:"鸡小腿看起来大，但算上骨头，实际肉量比一整个鸡腿（120克）少，接近90克。" }] },
   { id:"p_breast", name:"Chicken Breast (grilled)", name_zh:"鸡胸肉", category:"protein", portion:"1 piece (150g)", kcal:165, protein:31, carbs:0, fat:4, fiber:0, sugar:0, sodium:70,
     visual:{ type:"meat" },
     tips:[{ macro:"fat", text:"Leaner than thigh meat for the same weight — a straight swap in a mixed dish cuts fat without losing much protein.", text_zh:"同等重量下比鸡腿肉更精瘦——在混合菜肴中直接替换，能减少脂肪又不太影响蛋白质。" }] },
@@ -2478,6 +2498,87 @@ const COACH_FOODS = [
     visual:{ type:"veg", variant:"leafy" } },
   { id:"v_longbean", name:"Long Beans (stir-fried)", name_zh:"炒豆角", category:"veg", portion:"3 tbsp (100g)", kcal:55, protein:2.2, carbs:7, fat:2.5, fiber:2.7, sugar:3, sodium:160,
     visual:{ type:"veg", variant:"leafy" } },
+
+  // ── Sauces & Condiments (measured per spoon — not drinks, so not duplicated in Drink Coach) ──
+  { id:"s_soy_sauce", name:"Soy Sauce (1 tbsp)", name_zh:"酱油（一汤匙）", category:"sauce", portion:"1 tbsp (15ml)", kcal:8, protein:1, carbs:1, fat:0, fiber:0, sugar:0.5, sodium:900,
+    visual:{ type:"can" },
+    tips:[{ macro:"sodium", text:"Almost no calories, but a single tablespoon carries close to half a day's sodium on its own — easy to pour without noticing.", text_zh:"热量几乎为零，但一汤匙就接近一天钠摄入量的一半——倒的时候很容易不知不觉。" }] },
+  { id:"s_oyster_sauce", name:"Oyster Sauce (1 tbsp)", name_zh:"蚝油（一汤匙）", category:"sauce", portion:"1 tbsp (18g)", kcal:25, protein:0.5, carbs:5, fat:0, fiber:0, sugar:3, sodium:490,
+    visual:{ type:"can" } },
+  { id:"s_tartar_sauce", name:"Tartar Sauce (1 tbsp)", name_zh:"塔塔酱（一汤匙）", category:"sauce", portion:"1 tbsp (14g)", kcal:70, protein:0, carbs:2, fat:7, fiber:0, sugar:1, sodium:110,
+    visual:{ type:"can" },
+    tips:[{ macro:"fat", text:"Mostly oil-based — a couple of extra spoons on fish & chips adds up faster than the fish itself does.", text_zh:"主要成分是油——鱼柳薯条多加几勺，热量增加得比鱼本身还快。" }] },
+  { id:"s_blackpepper_sauce", name:"Black Pepper Sauce (1 tbsp)", name_zh:"黑胡椒酱（一汤匙）", category:"sauce", portion:"1 tbsp (16g)", kcal:35, protein:1, carbs:3, fat:2, fiber:0, sugar:1, sodium:280,
+    visual:{ type:"can" } },
+  { id:"s_chili_sauce", name:"Chili Sauce (1 tbsp)", name_zh:"辣椒酱（一汤匙）", category:"sauce", portion:"1 tbsp (17g)", kcal:15, protein:0, carbs:4, fat:0, fiber:0, sugar:3, sodium:220,
+    visual:{ type:"can" } },
+  { id:"s_mayonnaise", name:"Mayonnaise (1 tbsp)", name_zh:"美乃滋（一汤匙）", category:"sauce", portion:"1 tbsp (14g)", kcal:90, protein:0, carbs:0.5, fat:10, fiber:0, sugar:0, sodium:80,
+    visual:{ type:"can" } },
+  { id:"l_oil_tbsp", name:"Cooking Oil (1 tbsp)", name_zh:"食用油（一汤匙）", category:"sauce", portion:"1 tbsp (14g)", kcal:120, protein:0, carbs:0, fat:14, fiber:0, sugar:0, sodium:0,
+    visual:{ type:"can" },
+    tips:[{ macro:"fat", text:"Easy to lose track of — a few extra glugs in the pan can add 100+ kcal before the food itself is counted.", text_zh:"很容易不知不觉倒多——下锅时多倒几下，还没算食物本身就已经多了100多千卡。" }] },
+
+  // ── Grains & Staples ─────────────────────────────────
+  { id:"g_rice_bowl", name:"Rice, cooked (1 bowl)", name_zh:"米饭（一碗）", category:"grain", portion:"1 bowl (200g)", kcal:260, protein:5, carbs:57, fat:0.5, fiber:1, sugar:0, sodium:5,
+    visual:{ type:"rice" } },
+  { id:"g_noodles_pack", name:"Noodles, cooked (1 pack)", name_zh:"面条（一包）", category:"grain", portion:"1 pack (200g)", kcal:280, protein:6, carbs:58, fat:1, fiber:2, sugar:1, sodium:10,
+    visual:{ type:"noodles" } },
+  { id:"g_bread_slice", name:"White Bread (1 slice)", name_zh:"白面包（一片）", category:"grain", portion:"1 slice (30g)", kcal:80, protein:3, carbs:15, fat:1, fiber:1, sugar:1.5, sodium:150,
+    visual:{ type:"flatbread" } },
+  { id:"g_oats_bowl", name:"Oats, cooked (1 bowl)", name_zh:"燕麦（一碗）", category:"grain", portion:"1 bowl (200g)", kcal:150, protein:5, carbs:27, fat:3, fiber:4, sugar:1, sodium:5,
+    visual:{ type:"rice" } },
+
+  // ── Kopitiam (coffeeshop breakfast & mixed-rice staples) ──────
+  { id:"k_kaya_toast", name:"Kaya Toast with Butter (2 slices)", name_zh:"咖椰牛油土司（两片）", category:"kopitiam", portion:"2 slices", kcal:220, protein:5, carbs:30, fat:9, fiber:1, sugar:12, sodium:260,
+    visual:{ type:"flatbread" },
+    components:[{ name:"Toast", name_zh:"土司", kcal:80, grams:60 },{ name:"Kaya (coconut jam)", name_zh:"咖椰酱", kcal:90 },{ name:"Butter", name_zh:"牛油", kcal:50 }],
+    tips:[{ macro:"sugar", text:"The kaya spread carries most of the sugar here — a thin scrape instead of a thick layer barely changes the taste but cuts a fair bit.", text_zh:"咖椰酱是糖分的主要来源——薄薄一层和厚厚一层味道差不多，但热量差不少。" }] },
+  { id:"k_soft_eggs", name:"Soft Boiled Eggs (2, with soy sauce & pepper)", name_zh:"半熟蛋（两颗，配酱油胡椒）", category:"kopitiam", portion:"2 eggs", kcal:160, protein:13, carbs:1, fat:11, fiber:0, sugar:0, sodium:380,
+    visual:{ type:"egg" },
+    tips:[{ macro:"sodium", text:"The eggs themselves are low-sodium — most of it comes from how much soy sauce gets poured in.", text_zh:"鸡蛋本身钠含量不高——大部分的钠来自倒入的酱油量。" }] },
+  { id:"k_economy_rice", name:"Economy / Mixed Rice (rice + 2 veg + 1 meat)", name_zh:"经济饭（饭+两样菜+一样肉）", category:"kopitiam", portion:"1 plate", kcal:550, protein:25, carbs:70, fat:18, fiber:4, sugar:4, sodium:820 },
+  { id:"k_curry_mee", name:"Curry Mee", name_zh:"咖喱面", category:"kopitiam", portion:"1 bowl (400g)", kcal:480, protein:18, carbs:55, fat:20, fiber:3, sugar:5, sodium:890,
+    visual:{ type:"noodles" } },
+  { id:"k_roast_duck_rice", name:"Roasted Duck Rice", name_zh:"烧鸭饭", category:"kopitiam", portion:"1 plate", kcal:620, protein:28, carbs:65, fat:26, fiber:2, sugar:3, sodium:750,
+    visual:{ type:"rice" } },
+  { id:"k_char_siu_rice", name:"Char Siu Rice", name_zh:"叉烧饭", category:"kopitiam", portion:"1 plate", kcal:580, protein:26, carbs:68, fat:20, fiber:2, sugar:8, sodium:780,
+    visual:{ type:"rice" },
+    tips:[{ macro:"sugar", text:"The glossy char siu glaze is sugar-based — one of the sweeter savoury rice dishes in this library.", text_zh:"叉烧表面那层油亮的酱汁是糖基调味——是本图鉴中较甜的咸食之一。" }] },
+
+  // ── Nasi Kandar (Penang-style mixed rice with curry gravies) ──
+  { id:"nk_nasi_kandar_base", name:"Nasi Kandar (rice + mixed curry gravy)", name_zh:"槟城饭（饭+综合咖喱汁）", category:"nasikandar", portion:"1 plate", kcal:420, protein:8, carbs:75, fat:10, fiber:2, sugar:3, sodium:680,
+    visual:{ type:"rice" },
+    tips:[{ macro:"fat", text:"This is the base plate before sides — the real total depends heavily on how many different curry gravies get ladled on ('banjir').", text_zh:"这是加配菜前的基础份量——实际总热量取决于淋上多少种不同的咖喱汁（俗称「banjir」）。" }] },
+  { id:"nk_ayam_berempah", name:"Ayam Goreng Berempah (spiced fried chicken, 1pc)", name_zh:"香料炸鸡（一块）", category:"nasikandar", portion:"1 piece", kcal:280, protein:20, carbs:8, fat:18, fiber:0, sugar:0, sodium:420,
+    visual:{ type:"fried" } },
+  { id:"nk_sotong_goreng", name:"Sotong Goreng Tepung (battered fried squid)", name_zh:"炸鱿鱼", category:"nasikandar", portion:"small portion (100g)", kcal:220, protein:12, carbs:18, fat:12, fiber:0, sugar:0, sodium:380,
+    visual:{ type:"fried" } },
+  { id:"nk_mutton_curry", name:"Mutton Curry (Kambing, with gravy)", name_zh:"咖喱羊肉", category:"nasikandar", portion:"100g", kcal:320, protein:22, carbs:6, fat:22, fiber:1, sugar:1, sodium:520,
+    visual:{ type:"meat" } },
+  { id:"nk_telur_bungkus", name:"Telur Bungkus (fried-egg wrapped rice, 1pc)", name_zh:"蛋包饭（一份）", category:"nasikandar", portion:"1 piece", kcal:130, protein:6, carbs:2, fat:11, fiber:0, sugar:0, sodium:170,
+    visual:{ type:"egg" } },
+
+  // ── Street Food (hawker snacks & roadside stalls) ─────
+  { id:"sf_popiah", name:"Popiah (fresh spring roll, 1 roll)", name_zh:"薄饼（一卷）", category:"streetfood", portion:"1 roll", kcal:180, protein:5, carbs:28, fat:5, fiber:3, sugar:6, sodium:340,
+    visual:{ type:"flatbread" } },
+  { id:"sf_curry_puff", name:"Curry Puff (1 piece)", name_zh:"咖喱角（一个）", category:"streetfood", portion:"1 piece", kcal:150, protein:3, carbs:16, fat:8, fiber:1, sugar:1, sodium:210,
+    visual:{ type:"fried" } },
+  { id:"sf_rojak", name:"Rojak (1 plate)", name_zh:"啰惹（一盘）", category:"streetfood", portion:"1 plate", kcal:320, protein:5, carbs:45, fat:14, fiber:5, sugar:20, sodium:380,
+    visual:{ type:"veg", variant:"leafy" },
+    tips:[{ macro:"sugar", text:"The thick dark sauce is palm-sugar based — it's what makes rojak sweet, not the fruit and vegetables underneath.", text_zh:"那层浓稠的黑酱是棕榈糖基调味的——啰惹的甜味主要来自这层酱，而非底下的水果蔬菜。" }] },
+  { id:"sf_cendol", name:"Cendol (1 bowl)", name_zh:"煎蕊（一碗）", category:"streetfood", portion:"1 bowl (300ml)", kcal:300, protein:2, carbs:55, fat:9, fiber:1, sugar:40, sodium:35,
+    visual:{ type:"icedcup" },
+    tips:[{ macro:"sugar", text:"Coconut milk plus palm sugar syrup make this one of the sweeter items here — closer to a dessert than a drink, despite the ice.", text_zh:"椰浆加上椰糖浆，让这道甜品的糖分偏高——虽然是冰品，但热量更接近甜点而非饮料。" }] },
+  { id:"sf_apam_balik", name:"Apam Balik (peanut pancake, 1 slice)", name_zh:"曼煎糕（一片）", category:"streetfood", portion:"1 slice", kcal:220, protein:4, carbs:30, fat:10, fiber:2, sugar:12, sodium:150,
+    visual:{ type:"flatbread" } },
+  { id:"sf_ramly_burger", name:"Ramly Burger (with egg)", name_zh:"Ramly汉堡（加蛋）", category:"streetfood", portion:"1 burger", kcal:480, protein:20, carbs:42, fat:26, fiber:2, sugar:8, sodium:780,
+    visual:{ type:"burger" },
+    components:[{ name:"Bun", name_zh:"面包", kcal:130 },{ name:"Beef patty", name_zh:"牛肉饼", kcal:180 },{ name:"Egg & sauces", name_zh:"鸡蛋与酱料", kcal:170 }] },
+  { id:"sf_yong_tau_foo", name:"Yong Tau Foo (mixed, with soup)", name_zh:"酿豆腐（综合，含汤）", category:"streetfood", portion:"~6 pieces + soup", kcal:280, protein:20, carbs:20, fat:12, fiber:3, sugar:2, sodium:680,
+    visual:{ type:"noodles" },
+    tips:[{ macro:"protein", text:"One of the more balanced hawker choices here — you pick the pieces, so it's easy to load up on tofu/fish paste and go lighter on the fried ones.", text_zh:"是小贩美食中较均衡的选择之一——可以自己挑选，多拿豆腐鱼板，少拿油炸类。" }] },
+  { id:"sf_pisang_goreng", name:"Pisang Goreng (fried banana, 3pcs)", name_zh:"炸香蕉（三块）", category:"streetfood", portion:"3 pieces", kcal:260, protein:2, carbs:40, fat:11, fiber:2, sugar:18, sodium:90,
+    visual:{ type:"fried" } },
 ];
 
 const COACH_MACRO_EMOJI = { kcal:"🔥", protein:"🥩", carbs:"🍞", fat:"🥑", fiber:"🌾", sugar:"🍬", sodium:"🧂" };
@@ -2508,18 +2609,6 @@ function CoachTipRows({ tips, C, lang }) {
   );
 }
 
-function CoachMacroPill({ kind, label, value, unit, color, textDim }) {
-  return (
-    <div style={{ textAlign:"center", flex:1 }}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
-        <span style={{ fontSize:12 }}>{COACH_MACRO_EMOJI[kind]}</span>
-        <span style={{ fontSize:13, fontWeight:700, color }}>{value}{unit}</span>
-      </div>
-      <div style={{ fontSize:10, color:textDim, marginTop:1 }}>{label}</div>
-    </div>
-  );
-}
-
 // Reusable dish-illustration archetypes — same idea as WorkoutIllustration
 // above (icon keyed by detected type). New dishes just pick the closest
 // existing archetype rather than getting bespoke art.
@@ -2529,37 +2618,37 @@ function CoachDishIcon({ visual, C, size = 46 }) {
   const s = { width:size-8, height:size-8, display:"block" };
   let shape = null;
   switch (type) {
-    case "noodles": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 22a14 6 0 0028 0v4a14 6 0 01-28 0z" fill={C.surface} stroke={C.border}/><path d="M10 20c2-4 2-8 0-12M16 20c2-4 1-9-1-13M22 20c2-4 3-8 1-13M28 20c1-4 2-8 0-12" stroke={C.pink} strokeWidth="2" strokeLinecap="round"/></svg>); break;
-    case "rice": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 20a14 8 0 0028 0v3a14 8 0 01-28 0z" fill={C.surface} stroke={C.border}/><ellipse cx="20" cy="20" rx="14" ry="8" fill={C.gold} opacity="0.9"/></svg>); break;
-    case "flatbread": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M8 26c0-10 6-18 12-18s12 8 12 18c0 3-24 3-24 0z" fill={C.carbs} opacity="0.9"/></svg>); break;
-    case "skewer": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><line x1="6" y1="34" x2="32" y2="8" stroke={C.textDim} strokeWidth="2" strokeLinecap="round"/><ellipse cx="14" cy="26" rx="5" ry="4.2" fill={C.protein} transform="rotate(-40 14 26)"/><ellipse cx="21" cy="19" rx="5" ry="4.2" fill={C.protein} transform="rotate(-40 21 19)"/><ellipse cx="28" cy="12" rx="4.5" ry="3.8" fill={C.protein} transform="rotate(-40 28 12)"/></svg>); break;
+    case "noodles": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 22a14 6 0 0028 0v4a14 6 0 01-28 0z" fill={C.surface} stroke={C.border}/><path d="M10 20c2-4 2-8 0-12M16 20c2-4 1-9-1-13M22 20c2-4 3-8 1-13M28 20c1-4 2-8 0-12" stroke={C.pink} strokeWidth="2" strokeLinecap="round"/><ellipse cx="14" cy="19" rx="9" ry="2.2" fill="#fff" opacity="0.15"/></svg>); break;
+    case "rice": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 20a14 8 0 0028 0v3a14 8 0 01-28 0z" fill={C.surface} stroke={C.border}/><ellipse cx="20" cy="20" rx="14" ry="8" fill={C.gold} opacity="0.9"/><ellipse cx="15" cy="17" rx="6" ry="2.4" fill="#fff" opacity="0.25"/></svg>); break;
+    case "flatbread": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M8 26c0-10 6-18 12-18s12 8 12 18c0 3-24 3-24 0z" fill={C.carbs} opacity="0.9"/><path d="M12 22c1-6 3-10 6-13M20 24c1-7 2-11 3-14" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.25"/></svg>); break;
+    case "skewer": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><line x1="6" y1="34" x2="32" y2="8" stroke={C.textDim} strokeWidth="2" strokeLinecap="round"/><ellipse cx="14" cy="26" rx="5" ry="4.2" fill={C.protein} transform="rotate(-40 14 26)"/><ellipse cx="21" cy="19" rx="5" ry="4.2" fill={C.protein} transform="rotate(-40 21 19)"/><ellipse cx="28" cy="12" rx="4.5" ry="3.8" fill={C.protein} transform="rotate(-40 28 12)"/><ellipse cx="13" cy="24" rx="2" ry="1" fill="#fff" opacity="0.25" transform="rotate(-40 13 24)"/><ellipse cx="20" cy="17" rx="2" ry="1" fill="#fff" opacity="0.25" transform="rotate(-40 20 17)"/></svg>); break;
     case "pasta": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 22a14 8 0 0028 0v3a14 8 0 01-28 0z" fill={C.surface} stroke={C.border}/><path d="M12 22c2-2 2-4 0-6s0-4 2-5M18 23c2-2 2-4 0-6s0-4 2-5M24 22c2-2 2-4 0-6s0-4 2-5M30 23c1-2 1-4 0-6" stroke={C.fat} strokeWidth="1.8" strokeLinecap="round" fill="none"/></svg>); break;
-    case "pizza": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 6l14 28H6z" fill={C.gold}/><path d="M20 6l14 28H6z" fill="none" stroke={C.border} strokeWidth="2"/><circle cx="18" cy="20" r="2" fill={C.pink}/><circle cx="23" cy="26" r="2" fill={C.pink}/></svg>); break;
-    case "burger": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M8 16a12 7 0 0124 0z" fill={C.gold}/><rect x="7" y="17" width="26" height="4" rx="1" fill={C.green}/><rect x="7" y="22" width="26" height="4" rx="1" fill={C.protein}/><path d="M7 27h26v3a3 3 0 01-3 3H10a3 3 0 01-3-3z" fill={C.carbs}/></svg>); break;
-    case "fried": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M14 8c6-2 10 2 12 8 3 8-2 16-9 18-5 1-9-2-9-7 0-3 2-4 3-7 1-4-1-7 3-12z" fill={C.gold}/></svg>); break;
-    case "fries": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M9 18l3 16h16l3-16z" fill={C.protein}/>{[12,17,22,27].map((x,i)=>(<rect key={i} x={x-1.5} y={6+(i%2)*3} width="3" height={22-(i%2)*3} rx="1" fill={C.gold}/>))}</svg>); break;
-    case "meat": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M13 10c6-3 15 2 16 10 1 6-4 12-11 12-5 0-9-4-9-9 0-4 2-5 2-8 0-2 1-4 2-5z" fill={C.protein}/></svg>); break;
-    case "fish": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 20c6-8 18-10 26-2-8 8-20 6-26 2z" fill={C.water}/><path d="M30 18l6-5v11z" fill={C.water}/></svg>); break;
-    case "tofu": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="9" y="12" width="22" height="18" rx="2" fill={C.surface} stroke={C.border}/></svg>); break;
-    case "egg": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><ellipse cx="20" cy="21" rx="13" ry="10" fill={C.surface} stroke={C.border}/><circle cx="20" cy="21" r="6" fill={C.gold}/></svg>); break;
+    case "pizza": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 6l14 28H6z" fill={C.gold}/><path d="M20 6l14 28H6z" fill="none" stroke={C.border} strokeWidth="2"/><path d="M20 6l-6 12h12z" fill="#fff" opacity="0.18"/><circle cx="18" cy="20" r="2" fill={C.pink}/><circle cx="23" cy="26" r="2" fill={C.pink}/></svg>); break;
+    case "burger": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M8 16a12 7 0 0124 0z" fill={C.gold}/><path d="M11 14a9 4.5 0 0118 0z" fill="#fff" opacity="0.2"/><rect x="7" y="17" width="26" height="4" rx="1" fill={C.green}/><rect x="7" y="22" width="26" height="4" rx="1" fill={C.protein}/><path d="M7 27h26v3a3 3 0 01-3 3H10a3 3 0 01-3-3z" fill={C.carbs}/></svg>); break;
+    case "fried": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M9 30c-1-3 1-5 3-6 1-4-1-7 2-12 2-4 6-6 10-4 5 2 7 8 5 14-1 4-4 7-8 8-4 1-9 1-12 0z" fill={C.gold}/><path d="M13 14c2-3 5-4 8-2" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" opacity="0.3"/><circle cx="16" cy="18" r="1" fill="#fff" opacity="0.4"/><circle cx="22" cy="14" r="1" fill="#fff" opacity="0.4"/><circle cx="24" cy="22" r="1" fill="#fff" opacity="0.4"/><path d="M11 29c-1-2 0-4 2-5" stroke={C.textDim} strokeWidth="1.6" strokeLinecap="round" opacity="0.5"/></svg>); break;
+    case "fries": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M9 18l3 16h16l3-16z" fill={C.protein}/><path d="M11 18h6l-1 16h-3z" fill="#fff" opacity="0.15"/>{[12,17,22,27].map((x,i)=>(<rect key={i} x={x-1.5} y={6+(i%2)*3} width="3" height={22-(i%2)*3} rx="1" fill={C.gold}/>))}</svg>); break;
+    case "meat": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M13 10c6-3 15 2 16 10 1 6-4 12-11 12-5 0-9-4-9-9 0-4 2-5 2-8 0-2 1-4 2-5z" fill={C.protein}/><ellipse cx="17" cy="16" rx="6" ry="3.5" fill="#fff" opacity="0.2" transform="rotate(-30 17 16)"/><path d="M15 14l10 10M14 20l8 8" stroke="#000" strokeWidth="1" opacity="0.08" strokeLinecap="round"/></svg>); break;
+    case "fish": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M6 20c6-8 18-10 26-2-8 8-20 6-26 2z" fill={C.water}/><path d="M30 18l6-5v11z" fill={C.water}/><path d="M9 19c4-4 10-6 15-5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" opacity="0.3"/><circle cx="11" cy="19" r="1.2" fill={C.card}/></svg>); break;
+    case "tofu": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="9" y="12" width="22" height="18" rx="2" fill={C.surface} stroke={C.border}/><rect x="12" y="15" width="8" height="5" rx="1" fill="#fff" opacity="0.3"/></svg>); break;
+    case "egg": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><ellipse cx="20" cy="21" rx="13" ry="10" fill={C.surface} stroke={C.border}/><circle cx="20" cy="21" r="6" fill={C.gold}/><ellipse cx="18" cy="19" rx="2.4" ry="1.6" fill="#fff" opacity="0.45"/></svg>); break;
     case "fruit":
-      if (variant==="banana") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M10 30c2-14 10-22 20-21-1 3-3 4-5 5-8 3-11 10-11 18 0 3-1 5-4 5-3 0-4-3-3-7z" fill={C.gold}/></svg>);
-      else if (variant==="watermelon") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 6a26 26 0 0116 28H4A26 26 0 0120 6z" fill={C.pink} stroke={C.green} strokeWidth="2.5"/><circle cx="17" cy="24" r="1" fill={C.textDim}/><circle cx="23" cy="27" r="1" fill={C.textDim}/></svg>);
-      else if (variant==="apple") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 14c5-4 12-1 12 7 0 8-6 13-12 13S8 29 8 21c0-8 7-11 12-7z" fill={C.pink}/><path d="M21 9c2-1 4-1 5 1" fill={C.green}/></svg>);
-      else shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><circle cx="20" cy="21" r="14" fill={C.gold}/></svg>);
+      if (variant==="banana") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M10 30c2-14 10-22 20-21-1 3-3 4-5 5-8 3-11 10-11 18 0 3-1 5-4 5-3 0-4-3-3-7z" fill={C.gold}/><path d="M13 27c1-9 6-15 12-18" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" opacity="0.3"/></svg>);
+      else if (variant==="watermelon") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 6a26 26 0 0116 28H4A26 26 0 0120 6z" fill={C.pink} stroke={C.green} strokeWidth="2.5"/><path d="M20 6a26 26 0 00-13 22" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" opacity="0.25" fill="none"/><circle cx="17" cy="24" r="1" fill={C.textDim}/><circle cx="23" cy="27" r="1" fill={C.textDim}/><circle cx="19" cy="30" r="1" fill={C.textDim}/></svg>);
+      else if (variant==="apple") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 14c5-4 12-1 12 7 0 8-6 13-12 13S8 29 8 21c0-8 7-11 12-7z" fill={C.pink}/><ellipse cx="15" cy="18" rx="3.5" ry="5" fill="#fff" opacity="0.25" transform="rotate(-20 15 18)"/><path d="M21 9c2-1 4-1 5 1" fill={C.green}/></svg>);
+      else shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><circle cx="20" cy="21" r="14" fill={C.gold}/><path d="M20 7c1 3 1 5 0 7M9 30c-2-2-3-4-3-6M31 30c2-2 3-4 3-6" stroke="#fff" strokeWidth="1" opacity="0.2"/><ellipse cx="15" cy="16" rx="4.5" ry="3" fill="#fff" opacity="0.22" transform="rotate(-25 15 16)"/></svg>);
       break;
     case "veg":
-      if (variant==="carrot") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M18 12l6 2-14 20-4-4z" fill={C.gold}/><path d="M18 12c0-3 1-6 3-7M20 10c1-3 3-5 5-5" stroke={C.green} strokeWidth="2" strokeLinecap="round"/></svg>);
-      else if (variant==="broccoli") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="18" y="24" width="4" height="10" fill={C.gold}/><circle cx="16" cy="18" r="7" fill={C.green}/><circle cx="24" cy="18" r="7" fill={C.green}/><circle cx="20" cy="12" r="7" fill={C.green}/></svg>);
-      else shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 8c8 0 13 6 13 13s-5 13-13 13-13-6-13-13S12 8 20 8z" fill={C.green} opacity="0.9"/></svg>);
+      if (variant==="carrot") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M18 12l6 2-14 20-4-4z" fill={C.gold}/><path d="M17 15l3 1-10 15-2-2z" fill="#fff" opacity="0.2"/><path d="M18 12c0-3 1-6 3-7M20 10c1-3 3-5 5-5M16 13c-2-2-4-3-6-3" stroke={C.green} strokeWidth="2" strokeLinecap="round"/></svg>);
+      else if (variant==="broccoli") shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="18" y="24" width="4" height="10" fill={C.gold}/><circle cx="16" cy="18" r="7" fill={C.green}/><circle cx="24" cy="18" r="7" fill={C.green}/><circle cx="20" cy="12" r="7" fill={C.green}/><circle cx="17" cy="10" r="2.5" fill="#fff" opacity="0.2"/></svg>);
+      else shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M20 8c8 0 13 6 13 13s-5 13-13 13-13-6-13-13S12 8 20 8z" fill={C.green} opacity="0.9"/><path d="M20 12c4 3 6 6 6 9M20 12c-4 3-6 6-6 9M20 12v18" stroke="#fff" strokeWidth="1.1" opacity="0.22" strokeLinecap="round"/></svg>);
       break;
-    case "hotcup": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M9 16h20l-2 15a3 3 0 01-3 3H14a3 3 0 01-3-3z" fill={color||C.pink}/><path d="M29 19h3a4 4 0 010 8h-2" fill="none" stroke={color||C.pink} strokeWidth="2.2"/><path d="M14 10c1-2 0-3 1-5M20 10c1-2 0-3 1-5M26 10c1-2 0-3 1-5" stroke={C.textDim} strokeWidth="1.6" strokeLinecap="round" opacity="0.6"/></svg>); break;
-    case "icedcup": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M10 12h20l-2.5 21a2 2 0 01-2 1.8H14.5a2 2 0 01-2-1.8z" fill={C.surface} stroke={C.border}/><path d="M11 15h18l-2 17a1.6 1.6 0 01-1.6 1.4H14.6A1.6 1.6 0 0113 32z" fill={color||C.pink} opacity="0.85"/><line x1="24" y1="6" x2="19" y2="30" stroke={C.textDim} strokeWidth="2" strokeLinecap="round"/></svg>); break;
-    case "can": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="12" y="8" width="16" height="26" rx="3" fill={color||C.pink}/><rect x="12" y="8" width="16" height="5" rx="2" fill={C.border}/><rect x="16" y="4" width="2" height="5" fill={C.border}/></svg>); break;
+    case "hotcup": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M9 16h20l-2 15a3 3 0 01-3 3H14a3 3 0 01-3-3z" fill={color||C.pink}/><path d="M11 16h6l-1.5 16h-3z" fill="#fff" opacity="0.15"/><path d="M29 19h3a4 4 0 010 8h-2" fill="none" stroke={color||C.pink} strokeWidth="2.2"/><path d="M14 10c1-2 0-3 1-5M20 10c1-2 0-3 1-5M26 10c1-2 0-3 1-5" stroke={C.textDim} strokeWidth="1.6" strokeLinecap="round" opacity="0.6"/></svg>); break;
+    case "icedcup": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><path d="M10 12h20l-2.5 21a2 2 0 01-2 1.8H14.5a2 2 0 01-2-1.8z" fill={C.surface} stroke={C.border}/><path d="M11 15h18l-2 17a1.6 1.6 0 01-1.6 1.4H14.6A1.6 1.6 0 0113 32z" fill={color||C.pink} opacity="0.85"/><path d="M12.5 16h4l-1.5 15h-2.5z" fill="#fff" opacity="0.15"/><line x1="24" y1="6" x2="19" y2="30" stroke={C.textDim} strokeWidth="2" strokeLinecap="round"/></svg>); break;
+    case "can": shape = (<svg style={s} viewBox="0 0 40 40" fill="none"><rect x="12" y="8" width="16" height="26" rx="3" fill={color||C.pink}/><rect x="14" y="10" width="4" height="22" rx="2" fill="#fff" opacity="0.18"/><rect x="12" y="8" width="16" height="5" rx="2" fill={C.border}/><rect x="16" y="4" width="2" height="5" fill={C.border}/></svg>); break;
     default: shape = null;
   }
   return (
-    <div style={{ width:size, height:size, borderRadius:12, background:C.surface, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+    <div style={{ width:size, height:size, borderRadius:12, background:C.surface, border:`1px solid ${C.border}`, boxShadow:"0 1px 3px rgba(0,0,0,0.12)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
       {shape}
     </div>
   );
@@ -2567,95 +2656,32 @@ function CoachDishIcon({ visual, C, size = 46 }) {
 
 
 function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
-  const [multiplier, setMultiplier] = useState(1);
-  const [addonQty, setAddonQty] = useState({});
-
-  const portionComp = food.portionComponent && food.components?.find(c => c.name === food.portionComponent);
-  const portionDeltaKcal = portionComp ? portionComp.kcal * (multiplier - 1) : 0;
-  const addonDelta = (food.addons||[]).reduce((acc,a) => {
-    const qty = addonQty[a.name] || 0;
-    acc.kcal += qty*a.unitKcal; acc.protein += qty*(a.unitProtein||0); acc.carbs += qty*(a.unitCarbs||0); acc.fat += qty*(a.unitFat||0);
-    return acc;
-  }, { kcal:0, protein:0, carbs:0, fat:0 });
-
-  const kcal = food.kcal + portionDeltaKcal + addonDelta.kcal;
-  const protein = food.protein + addonDelta.protein;
-  const carbs = food.carbs + portionDeltaKcal/4 + addonDelta.carbs;
-  const fat = food.fat + addonDelta.fat;
-  // Sugar/sodium/fiber aren't itemized per-component the way kcal/protein/carbs/fat are, so they
-  // scale by the overall kcal ratio as an approximation — same principle scaleMealToTotal uses.
-  const kcalRatio = food.kcal > 0 ? kcal / food.kcal : 1;
-  const sugar = Math.round(food.sugar * kcalRatio * 10) / 10;
-  const sodium = Math.round(food.sodium * kcalRatio);
-  const fiber = Math.round(food.fiber * kcalRatio * 10) / 10;
-  const isAdjusted = multiplier !== 1 || Object.values(addonQty).some(q => q > 0);
-  const setAddon = (name, qty) => setAddonQty(prev => ({ ...prev, [name]: Math.max(0, Math.min(2, qty)) }));
-
   const dishName = lang === "zh" ? food.name_zh : food.name;
 
   return (
-    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px" }}>
-      <div onClick={() => food.components && onToggle(food.id)} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", cursor: food.components?"pointer":"default", gap:10 }}>
-        <div style={{ display:"flex", gap:10, alignItems:"center", minWidth:0 }}>
-          <CoachDishIcon visual={food.visual} C={C} />
-          <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{dishName}</div>
-            <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{lang==="zh"?food.name:food.name_zh} · {food.portion}</div>
+    <div style={{ padding:"12px 14px", borderRadius:18, background:C.card, border:`1px solid ${C.border}66` }}>
+      <div onClick={() => food.components && onToggle(food.id)} style={{ display:"flex", alignItems:"flex-start", gap:10, cursor: food.components?"pointer":"default" }}>
+        <CoachDishIcon visual={food.visual} C={C} size={50} />
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text, marginBottom:2, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", lineHeight:1.3 }}>
+            {dishName}{food.components && <span style={{ fontSize:10, color:C.textDim, marginLeft:6 }}>{expanded ? "▲" : "▼"}</span>}
           </div>
+          <div style={{ fontSize:11, color:C.textMuted }}>{lang==="zh"?food.name:food.name_zh} · {food.portion}</div>
         </div>
-        <div style={{ textAlign:"right", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"flex-end" }}>
-            <span style={{ fontSize:14 }}>🔥</span>
-            <span style={{ fontSize:17, fontWeight:800, color:C.pink }}>{Math.round(kcal)}</span>
-          </div>
-          <div style={{ fontSize:10, color:C.textDim }}>{isAdjusted ? L("kcal (adjusted)","千卡（已调整）") : "kcal"}</div>
-        </div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:C.pink, fontWeight:"800", flexShrink:0 }}>{Math.round(food.kcal)}</div>
       </div>
 
-      <div style={{ display:"flex", marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-        <CoachMacroPill kind="protein" label={L("Protein","蛋白质")} value={Math.round(protein)} unit="g" color={C.protein} textDim={C.textDim} />
-        <CoachMacroPill kind="carbs" label={L("Carbs","碳水")} value={Math.round(carbs)} unit="g" color={C.carbs} textDim={C.textDim} />
-        <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={Math.round(fat)} unit="g" color={C.fat} textDim={C.textDim} />
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
+        <span style={{ fontSize:11, color:C.protein, fontWeight:"600" }}>P 🥩 {Math.round(food.protein)}g</span>
+        <span style={{ fontSize:11, color:C.carbs, fontWeight:"600" }}>C 🍞 {Math.round(food.carbs)}g</span>
+        <span style={{ fontSize:11, color:C.fat, fontWeight:"600" }}>F 🥑 {Math.round(food.fat)}g</span>
+        <span style={{ fontSize:11, color:C.sugar, fontWeight:"600" }}>S 🍬 {food.sugar}g</span>
+        <span style={{ fontSize:11, color:C.sodium, fontWeight:"600" }}>NA 🧂 {food.sodium}mg</span>
+        <span style={{ fontSize:11, color:C.fiber, fontWeight:"600" }}>Fbr 🌾 {food.fiber}g</span>
       </div>
-      <div style={{ display:"flex", marginTop:6 }}>
-        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={fiber} unit="g" color={C.fiber} textDim={C.textDim} />
-        <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={sugar} unit="g" color={C.sugar} textDim={C.textDim} />
-        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={sodium} unit="mg" color={C.sodium} textDim={C.textDim} />
-      </div>
-
-      {portionComp && (
-        <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:C.surface, borderRadius:8, padding:"7px 10px" }}>
-            <span style={{ fontSize:12, color:C.text }}>{lang==="zh" ? (portionComp.name_zh||portionComp.name) : portionComp.name} <span style={{ color:C.textDim }}>({L("portion","份量")})</span></span>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <button onClick={(e)=>{e.stopPropagation(); setMultiplier(Math.max(0, Math.round((multiplier-0.5)*10)/10));}} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textMuted, cursor:"pointer", fontSize:13, lineHeight:1 }}>−</button>
-              <span style={{ fontSize:12.5, fontWeight:700, color:C.text, minWidth:26, textAlign:"center" }}>{multiplier}x</span>
-              <button onClick={(e)=>{e.stopPropagation(); setMultiplier(Math.min(2, Math.round((multiplier+0.5)*10)/10));}} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.pink}`, background:"transparent", color:C.pink, cursor:"pointer", fontSize:13, lineHeight:1 }}>+</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {food.addons && food.addons.length > 0 && (
-        <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:6 }}>
-          {food.addons.map(a => {
-            const qty = addonQty[a.name] || 0;
-            return (
-              <div key={a.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:C.surface, borderRadius:8, padding:"7px 10px" }}>
-                <span style={{ fontSize:12, color:C.text }}>{lang==="zh"?a.name_zh:a.name} <span style={{ color:C.textDim }}>(+{a.unitKcal} kcal {L("each","每份")})</span></span>
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <button onClick={(e)=>{e.stopPropagation(); setAddon(a.name, qty-1);}} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.border}`, background:"transparent", color:C.textMuted, cursor:"pointer", fontSize:13, lineHeight:1 }}>−</button>
-                  <span style={{ fontSize:12.5, fontWeight:700, color:C.text, minWidth:12, textAlign:"center" }}>{qty}</span>
-                  <button onClick={(e)=>{e.stopPropagation(); setAddon(a.name, qty+1);}} style={{ width:22, height:22, borderRadius:6, border:`1px solid ${C.pink}`, background:"transparent", color:C.pink, cursor:"pointer", fontSize:13, lineHeight:1 }}>+</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       <button
-        onClick={(e) => { e.stopPropagation(); onLogThis(food, { kcal:Math.round(kcal), protein:Math.round(protein), carbs:Math.round(carbs), fat:Math.round(fat), fiber, sugar, sodium, multiplier, addonQty }); }}
+        onClick={(e) => { e.stopPropagation(); onLogThis(food); }}
         style={{ marginTop:12, width:"100%", padding:"9px 0", borderRadius:10, border:`1px solid ${C.pink}`, background:C.pinkGlow, color:C.pink, fontSize:12.5, fontWeight:700, cursor:"pointer" }}
       >
         {L("+ Add as meal","+ 添加为一餐")}
@@ -2668,24 +2694,17 @@ function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
       )}
 
       {expanded && food.components && (
-        <div style={{ marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}` }}>
-          {food.components.map((c,i) => {
-            const isPortionLine = c.portionAdjust;
-            const lineKcal = isPortionLine ? Math.round(c.kcal*multiplier) : c.kcal;
-            const lineGrams = isPortionLine && c.grams ? Math.round(c.grams*multiplier) : null;
-            return (
-              <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"3px 0", color:C.textMuted }}>
-                <span>{lang==="zh" ? (c.name_zh||c.name) : c.name}{isPortionLine && <span style={{ color:C.pink }}> (×{multiplier}{lineGrams?`, ${lineGrams}g`:""})</span>}</span>
-                <span style={{ color:C.text, fontWeight:600 }}>{lineKcal} kcal</span>
-              </div>
-            );
-          })}
-          {(food.addons||[]).filter(a => (addonQty[a.name]||0) > 0).map(a => (
-            <div key={a.name} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"3px 0", color:C.pink }}>
-              <span>+ {lang==="zh"?a.name_zh:a.name} ×{addonQty[a.name]}</span>
-              <span style={{ fontWeight:600 }}>{a.unitKcal*addonQty[a.name]} kcal</span>
+        <div style={{ marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
+          <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:6 }}>{L("BREAKDOWN BY COMPONENT","按成分细分")}</div>
+          {food.components.map((c,i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"4px 0" }}>
+              <span style={{ color:C.text, textTransform:"capitalize" }}>{lang==="zh" ? (c.name_zh||c.name) : c.name}{c.grams ? ` (~${c.grams}g)` : ""}</span>
+              <span style={{ color:C.pink, fontWeight:600 }}>{c.kcal} kcal</span>
             </div>
           ))}
+          <div style={{ fontSize:10, color:C.textDim, fontStyle:"italic", marginTop:6 }}>
+            {L("Tap \"Add as meal\" to adjust exact grams and add extra ingredients before logging.","点击「添加为一餐」即可在记录前调整具体克数并添加额外食材。")}
+          </div>
           <CoachTipRows tips={food.tips} C={C} lang={lang} />
         </div>
       )}
@@ -2694,9 +2713,17 @@ function CoachFoodCard({ food, expanded, onToggle, onLogThis, C, lang, L }) {
 }
 
 function DietCoachModal({ onClose, onLogThis, C, lang, L }) {
-  const [activeCategory, setActiveCategory] = useState("chinese");
+  const [section, setSection] = useState("measurement"); // "measurement" | "library" — measurement first
+  const [activeCategory, setActiveCategory] = useState("protein");
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+
+  const categories = section === "measurement" ? MEASUREMENT_CATEGORIES : FOOD_LIBRARY_CATEGORIES;
+  const switchSection = (key) => {
+    setSection(key);
+    setActiveCategory(key === "measurement" ? "protein" : "chinese");
+    setExpandedId(null);
+  };
 
   const filtered = COACH_FOODS.filter(f => {
     const inCat = f.category === activeCategory;
@@ -2713,14 +2740,30 @@ function DietCoachModal({ onClose, onLogThis, C, lang, L }) {
       </div>
 
       <div style={{ width:"100%", maxWidth:500, margin:"0 auto", padding:"12px 16px 0", boxSizing:"border-box" }}>
+        <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+          {COACH_SECTIONS.map(s => (
+            <button
+              key={s.key}
+              onClick={() => switchSection(s.key)}
+              style={{ flex:1, padding:"9px 0", borderRadius:10, border:`1px solid ${section===s.key?C.pink:C.border}`, background:section===s.key?C.pinkGlow:"transparent", color:section===s.key?C.pink:C.textMuted, fontSize:13, fontWeight:700, cursor:"pointer" }}
+            >
+              {s.emoji} {lang==="zh"?s.label_zh:s.label}
+            </button>
+          ))}
+        </div>
+        {section === "measurement" && (
+          <div style={{ fontSize:11, color:C.textMuted, fontStyle:"italic", marginBottom:10, lineHeight:1.4 }}>
+            {L("How much is \"1 piece\" or \"1 glass\", really? Grams and ml for common everyday units.","「1颗」或「1杯」到底是多少？常见单位的实际克数与毫升数。")}
+          </div>
+        )}
         <input
           value={search} onChange={e => setSearch(e.target.value)}
-          placeholder={L("Search a dish or ingredient…","搜索菜肴或食材…")}
+          placeholder={section==="measurement" ? L("Search an ingredient…","搜索食材…") : L("Search a dish…","搜索菜肴…")}
           className="inp"
           style={{ width:"100%", boxSizing:"border-box", marginBottom:12 }}
         />
         <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:12 }}>
-          {COACH_CATEGORIES.map(cat => (
+          {categories.map(cat => (
             <button
               key={cat.key}
               onClick={() => { setActiveCategory(cat.key); setExpandedId(null); }}
@@ -2752,8 +2795,8 @@ function DietCoachModal({ onClose, onLogThis, C, lang, L }) {
 
 // ════════════════════════════════════════════════════════════
 // DRINK COACH — same pattern as Diet Coach: curated reference library,
-// opened from the Water tab's 4-quadrant chooser. Reuses CoachMacroPill,
-// COACH_MACRO_EMOJI, and CoachDishIcon (hotcup/icedcup/can archetypes)
+// opened from the Water tab's 4-quadrant chooser. Reuses the same MealCard-style
+// inline macro row, COACH_MACRO_EMOJI, and CoachDishIcon (hotcup/icedcup/can archetypes)
 // rather than building a parallel icon/macro system.
 // ════════════════════════════════════════════════════════════
 const DRINK_CATEGORIES = [
@@ -2761,34 +2804,6 @@ const DRINK_CATEGORIES = [
   { key: "coffee", label: "Coffee", label_zh: "咖啡", emoji: "☕" },
   { key: "local", label: "Local", label_zh: "本地饮品", emoji: "🥤" },
   { key: "soda", label: "Soda", label_zh: "汽水", emoji: "🧋" },
-];
-
-// Sugar-level adjuster — reuses the same "adjust relative to one listed
-// component" idea as Diet Coach's rice/noodle portion adjuster, just with
-// levels that match how people actually order these drinks locally.
-// Container sizes — researched against real-world common serving sizes rather than
-// guessed: Malaysian canned drinks are standardized at 325ml (not the 330/355ml seen
-// elsewhere), kopitiam tea/coffee glasses run ~250ml, a regular takeaway hot/cold cup
-// is commonly 300-350ml, and bubble tea's global standard "regular" size is 500ml.
-const CONTAINER_SIZES = {
-  cup: { label: "Cup", label_zh: "杯", ml: 250 },
-  takeaway: { label: "Takeaway Cup", label_zh: "外带杯", ml: 350 },
-  large: { label: "Large Cup", label_zh: "大杯", ml: 500 },
-  can: { label: "Can", label_zh: "罐装", ml: 325 },
-  bottle: { label: "Bottle", label_zh: "瓶装", ml: 500 },
-};
-const CATEGORY_CONTAINERS = {
-  tea: ["cup", "takeaway", "large"],
-  coffee: ["cup", "takeaway"],
-  local: ["cup", "takeaway", "large"],
-  soda: ["can", "bottle"],
-};
-
-const SUGAR_LEVELS = [
-  { key: 1, label: "Normal", label_zh: "正常" },
-  { key: 0.75, label: "Less Sweet", label_zh: "少甜" },
-  { key: 0.5, label: "Half Sugar", label_zh: "半糖" },
-  { key: 0.1, label: "No Sugar", label_zh: "无糖" },
 ];
 
 const DRINK_COACH_ITEMS = [
@@ -2853,118 +2868,42 @@ const DRINK_COACH_ITEMS = [
 ];
 
 function DrinkCard({ drink, C, lang, L, onAdd }) {
-  const baseMlMatch = drink.portion.match(/(\d+)\s*ml/);
-  const baseMl = baseMlMatch ? parseInt(baseMlMatch[1], 10) : 250;
-  const containerKeys = CATEGORY_CONTAINERS[drink.category] || ["cup"];
-  // Default to whichever container size is closest to this drink's own listed portion,
-  // so nothing changes until the person actually picks a different size.
-  const defaultContainerKey = containerKeys.reduce((best, key) =>
-    Math.abs(CONTAINER_SIZES[key].ml - baseMl) < Math.abs(CONTAINER_SIZES[best].ml - baseMl) ? key : best
-  , containerKeys[0]);
-  const [containerKey, setContainerKey] = useState(defaultContainerKey);
-  const [level, setLevel] = useState(1);
-
-  const containerMl = CONTAINER_SIZES[containerKey].ml;
-  const ratio = containerMl / baseMl;
-  const hasSugarAdjust = drink.sugarKcal != null;
-  const mult = hasSugarAdjust ? level : 1;
-
-  // Container size scales everything proportionally first; sugar level then only
-  // adjusts the syrup/condensed-milk portion on top of that already-scaled baseline.
-  const baseKcalAtSize = drink.kcal * ratio;
-  const sugarKcalAtSize = hasSugarAdjust ? drink.sugarKcal * ratio : 0;
-  const kcal = Math.round(baseKcalAtSize + (hasSugarAdjust ? sugarKcalAtSize * (mult - 1) : 0));
-
-  const baseSugarAtSize = drink.sugar * ratio;
-  const sugarGAtSize = hasSugarAdjust ? drink.sugarG * ratio : 0;
-  const sugar = Math.max(0, Math.round(baseSugarAtSize + (hasSugarAdjust ? sugarGAtSize * (mult - 1) : 0)));
-
-  const protein = Math.round(drink.protein * ratio * 10) / 10;
-  const carbs = Math.round(drink.carbs * ratio * 10) / 10;
-  const fat = Math.round(drink.fat * ratio * 10) / 10;
-  const fiber = Math.round(drink.fiber * ratio * 10) / 10;
-  const sodium = Math.round(drink.sodium * ratio);
-
-  const isAdjusted = containerKey !== defaultContainerKey || (hasSugarAdjust && level !== 1);
   const dishName = lang === "zh" ? drink.name_zh : drink.name;
-  const sizeLabel = lang==="zh" ? CONTAINER_SIZES[containerKey].label_zh : CONTAINER_SIZES[containerKey].label;
   // Icon color varies by category so tea/coffee/local/soda read as visually distinct
   // even when they share the same cup/can archetype — all theme-driven, no fixed hex.
   const iconColor = { tea: C.green, coffee: C.gold, local: C.carbs, soda: C.pink }[drink.category] || C.pink;
 
   return (
-    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px" }}>
-      <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-        <CoachDishIcon visual={{ ...drink.visual, color: iconColor }} C={C} />
+    <div style={{ padding:"12px 14px", borderRadius:18, background:C.card, border:`1px solid ${C.border}66` }}>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+        <CoachDishIcon visual={{ ...drink.visual, color: iconColor }} C={C} size={50} />
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{dishName}</div>
-          <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{lang==="zh"?drink.name:drink.name_zh} · {sizeLabel} ({containerMl}ml)</div>
+          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text, marginBottom:2, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", lineHeight:1.3 }}>{dishName}</div>
+          <div style={{ fontSize:11, color:C.textMuted }}>{lang==="zh"?drink.name:drink.name_zh} · {drink.portion}</div>
         </div>
-        <div style={{ textAlign:"right", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"flex-end" }}>
-            <span style={{ fontSize:14 }}>🔥</span>
-            <span style={{ fontSize:17, fontWeight:800, color:C.pink }}>{kcal}</span>
-          </div>
-          <div style={{ fontSize:10, color:C.textDim }}>{isAdjusted ? L("kcal (adjusted)","千卡（已调整）") : "kcal"}</div>
-        </div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:C.pink, fontWeight:"800", flexShrink:0 }}>{drink.kcal}</div>
       </div>
 
-      <div style={{ display:"flex", marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-        <CoachMacroPill kind="protein" label={L("Protein","蛋白质")} value={protein} unit="g" color={C.protein} textDim={C.textDim} />
-        <CoachMacroPill kind="carbs" label={L("Carbs","碳水")} value={carbs} unit="g" color={C.carbs} textDim={C.textDim} />
-        <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={fat} unit="g" color={C.fat} textDim={C.textDim} />
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
+        <span style={{ fontSize:11, color:C.protein, fontWeight:"600" }}>P 🥩 {drink.protein}g</span>
+        <span style={{ fontSize:11, color:C.carbs, fontWeight:"600" }}>C 🍞 {drink.carbs}g</span>
+        <span style={{ fontSize:11, color:C.fat, fontWeight:"600" }}>F 🥑 {drink.fat}g</span>
+        <span style={{ fontSize:11, color:C.sugar, fontWeight:"600" }}>S 🍬 {drink.sugar}g</span>
+        <span style={{ fontSize:11, color:C.sodium, fontWeight:"600" }}>NA 🧂 {drink.sodium}mg</span>
+        <span style={{ fontSize:11, color:C.fiber, fontWeight:"600" }}>Fbr 🌾 {drink.fiber}g</span>
       </div>
-      <div style={{ display:"flex", marginTop:6 }}>
-        <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={sugar} unit="g" color={C.sugar} textDim={C.textDim} />
-        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={sodium} unit="mg" color={C.sodium} textDim={C.textDim} />
-        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={fiber} unit="g" color={C.fiber} textDim={C.textDim} />
-      </div>
-
-      {containerKeys.length > 1 && (
-        <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
-          <div style={{ fontSize:11, color:C.textMuted, marginBottom:6 }}>{L("Serving size","份量")}</div>
-          <div style={{ display:"flex", gap:6 }}>
-            {containerKeys.map(key => (
-              <button key={key} onClick={() => setContainerKey(key)} style={{
-                flex:1, fontSize:10.5, fontWeight:600, padding:"6px 2px", borderRadius:8,
-                border:`1px solid ${containerKey===key?C.pink:C.border}`,
-                background:containerKey===key?C.pinkGlow:"transparent",
-                color:containerKey===key?C.pink:C.textMuted, cursor:"pointer",
-              }}>
-                {lang==="zh"?CONTAINER_SIZES[key].label_zh:CONTAINER_SIZES[key].label}<br/>
-                <span style={{ fontSize:9.5, opacity:0.8 }}>{CONTAINER_SIZES[key].ml}ml</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {hasSugarAdjust && (
-        <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
-          <div style={{ fontSize:11, color:C.textMuted, marginBottom:6 }}>{L("Sugar level","甜度")}</div>
-          <div style={{ display:"flex", gap:6 }}>
-            {SUGAR_LEVELS.map(t => (
-              <button key={t.key} onClick={() => setLevel(t.key)} style={{
-                flex:1, fontSize:10.5, fontWeight:600, padding:"6px 2px", borderRadius:8,
-                border:`1px solid ${level===t.key?C.pink:C.border}`,
-                background:level===t.key?C.pinkGlow:"transparent",
-                color:level===t.key?C.pink:C.textMuted, cursor:"pointer",
-              }}>
-                {lang==="zh"?t.label_zh:t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <CoachTipRows tips={drink.tips} C={C} lang={lang} />
 
       <button
-        onClick={() => onAdd(drink, { kcal, protein, carbs, fat, fiber, sugar, sodium, containerMl, sizeLabel, level })}
+        onClick={() => onAdd(drink)}
         style={{ marginTop:10, width:"100%", padding:"9px 0", borderRadius:10, border:`1px solid ${C.pink}`, background:C.pinkGlow, color:C.pink, fontSize:12.5, fontWeight:700, cursor:"pointer" }}
       >
         {L("+ Add as drink","+ 添加为饮品")}
       </button>
+      <div style={{ marginTop:8, fontSize:10, color:C.textDim, fontStyle:"italic" }}>
+        {L("Opens the drink form pre-filled — adjust ml, sugar, or anything else there before saving.","将打开预先填好的饮品表单 —— 保存前可在此调整毫升数、糖分等任何数值。")}
+      </div>
     </div>
   );
 }
@@ -3016,114 +2955,6 @@ function DrinkCoachModal({ onClose, onAdd, C, lang, L }) {
             <DrinkCard key={drink.id} drink={drink} C={C} lang={lang} L={L} onAdd={onAdd} />
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════
-// COACH CONFIRM CARD — the review step for both Diet Coach and Drink Coach, deliberately kept
-// as a static summary (icon, name, kcal, macros, read-only breakdown) rather than another
-// editable form. Portion/add-on adjustments happen back in the Coach card itself via its
-// discrete steppers (0.5x/1x/1.5x, pieces) — this screen doesn't re-open that editing surface,
-// unlike AI Photo's free-form gram entry. Used for both meal and drink confirmation.
-// ════════════════════════════════════════════════════════════
-function CoachConfirmCard({ kind, food, drink, computed, slot, onSlotChange, flagged, onFlagToggle, occasion, onOccasion, location, onLocation, comment, onComment, onConfirm, onCancel, saving, C, lang, L }) {
-  const isDrink = kind === "drink";
-  const item = isDrink ? drink : food;
-  const dishName = lang === "zh" ? item.name_zh : item.name;
-  const accentColor = isDrink ? C.water : C.pink;
-
-  let breakdownLines = [];
-  if (!isDrink) {
-    if (Array.isArray(item.components)) {
-      breakdownLines = item.components.map(c => {
-        const isPortionLine = c.portionAdjust;
-        const lineKcal = isPortionLine ? Math.round(c.kcal * computed.multiplier) : c.kcal;
-        return { label: lang==="zh"?(c.name_zh||c.name):c.name, sub: isPortionLine ? `×${computed.multiplier}` : "", kcal: lineKcal };
-      });
-    }
-    (item.addons||[]).forEach(a => {
-      const qty = (computed.addonQty||{})[a.name] || 0;
-      if (qty > 0) breakdownLines.push({ label: `+ ${lang==="zh"?a.name_zh:a.name}`, sub: `×${qty}`, kcal: a.unitKcal*qty });
-    });
-  } else {
-    const level = SUGAR_LEVELS.find(l => l.key === computed.level);
-    breakdownLines = [
-      { label: L("Serving size","份量"), value: `${computed.sizeLabel} · ${computed.containerMl}ml` },
-      ...(level ? [{ label: L("Sugar level","甜度"), value: lang==="zh"?level.label_zh:level.label }] : []),
-    ];
-  }
-
-  return (
-    <div className="fade" style={{ background:C.surface, border:`1px solid ${accentColor}59`, borderRadius:18, padding:16, marginTop:12 }}>
-      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:accentColor, marginBottom:12 }}>
-        {isDrink ? "🥤" : "🍽"} {isDrink ? L("Confirm Drink","确认饮品") : L(`Confirm ${slotLabel(slot, lang)}`,`确认${slotLabel(slot, lang)}`)}
-      </div>
-
-      {!isDrink && onSlotChange && (
-        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4, marginBottom:14 }}>
-          {SLOTS.map(s => (
-            <button key={s} className={`slot-btn ${slot===s?"on":""}`} onClick={() => onSlotChange(s)} style={{ flexShrink:0 }}>
-              {SLOT_ICONS[s]} {slotLabel(s, lang)}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div style={{ display:"flex", gap:12, marginBottom:14, alignItems:"center" }}>
-        <CoachDishIcon visual={item.visual} C={C} size={54} />
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontSize:16, fontWeight:700, color:C.text }}>{dishName}</div>
-          <div style={{ fontSize:12, color:C.textMuted }}>{lang==="zh"?item.name:item.name_zh}</div>
-        </div>
-        <div style={{ textAlign:"right", flexShrink:0 }}>
-          <div style={{ fontSize:20, fontWeight:800, color:accentColor }}>{Math.round(computed.kcal)}</div>
-          <div style={{ fontSize:10, color:C.textDim }}>kcal</div>
-        </div>
-      </div>
-
-      <div style={{ display:"flex", marginBottom:6 }}>
-        <CoachMacroPill kind="protein" label={L("Protein","蛋白质")} value={Math.round(computed.protein)} unit="g" color={C.protein} textDim={C.textDim} />
-        <CoachMacroPill kind="carbs" label={L("Carbs","碳水")} value={Math.round(computed.carbs)} unit="g" color={C.carbs} textDim={C.textDim} />
-        <CoachMacroPill kind="fat" label={L("Fat","脂肪")} value={Math.round(computed.fat)} unit="g" color={C.fat} textDim={C.textDim} />
-      </div>
-      <div style={{ display:"flex", marginBottom:14 }}>
-        <CoachMacroPill kind="sugar" label={L("Sugar","糖")} value={Math.round(computed.sugar)} unit="g" color={C.sugar} textDim={C.textDim} />
-        <CoachMacroPill kind="sodium" label={L("Sodium","钠")} value={Math.round(computed.sodium)} unit="mg" color={C.sodium} textDim={C.textDim} />
-        <CoachMacroPill kind="fiber" label={L("Fiber","纤维")} value={Math.round(computed.fiber||0)} unit="g" color={C.fiber} textDim={C.textDim} />
-      </div>
-
-      {breakdownLines.length > 0 && (
-        <div style={{ marginBottom:14, background:`${C.border}22`, borderRadius:12, padding:"10px 12px" }}>
-          <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{L("BREAKDOWN","明细")}</div>
-          {breakdownLines.map((line, i) => (
-            <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", fontSize:12, borderBottom: i<breakdownLines.length-1?`1px dashed ${C.border}66`:"none" }}>
-              <span style={{ color:C.text }}>{line.label} {line.sub && <span style={{ color:accentColor }}>{line.sub}</span>}</span>
-              <span style={{ color:C.textMuted, fontWeight:600 }}>{line.kcal != null ? `${line.kcal} kcal` : line.value}</span>
-            </div>
-          ))}
-          <div style={{ fontSize:10, color:C.textDim, fontStyle:"italic", marginTop:6 }}>
-            {L("To adjust, discard and reopen the coach to change portion or add-ons.","如需调整，请放弃并重新打开教练以更改份量或配料。")}
-          </div>
-        </div>
-      )}
-
-      {!isDrink && (
-        <div style={{ marginBottom:14 }}>
-          <MealFlagEditor
-            flagged={flagged} occasion={occasion} location={location} comment={comment}
-            onToggle={onFlagToggle} onOccasion={onOccasion} onLocation={onLocation} onComment={onComment}
-            C={C} L={L}
-          />
-        </div>
-      )}
-
-      <div style={{ display:"flex", gap:8 }}>
-        <button className="ghost-btn" style={{ flex:1 }} onClick={onCancel} disabled={saving}>{L("Discard","放弃")}</button>
-        <button className="pink-btn" style={{ flex:2, background: isDrink ? `linear-gradient(135deg,${C.water},${C.waterDeep})` : undefined, boxShadow: isDrink ? `0 4px 20px ${C.water}47` : undefined }} onClick={onConfirm} disabled={saving}>
-          {saving ? L("Saving...","保存中...") : `✓ ${L("Add to Log","添加记录")}`}
-        </button>
       </div>
     </div>
   );
@@ -3187,23 +3018,17 @@ function WorkoutCoachCard({ item, C, lang, L, weightKg, onAdd }) {
   const name = lang === "zh" ? item.name_zh : item.name;
 
   return (
-    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px" }}>
-      <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-        <WorkoutIllustration description={item.name} color={C.workoutAccent} size={46} />
+    <div style={{ padding:"12px 14px", borderRadius:18, background:C.card, border:`1px solid ${C.border}66` }}>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+        <WorkoutIllustration description={item.name} color={C.workoutAccent} size={50} />
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{name}</div>
-          <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{lang==="zh"?item.name:item.name_zh}</div>
+          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text, marginBottom:2, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", lineHeight:1.3 }}>{name}</div>
+          <div style={{ fontSize:11, color:C.textMuted }}>{lang==="zh"?item.name:item.name_zh}</div>
         </div>
-        <div style={{ textAlign:"right", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"flex-end" }}>
-            <span style={{ fontSize:14 }}>🔥</span>
-            <span style={{ fontSize:17, fontWeight:800, color:C.workoutAccent }}>{kcal}</span>
-          </div>
-          <div style={{ fontSize:10, color:C.textDim }}>kcal</div>
-        </div>
+        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:C.workoutAccent, fontWeight:"800", flexShrink:0 }}>{kcal}</div>
       </div>
 
-      <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+      <div style={{ marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.border}66` }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:C.surface, borderRadius:8, padding:"7px 10px" }}>
           <span style={{ fontSize:12, color:C.text }}>{isTime ? L("Duration","时长") : L("Sets","组数")}</span>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -4106,73 +3931,50 @@ function NutriLogPro({ session, onLogout }) {
     }
   };
 
-  // Diet Coach — reference library, opened from the meal-logging method chooser. Deliberately
-  // simple: adjustments (portion ×0.5/1/1.5, addon pieces) happen back in the Coach card via its
-  // discrete steppers, not here — this screen is a static summary, like a logged food card, not
-  // another editable form. That's the whole point versus AI Photo's free-form gram editing.
+  // Diet Coach — reference library, opened from the meal-logging method chooser. Routes into the
+  // exact same PendingCard AI Photo uses: editable grams per component, the "add ingredient" AI
+  // feature, locked-but-proportionally-scaling macros. One shared editing system for both, rather
+  // than Coach maintaining its own separate stepper-based adjustment UI.
   const [showDietCoach, setShowDietCoach] = useState(false);
-  const [pendingCoachMeal, setPendingCoachMeal] = useState(null); // { food, computed } | null
-  const logFoodFromCoach = (food, computed) => {
-    setPendingCoachMeal({ food, computed });
-    setShowDietCoach(false);
-    setMealEntryMethod("coachConfirm");
-  };
-  const confirmCoachMeal = async () => {
-    if (!pendingCoachMeal) return;
-    const { food, computed } = pendingCoachMeal;
+  const logFoodFromCoach = (food) => {
     const dishName = lang === "zh" ? food.name_zh : food.name;
-    const extras = [];
-    if (computed.multiplier !== 1) extras.push(`${computed.multiplier}x ${food.portionComponent || ""}`.trim());
-    Object.entries(computed.addonQty || {}).forEach(([name, qty]) => { if (qty > 0) extras.push(`${name} x${qty}`); });
-    const name = extras.length ? `${dishName} (${extras.join(", ")})` : dishName;
-    try {
-      const meal = await DataAPI.addMeal(userId, {
-        log_date: today, slot: activeSlot, name, calories: computed.kcal,
-        protein: computed.protein, carbs: computed.carbs, fat: computed.fat,
-        sugar_g: computed.sugar, sodium_mg: computed.sodium, fiber_g: computed.fiber,
-        confidence: "coach", image_url: null, items: null, logged_at: new Date().toISOString(),
-        flagged: !!coachMealFlagged, flag_occasion: coachMealFlagged ? (coachMealFlagOccasion||null) : null,
-        flag_location: coachMealFlagged ? (coachMealFlagLocation||null) : null, flag_comment: coachMealFlagged ? (coachMealFlagComment||null) : null
-      });
-      setDayData(d => ({ ...d, meals: [...d.meals, meal] }));
-      setPendingCoachMeal(null); setMealEntryMethod(null);
-      setCoachMealFlagged(false); setCoachMealFlagOccasion(null); setCoachMealFlagLocation(""); setCoachMealFlagComment("");
-    } catch (err) { setError(L("Failed to add meal: ","添加餐食失败：") + err.message); }
+    const items = Array.isArray(food.components) ? food.components.map(c => ({
+      item: lang === "zh" ? (c.name_zh||c.name) : c.name,
+      calories: c.kcal,
+      grams_estimate: c.grams || null,
+    })) : null;
+    setPendingEntry({
+      type: "meal", source: "coach", name: dishName,
+      calories: food.kcal, protein: food.protein, carbs: food.carbs, fat: food.fat,
+      sugar: food.sugar, sodium: food.sodium, fiber: food.fiber,
+      confidence: "coach", image: null, items,
+      flagged: false, flag_occasion: null, flag_location: null, flag_comment: null
+    });
+    setShowDietCoach(false);
+    setMealEntryMethod("photo");
   };
-  const [coachMealFlagged, setCoachMealFlagged] = useState(false);
-  const [coachMealFlagOccasion, setCoachMealFlagOccasion] = useState(null);
-  const [coachMealFlagLocation, setCoachMealFlagLocation] = useState("");
-  const [coachMealFlagComment, setCoachMealFlagComment] = useState("");
 
   // Water tab's 4-quadrant chooser — same pattern as Meal. null = still choosing.
   const [waterEntryMethod, setWaterEntryMethod] = useState(null); // null | "quick" | "text" | "manual"
   const [showDrinkCoach, setShowDrinkCoach] = useState(false);
-  const [pendingCoachDrink, setPendingCoachDrink] = useState(null); // { drink, computed } | null
-  const logDrinkFromCoach = (drink, computed) => {
-    setPendingCoachDrink({ drink, computed });
-    setShowDrinkCoach(false);
-    setWaterEntryMethod("coachConfirm");
-  };
-  const confirmCoachDrink = async () => {
-    if (!pendingCoachDrink) return;
-    const { drink, computed } = pendingCoachDrink;
+  // Drinks don't have a component breakdown to edit the way dishes do, so Coach selections just
+  // prefill the same free-editable Custom Drink form Text/Manual already use — full flexibility
+  // there rather than a bespoke drink-specific editing screen.
+  const logDrinkFromCoach = (drink) => {
     const dishName = lang === "zh" ? drink.name_zh : drink.name;
-    const level = SUGAR_LEVELS.find(l => l.key === computed.level);
-    const extras = [`${computed.sizeLabel} ${computed.containerMl}ml`];
-    if (level && level.key !== 1) extras.push(lang==="zh"?level.label_zh:level.label);
-    const name = `${dishName} (${extras.join(", ")})`;
-    try {
-      const d = await DataAPI.addDrink(userId, {
-        log_date: today, drink_type: name, amount_ml: computed.containerMl,
-        calories: computed.kcal, protein: computed.protein, carbs: computed.carbs, fat: computed.fat,
-        sugar_g: computed.sugar, sodium_mg: computed.sodium, fiber_g: computed.fiber||0,
-        logged_at: new Date().toISOString()
-      });
-      setDayData(prev => ({ ...prev, drinks: [...(prev.drinks||[]), d] }));
-      setPendingCoachDrink(null); setWaterEntryMethod(null);
-    } catch (err) { setError(L("Failed to log drink: ","记录饮品失败：") + err.message); }
+    const mlMatch = drink.portion.match(/(\d+)\s*ml/);
+    setCustomDrinkName(dishName);
+    setCustomDrinkMl(mlMatch ? mlMatch[1] : "250");
+    setCustomDrinkCal(String(drink.kcal));
+    setCustomDrinkProt(String(drink.protein));
+    setCustomDrinkCarb(String(drink.carbs));
+    setCustomDrinkFat(String(drink.fat));
+    setCustomDrinkSugar(String(drink.sugar));
+    setCustomDrinkSodium(String(drink.sodium));
+    setDrinkRatePer100ml(null);
+    setShowDrinkCoach(false);
+    setWaterEntryMethod("manual");
   };
-
 
   // Workout tab's 4-quadrant chooser — same pattern as Meal/Water. null = still choosing.
   // "confirm" gates the PendingCard review screen for Workout Coach entries, same as
@@ -4200,8 +4002,6 @@ function NutriLogPro({ session, onLogout }) {
     setWorkoutEntryMethod(null);
     setPendingEntry(null);
     setEntryPhoto(null);
-    setPendingCoachMeal(null);
-    setPendingCoachDrink(null);
   }, [activeTab]);
 
   // AI Text Search's autocomplete: matches typed description against saved favorites, so a
@@ -5973,17 +5773,6 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
             ) : mealEntryMethod === "photo" ? (
               pendingEntry && pendingEntry.type==="meal" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={backToMethodChooser} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} slot={activeSlot} onSlotChange={setActiveSlot} theme={theme} C={C} saving={savingEntry} lang={lang} L={L} onAddIngredients={addIngredientsToPendingEntry} addingIngredients={addingIngredients} />
-            ) : mealEntryMethod === "coachConfirm" ? (
-              pendingCoachMeal && <CoachConfirmCard
-                kind="meal" food={pendingCoachMeal.food} computed={pendingCoachMeal.computed}
-                slot={activeSlot} onSlotChange={setActiveSlot}
-                flagged={coachMealFlagged} onFlagToggle={() => setCoachMealFlagged(!coachMealFlagged)}
-                occasion={coachMealFlagOccasion} onOccasion={setCoachMealFlagOccasion}
-                location={coachMealFlagLocation} onLocation={setCoachMealFlagLocation}
-                comment={coachMealFlagComment} onComment={setCoachMealFlagComment}
-                onConfirm={confirmCoachMeal} onCancel={() => { setPendingCoachMeal(null); setMealEntryMethod(null); }}
-                C={C} lang={lang} L={L}
-              />
             ) : (
               <div className="card" style={{ padding:"14px 14px", marginBottom:14, position:"relative" }}>
                 <button onClick={backToMethodChooser} style={{ position:"absolute", top:10, right:10, background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:26, height:26, color:C.text, fontSize:15, cursor:"pointer", lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
@@ -6137,12 +5926,6 @@ function NutriLogPro({ session, onLogout }) {
                     </button>
                   </div>
                 </div>
-            ) : waterEntryMethod === "coachConfirm" ? (
-              pendingCoachDrink && <CoachConfirmCard
-                kind="drink" drink={pendingCoachDrink.drink} computed={pendingCoachDrink.computed}
-                onConfirm={confirmCoachDrink} onCancel={() => { setPendingCoachDrink(null); setWaterEntryMethod(null); }}
-                C={C} lang={lang} L={L}
-              />
             ) : waterEntryMethod === "quick" ? (
               <div className="card" style={{ padding:"14px 14px", marginBottom:14, position:"relative" }}>
                 <button onClick={()=>setWaterEntryMethod(null)} style={{ position:"absolute", top:10, right:10, background:"rgba(120,120,130,0.15)", border:"none", borderRadius:"50%", width:26, height:26, color:C.text, fontSize:15, cursor:"pointer", lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
@@ -7167,7 +6950,7 @@ function NutriLogPro({ session, onLogout }) {
                                 type="number" defaultValue={Math.round(it.grams_estimate)}
                                 onBlur={e => editGrams(e.target.value)}
                                 onKeyDown={e => { if (e.key === "Enter") { editGrams(e.target.value); e.target.blur(); } }}
-                                style={{ width:36, background:"transparent", border:"none", borderBottom:`1px dashed ${C.border}`, outline:"none", color:C.text, fontSize:12, textAlign:"center", padding:0 }}
+                                style={{ width:38, boxSizing:"border-box", background:C.surface, border:`1px solid ${C.border}`, borderRadius:5, outline:"none", color:C.text, fontSize:12, textAlign:"center", padding:"1px 3px" }}
                               />g)
                             </span>
                           )}
