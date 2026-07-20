@@ -1398,12 +1398,46 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
             <span style={{ fontSize:10, color:textMuted, fontWeight:"700", letterSpacing:"0.05em" }}>{Lt("BREAKDOWN BY COMPONENT","按成分细分")}</span>
             <span style={{ fontSize:10, color:textMuted }}>{itemsExpanded ? Lt("▲ minimize","▲ 收起") : Lt("▼ expand","▼ 展开")}</span>
           </div>
-          {itemsExpanded && entry.items.slice().sort((a,b)=>(b.calories||0)-(a.calories||0)).map((it,idx) => (
-            <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom: idx < entry.items.length-1 ? `1px dashed ${C.border}66` : "none" }}>
-              <span style={{ fontSize:12, color:textColor, textTransform:"capitalize" }}>{it.item}{it.grams_estimate ? ` (~${Math.round(it.grams_estimate)}g)` : ""}</span>
-              <span style={{ fontSize:12, color:mealAccent, fontWeight:"700" }}>{Math.round(it.calories||0)} kcal</span>
-            </div>
-          ))}
+          {itemsExpanded && (
+            <React.Fragment>
+              {entry.items.slice().sort((a,b)=>(b.calories||0)-(a.calories||0)).map((it,idx) => {
+                const canEditGrams = it.grams_estimate != null && it.grams_estimate > 0;
+                const editGrams = (newGramsStr) => {
+                  const newGrams = parseFloat(newGramsStr);
+                  if (!newGrams || newGrams < 0) return;
+                  const rate = it.calories / it.grams_estimate; // kcal per gram, from the AI's own original estimate
+                  const newItemKcal = Math.round(rate * newGrams);
+                  const deltaKcal = newItemKcal - (it.calories || 0);
+                  const originalIndex = entry.items.indexOf(it);
+                  const newItems = entry.items.slice();
+                  newItems[originalIndex] = { ...it, grams_estimate: newGrams, calories: newItemKcal };
+                  onUpdate({ items: newItems, calories: Math.max(0, Math.round((entry.calories||0) + deltaKcal)) });
+                };
+                return (
+                  <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom: idx < entry.items.length-1 ? `1px dashed ${C.border}66` : "none" }}>
+                    <span style={{ fontSize:12, color:textColor, textTransform:"capitalize", display:"flex", alignItems:"center", gap:3 }}>
+                      {it.item}
+                      {canEditGrams && (
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:2, color:textMuted }}>
+                          (~<input
+                            type="number" defaultValue={Math.round(it.grams_estimate)}
+                            onBlur={e => editGrams(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") { editGrams(e.target.value); e.target.blur(); } }}
+                            style={{ width:36, background:"transparent", border:"none", borderBottom:`1px dashed ${C.border}`, outline:"none", color:textColor, fontSize:12, textAlign:"center", padding:0 }}
+                          />g)
+                        </span>
+                      )}
+                      {!canEditGrams && it.grams_estimate && ` (~${Math.round(it.grams_estimate)}g)`}
+                    </span>
+                    <span style={{ fontSize:12, color:mealAccent, fontWeight:"700" }}>{Math.round(it.calories||0)} kcal</span>
+                  </div>
+                );
+              })}
+              <div style={{ fontSize:10, color:textDim, fontStyle:"italic", marginTop:6 }}>
+                {Lt("Edit a component's grams to scale its calories and update the total.","编辑成分克数可按比例调整其热量并更新总量。")}
+              </div>
+            </React.Fragment>
+          )}
         </div>
       )}
       {!isWorkout && (
@@ -3845,6 +3879,17 @@ function NutriLogPro({ session, onLogout }) {
     setWorkoutEntryMethod("confirm");
   };
 
+  // Leaving a tab resets its 4-quadrant chooser back to the grid — coming back to
+  // Meal/Water/Workout later always starts from "how would you like to log this?"
+  // rather than wherever it was left mid-flow.
+  useEffect(() => {
+    setMealEntryMethod(null);
+    setWaterEntryMethod(null);
+    setWorkoutEntryMethod(null);
+    setPendingEntry(null);
+    setEntryPhoto(null);
+  }, [activeTab]);
+
   // AI Text Search's autocomplete: matches typed description against saved favorites, so a
   // repeat meal can be filled in instantly (name + full macros) with zero AI calls, and the
   // Suggest button is only needed for something genuinely new.
@@ -5588,7 +5633,6 @@ function NutriLogPro({ session, onLogout }) {
             )}
             <input ref={foodRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>attachEntryPhoto(e.target.files[0])} />
             {mealEntryMethod === null ? (
-              <React.Fragment>
                 <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
                   <div style={{ fontSize:10.5, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:10, textAlign:"center" }}>{L("HOW WOULD YOU LIKE TO LOG THIS?","您想如何记录？")}</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -5613,54 +5657,6 @@ function NutriLogPro({ session, onLogout }) {
                     </button>
                   </div>
                 </div>
-
-                {(() => {
-                  const used = getAiUsageToday();
-                  const over = used > aiDailyLimit;
-                  const remaining = Math.max(0, aiDailyLimit - used);
-                  const color = over ? C.red : remaining === 0 ? C.red : remaining <= Math.max(1, Math.round(aiDailyLimit*0.2)) ? C.caution : C.textDim;
-                  return (
-                    <div style={{ fontSize:10.5, color, textAlign:"center", marginBottom:14, fontStyle:"italic" }}>
-                      {over
-                        ? L(`⚠️ ${used} of ${aiDailyLimit} AI calls used today — past your set limit, but AI Photo/Text Search will keep working`,`⚠️ 今日已使用 AI 次数 ${used} / ${aiDailyLimit} —— 已超出设定上限，但 AI 图片/文字识别仍可继续使用`)
-                        : L(`🤖 ${remaining} of ${aiDailyLimit} AI calls left today (photo + Suggest share this budget)`, `🤖 今日剩余 AI 次数 ${remaining} / ${aiDailyLimit}（拍照分析与 AI建议 共用此额度）`)}
-                    </div>
-                  );
-                })()}
-
-                {favMeals.length > 0 && (
-                  <div className="card" style={{ padding:12, marginBottom:12 }}>
-                    <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:6 }}>★ {L("MY FAVORITES","我的收藏")}</div>
-                    <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
-                      {favMeals.map(fav => (
-                        <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteMeal(fav)}>
-                          <span>{fav.name} ({Math.round(fav.calories)} kcal)</span>
-                          <span onClick={(e)=>{e.stopPropagation(); removeFavorite("meal", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:10 }}>📝 {L("Food Intake Feed","饮食记录动态")}</div>
-                  {SLOTS.map(slot => {
-                    const slotMeals = dayData.meals.filter(m=>m.slot===slot);
-                    return (
-                      <div key={slot} style={{ marginBottom:14 }}>
-                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:"800", color:C.textMuted, marginBottom:6, display:"flex", justifyContent:"space-between" }}>
-                          <span>{SLOT_ICONS[slot]} {slotLabel(slot, lang)}</span>
-                          <span>{Math.round(slotMeals.reduce((sum,m)=>sum+Number(m.calories),0))} kcal</span>
-                        </div>
-                        {slotMeals.length===0
-                          ? <div style={{ fontSize:12, fontStyle:"italic", color:C.textDim, paddingLeft:10, marginBottom:8 }}>{L(`Nothing logged for ${slotLabel(slot, lang)}`, `${slotLabel(slot, lang)}还没有记录`)}</div>
-                          : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={stableRemoveMeal} onEdit={stableEditMeal} onSlotChange={stableChangeMealSlot} theme={theme} C={C} lang={lang} onSaveFavorite={stableSaveFavoriteMeal} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} />)
-                        }
-                      </div>
-                    );
-                  })}
-                </div>
-              </React.Fragment>
             ) : mealEntryMethod === "photo" ? (
               pendingEntry && pendingEntry.type==="meal" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={backToMethodChooser} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} slot={activeSlot} onSlotChange={setActiveSlot} theme={theme} C={C} saving={savingEntry} lang={lang} L={L} />
             ) : (
@@ -5744,13 +5740,57 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
               </div>
             )}
+
+                {(() => {
+                  const used = getAiUsageToday();
+                  const over = used > aiDailyLimit;
+                  const remaining = Math.max(0, aiDailyLimit - used);
+                  const color = over ? C.red : remaining === 0 ? C.red : remaining <= Math.max(1, Math.round(aiDailyLimit*0.2)) ? C.caution : C.textDim;
+                  return (
+                    <div style={{ fontSize:10.5, color, textAlign:"center", marginBottom:14, fontStyle:"italic" }}>
+                      {over
+                        ? L(`⚠️ ${used} of ${aiDailyLimit} AI calls used today — past your set limit, but AI Photo/Text Search will keep working`,`⚠️ 今日已使用 AI 次数 ${used} / ${aiDailyLimit} —— 已超出设定上限，但 AI 图片/文字识别仍可继续使用`)
+                        : L(`🤖 ${remaining} of ${aiDailyLimit} AI calls left today (photo + Suggest share this budget)`, `🤖 今日剩余 AI 次数 ${remaining} / ${aiDailyLimit}（拍照分析与 AI建议 共用此额度）`)}
+                    </div>
+                  );
+                })()}
+                {favMeals.length > 0 && (
+                  <div className="card" style={{ padding:12, marginBottom:12 }}>
+                    <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:6 }}>★ {L("MY FAVORITES","我的收藏")}</div>
+                    <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
+                      {favMeals.map(fav => (
+                        <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteMeal(fav)}>
+                          <span>{fav.name} ({Math.round(fav.calories)} kcal)</span>
+                          <span onClick={(e)=>{e.stopPropagation(); removeFavorite("meal", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.pink, marginBottom:10 }}>📝 {L("Food Intake Feed","饮食记录动态")}</div>
+                  {SLOTS.map(slot => {
+                    const slotMeals = dayData.meals.filter(m=>m.slot===slot);
+                    return (
+                      <div key={slot} style={{ marginBottom:14 }}>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:"800", color:C.textMuted, marginBottom:6, display:"flex", justifyContent:"space-between" }}>
+                          <span>{SLOT_ICONS[slot]} {slotLabel(slot, lang)}</span>
+                          <span>{Math.round(slotMeals.reduce((sum,m)=>sum+Number(m.calories),0))} kcal</span>
+                        </div>
+                        {slotMeals.length===0
+                          ? <div style={{ fontSize:12, fontStyle:"italic", color:C.textDim, paddingLeft:10, marginBottom:8 }}>{L(`Nothing logged for ${slotLabel(slot, lang)}`, `${slotLabel(slot, lang)}还没有记录`)}</div>
+                          : slotMeals.map(m => <MealCard key={m.id} meal={m} onRemove={stableRemoveMeal} onEdit={stableEditMeal} onSlotChange={stableChangeMealSlot} theme={theme} C={C} lang={lang} onSaveFavorite={stableSaveFavoriteMeal} isFavorited={favMeals.some(f=>f.name===m.name && f.calories===m.calories)} />)
+                        }
+                      </div>
+                    );
+                  })}
+                </div>
           </div>
         )}
 
         {activeTab==="water" && (
           <div className="fade">
             {waterEntryMethod === null ? (
-              <React.Fragment>
                 <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
                   <div style={{ fontSize:10.5, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:10, textAlign:"center" }}>{L("HOW WOULD YOU LIKE TO LOG THIS?","您想如何记录？")}</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -5772,6 +5812,52 @@ function NutriLogPro({ session, onLogout }) {
                     </button>
                   </div>
                 </div>
+            ) : waterEntryMethod === "quick" ? (
+              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
+                <button className="ghost-btn" onClick={()=>setWaterEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+                <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{L("QUICK ADD WATER","快速添加饮水")}</div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={() => adjustWater(-250)} className="ghost-btn" style={{ padding:"5px 8px", flex:0.8, fontSize:14 }}>−250</button>
+                  <button onClick={() => adjustWater(250)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+250ml</button>
+                  <button onClick={() => adjustWater(500)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+500ml</button>
+                  <button onClick={() => adjustWater(1000)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+1L</button>
+                </div>
+              </div>
+            ) : (
+              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
+                <button className="ghost-btn" onClick={()=>setWaterEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
+                <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:8 }}>{L("CUSTOM DRINK","自定义饮品")}</div>
+                <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                  <input className="inp" placeholder={L("Drink name (e.g. Bubble tea)","饮品名称 (例如：珍珠奶茶)")} value={customDrinkName} onChange={e=>{setCustomDrinkName(e.target.value); setDrinkRatePer100ml(null);}} style={{ flex:2 }} />
+                  <input className="inp" type="number" placeholder="ml" value={customDrinkMl} onChange={e=>onCustomDrinkMlChange(e.target.value)} style={{ flex:1 }} />
+                  {waterEntryMethod === "text" && (
+                    <button className="ghost-btn" onClick={suggestDrinkNutrition} disabled={isSuggestingDrink} style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, minWidth:"56px", display:"flex", justifyContent:"center", alignItems:"center", flexShrink:0 }}>
+                      {isSuggestingDrink ? <div className="spin" style={{ width:14, height:14, border:`2px solid ${C.border}`, borderTopColor:C.pink, borderRadius:"50%" }} /> : "✨"}
+                    </button>
+                  )}
+                </div>
+                {drinkRatePer100ml && <div style={{ fontSize:10, color:C.textMuted, marginBottom:8, fontStyle:"italic" }}>✨ {L("AI-estimated — values auto-scale if you change ml","AI 估算值 —— 修改 ml 会自动等比例调整")}</div>}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6, marginBottom:8 }}>
+                  <input className="inp" type="number" placeholder="kcal" value={customDrinkCal} onChange={e=>{setCustomDrinkCal(e.target.value); setDrinkRatePer100ml(null);}} />
+                  <input className="inp" type="number" placeholder={L("P g","蛋白质 g")} value={customDrinkProt} onChange={e=>{setCustomDrinkProt(e.target.value); setDrinkRatePer100ml(null);}} />
+                  <input className="inp" type="number" placeholder={L("C g","碳水 g")} value={customDrinkCarb} onChange={e=>{setCustomDrinkCarb(e.target.value); setDrinkRatePer100ml(null);}} />
+                  <input className="inp" type="number" placeholder={L("F g","脂肪 g")} value={customDrinkFat} onChange={e=>{setCustomDrinkFat(e.target.value); setDrinkRatePer100ml(null);}} />
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:8 }}>
+                  <input className="inp" type="number" placeholder={L("Sugar g","糖 g")} value={customDrinkSugar} onChange={e=>{setCustomDrinkSugar(e.target.value); setDrinkRatePer100ml(null);}} />
+                  <input className="inp" type="number" placeholder={L("Sodium mg","钠 mg")} value={customDrinkSodium} onChange={e=>{setCustomDrinkSodium(e.target.value); setDrinkRatePer100ml(null);}} />
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button className="pink-btn" style={{ flex:1 }} onClick={addCustomDrink}>+ {L("Add Drink","添加饮品")}</button>
+                  <button className="ghost-btn" title={L("Save as favorite for quick re-logging","收藏以便快速再次记录")} style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, fontSize:16 }}
+                    onClick={() => {
+                      const ml = parseFloat(customDrinkMl);
+                      if (!ml||ml<=0) { setError(L("Enter an amount before saving a favorite.","请先输入毫升数再收藏。")); return; }
+                      saveFavorite("drink", { name: customDrinkName.trim()||"Other", drink_type: customDrinkName.trim()||"Other", amount_ml: ml, calories: parseFloat(customDrinkCal)||0, protein: parseFloat(customDrinkProt)||0, carbs: parseFloat(customDrinkCarb)||0, fat: parseFloat(customDrinkFat)||0, sugar_g: parseFloat(customDrinkSugar)||0, sodium_mg: parseFloat(customDrinkSodium)||0, fiber_g: 0 });
+                    }}>☆</button>
+                </div>
+              </div>
+            )}
 
                 {favDrinks.length > 0 && (
                   <div className="card" style={{ padding:12, marginBottom:14 }}>
@@ -5786,7 +5872,6 @@ function NutriLogPro({ session, onLogout }) {
                     </div>
                   </div>
                 )}
-
                 <div>
                   <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.water, marginBottom:10 }}>{L("Today's Drinks","今日饮品")}</div>
                   {(dayData.drinks||[]).length===0 ? (
@@ -5836,53 +5921,6 @@ function NutriLogPro({ session, onLogout }) {
                     );
                   })}
                 </div>
-              </React.Fragment>
-            ) : waterEntryMethod === "quick" ? (
-              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
-                <button className="ghost-btn" onClick={()=>setWaterEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
-                <div style={{ fontSize:10, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:8 }}>{L("QUICK ADD WATER","快速添加饮水")}</div>
-                <div style={{ display:"flex", gap:6 }}>
-                  <button onClick={() => adjustWater(-250)} className="ghost-btn" style={{ padding:"5px 8px", flex:0.8, fontSize:14 }}>−250</button>
-                  <button onClick={() => adjustWater(250)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+250ml</button>
-                  <button onClick={() => adjustWater(500)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+500ml</button>
-                  <button onClick={() => adjustWater(1000)} className="pink-btn" style={{ background:`linear-gradient(135deg,${C.water},${C.waterDeep})`, boxShadow:`0 4px 15px ${C.water}4d`, padding:"5px 6px", flex:1, fontSize:13 }}>+1L</button>
-                </div>
-              </div>
-            ) : (
-              <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
-                <button className="ghost-btn" onClick={()=>setWaterEntryMethod(null)} style={{ fontSize:11, padding:"5px 10px", marginBottom:12 }}>← {L("Change method","更改方式")}</button>
-                <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:8 }}>{L("CUSTOM DRINK","自定义饮品")}</div>
-                <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-                  <input className="inp" placeholder={L("Drink name (e.g. Bubble tea)","饮品名称 (例如：珍珠奶茶)")} value={customDrinkName} onChange={e=>{setCustomDrinkName(e.target.value); setDrinkRatePer100ml(null);}} style={{ flex:2 }} />
-                  <input className="inp" type="number" placeholder="ml" value={customDrinkMl} onChange={e=>onCustomDrinkMlChange(e.target.value)} style={{ flex:1 }} />
-                  {waterEntryMethod === "text" && (
-                    <button className="ghost-btn" onClick={suggestDrinkNutrition} disabled={isSuggestingDrink} style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, minWidth:"56px", display:"flex", justifyContent:"center", alignItems:"center", flexShrink:0 }}>
-                      {isSuggestingDrink ? <div className="spin" style={{ width:14, height:14, border:`2px solid ${C.border}`, borderTopColor:C.pink, borderRadius:"50%" }} /> : "✨"}
-                    </button>
-                  )}
-                </div>
-                {drinkRatePer100ml && <div style={{ fontSize:10, color:C.textMuted, marginBottom:8, fontStyle:"italic" }}>✨ {L("AI-estimated — values auto-scale if you change ml","AI 估算值 —— 修改 ml 会自动等比例调整")}</div>}
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6, marginBottom:8 }}>
-                  <input className="inp" type="number" placeholder="kcal" value={customDrinkCal} onChange={e=>{setCustomDrinkCal(e.target.value); setDrinkRatePer100ml(null);}} />
-                  <input className="inp" type="number" placeholder={L("P g","蛋白质 g")} value={customDrinkProt} onChange={e=>{setCustomDrinkProt(e.target.value); setDrinkRatePer100ml(null);}} />
-                  <input className="inp" type="number" placeholder={L("C g","碳水 g")} value={customDrinkCarb} onChange={e=>{setCustomDrinkCarb(e.target.value); setDrinkRatePer100ml(null);}} />
-                  <input className="inp" type="number" placeholder={L("F g","脂肪 g")} value={customDrinkFat} onChange={e=>{setCustomDrinkFat(e.target.value); setDrinkRatePer100ml(null);}} />
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:8 }}>
-                  <input className="inp" type="number" placeholder={L("Sugar g","糖 g")} value={customDrinkSugar} onChange={e=>{setCustomDrinkSugar(e.target.value); setDrinkRatePer100ml(null);}} />
-                  <input className="inp" type="number" placeholder={L("Sodium mg","钠 mg")} value={customDrinkSodium} onChange={e=>{setCustomDrinkSodium(e.target.value); setDrinkRatePer100ml(null);}} />
-                </div>
-                <div style={{ display:"flex", gap:8 }}>
-                  <button className="pink-btn" style={{ flex:1 }} onClick={addCustomDrink}>+ {L("Add Drink","添加饮品")}</button>
-                  <button className="ghost-btn" title={L("Save as favorite for quick re-logging","收藏以便快速再次记录")} style={{ padding:"10px 14px", borderColor:C.pink, color:C.pink, fontSize:16 }}
-                    onClick={() => {
-                      const ml = parseFloat(customDrinkMl);
-                      if (!ml||ml<=0) { setError(L("Enter an amount before saving a favorite.","请先输入毫升数再收藏。")); return; }
-                      saveFavorite("drink", { name: customDrinkName.trim()||"Other", drink_type: customDrinkName.trim()||"Other", amount_ml: ml, calories: parseFloat(customDrinkCal)||0, protein: parseFloat(customDrinkProt)||0, carbs: parseFloat(customDrinkCarb)||0, fat: parseFloat(customDrinkFat)||0, sugar_g: parseFloat(customDrinkSugar)||0, sodium_mg: parseFloat(customDrinkSodium)||0, fiber_g: 0 });
-                    }}>☆</button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -5930,7 +5968,6 @@ function NutriLogPro({ session, onLogout }) {
               </div>
             )}
             {workoutEntryMethod === null ? (
-              <React.Fragment>
                 <div className="card" style={{ padding:"14px 14px", marginBottom:14 }}>
                   <div style={{ fontSize:10.5, color:C.textMuted, fontWeight:"700", letterSpacing:"0.05em", marginBottom:10, textAlign:"center" }}>{L("HOW WOULD YOU LIKE TO LOG THIS?","您想如何记录？")}</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -5952,43 +5989,6 @@ function NutriLogPro({ session, onLogout }) {
                     </button>
                   </div>
                 </div>
-
-                {favWorkouts.length > 0 && (
-                  <div className="card" style={{ padding:12, marginBottom:14 }}>
-                    <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif" }}>★ {L("MY FAVORITES","我的收藏")}</div>
-                    <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
-                      {favWorkouts.map(fav => (
-                        <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteWorkout(fav)}>
-                          <span>{fav.activity || fav.name} (−{Math.round(fav.calories)} kcal)</span>
-                          <span onClick={(e)=>{e.stopPropagation(); removeFavorite("workout", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent, marginBottom:10 }}>🏃 {L("Active Workouts Logged","已记录运动")}</div>
-                  {(dayData.workouts||[]).length===0 ? (
-                    <div style={{ fontSize:13, fontStyle:"italic", color:C.textDim, paddingLeft:10 }}>{L("No workouts logged for today","今天还没有记录运动")}</div>
-                  ) : (dayData.workouts||[]).map(w => (
-                    <div key={w.id} className="card" style={{ padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10, borderColor:`${C.workoutAccent}59` }}>
-                      <WorkoutIllustration description={w.activity+" "+(w.description||"")} color={C.workoutAccent} size={44} />
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text }}>{w.activity}</div>
-                        {w.description && w.description !== w.activity && <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>{w.description}</div>}
-                        <div style={{ fontSize:12, fontStyle:"italic", color:C.textMuted }}>{w.duration}{w.logged_at?` · ${new Date(w.logged_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`:""}</div>
-                      </div>
-                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.workoutAccent }}>−{Math.round(w.calories)}</div>
-                      <div style={{ display:"flex", gap:6 }}>
-                        <button onClick={() => saveFavorite("workout", { name:w.activity, activity:w.activity, calories:w.calories, duration:w.duration, description:w.description })} title={L("Save as favorite","收藏")} style={{ background:"none", border:"none", color: favWorkouts.some(f=>f.activity===w.activity && f.calories===w.calories) ? C.workoutAccent : C.textDim, fontSize:15, cursor:"pointer", padding:"6px" }}>{favWorkouts.some(f=>f.activity===w.activity && f.calories===w.calories) ? "★" : "☆"}</button>
-                        <button onClick={() => setEditingItem({...w,type:"workout"})} style={{ background:"none", border:"none", color:C.textDim, fontSize:14, cursor:"pointer", padding:"6px" }}>✏️</button>
-                        <button onClick={() => removeWorkout(w.id)} style={{ background:"none", border:"none", color:C.textDim, fontSize:18, cursor:"pointer" }}>×</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </React.Fragment>
             ) : workoutEntryMethod === "confirm" ? (
               pendingEntry && pendingEntry.type==="workout" && <PendingCard entry={pendingEntry} onConfirm={confirmEntry} onCancel={() => { setPendingEntry(null); setWorkoutEntryMethod(null); }} onUpdate={updatePendingEntry} onRetryAI={() => runAIAnalysis(pendingEntry)} analyzeStatusMsg={analyzeStatusMsg} theme={theme} C={C} saving={savingEntry} lang={lang} L={L} />
             ) : workoutEntryMethod === "steps" ? (
@@ -6050,6 +6050,41 @@ function NutriLogPro({ session, onLogout }) {
                 </div>
               </div>
             )}
+
+                {favWorkouts.length > 0 && (
+                  <div className="card" style={{ padding:12, marginBottom:14 }}>
+                    <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif" }}>★ {L("MY FAVORITES","我的收藏")}</div>
+                    <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
+                      {favWorkouts.map(fav => (
+                        <div key={fav.id} className="ghost-btn animate-pop" style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap", flexShrink:0, fontSize:12, fontWeight:"500", cursor:"pointer" }} onClick={() => useFavoriteWorkout(fav)}>
+                          <span>{fav.activity || fav.name} (−{Math.round(fav.calories)} kcal)</span>
+                          <span onClick={(e)=>{e.stopPropagation(); removeFavorite("workout", fav.id);}} style={{ color:C.textDim, fontSize:14, padding:"0 0 0 2px" }}>×</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:"800", color:C.workoutAccent, marginBottom:10 }}>🏃 {L("Active Workouts Logged","已记录运动")}</div>
+                  {(dayData.workouts||[]).length===0 ? (
+                    <div style={{ fontSize:13, fontStyle:"italic", color:C.textDim, paddingLeft:10 }}>{L("No workouts logged for today","今天还没有记录运动")}</div>
+                  ) : (dayData.workouts||[]).map(w => (
+                    <div key={w.id} className="card" style={{ padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10, borderColor:`${C.workoutAccent}59` }}>
+                      <WorkoutIllustration description={w.activity+" "+(w.description||"")} color={C.workoutAccent} size={44} />
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:"600", color:C.text }}>{w.activity}</div>
+                        {w.description && w.description !== w.activity && <div style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>{w.description}</div>}
+                        <div style={{ fontSize:12, fontStyle:"italic", color:C.textMuted }}>{w.duration}{w.logged_at?` · ${new Date(w.logged_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`:""}</div>
+                      </div>
+                      <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:18, fontWeight:"800", color:C.workoutAccent }}>−{Math.round(w.calories)}</div>
+                      <div style={{ display:"flex", gap:6 }}>
+                        <button onClick={() => saveFavorite("workout", { name:w.activity, activity:w.activity, calories:w.calories, duration:w.duration, description:w.description })} title={L("Save as favorite","收藏")} style={{ background:"none", border:"none", color: favWorkouts.some(f=>f.activity===w.activity && f.calories===w.calories) ? C.workoutAccent : C.textDim, fontSize:15, cursor:"pointer", padding:"6px" }}>{favWorkouts.some(f=>f.activity===w.activity && f.calories===w.calories) ? "★" : "☆"}</button>
+                        <button onClick={() => setEditingItem({...w,type:"workout"})} style={{ background:"none", border:"none", color:C.textDim, fontSize:14, cursor:"pointer", padding:"6px" }}>✏️</button>
+                        <button onClick={() => removeWorkout(w.id)} style={{ background:"none", border:"none", color:C.textDim, fontSize:18, cursor:"pointer" }}>×</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
           </div>
         )}
 
