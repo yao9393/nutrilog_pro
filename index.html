@@ -198,8 +198,6 @@ const STRINGS = {
     settings_mb_today: "Data uploaded today (est.)",
     settings_claude_calls_today: "Claude calls used today",
     settings_anthropic_label: "Claude API key (secondary provider, optional)",
-    settings_fallback_key_label: "Fallback API key (optional)",
-    settings_fallback_key_hint: "Only helps if this key is from a genuinely separate Google Cloud project — a second key in the same project shares the same quota and won't add headroom.",
     settings_get_key_title: "Get a free key",
     settings_get_key_step1: "Go to aistudio.google.com → Get API Key",
     settings_get_key_step2: "Create API Key (no domain restrictions by default)",
@@ -272,8 +270,6 @@ const STRINGS = {
     settings_mb_today: "今日已上传数据量（估算）",
     settings_claude_calls_today: "今日已用 Claude 次数",
     settings_anthropic_label: "Claude API 密钥（备用服务商，可选）",
-    settings_fallback_key_label: "备用 API 密钥（可选）",
-    settings_fallback_key_hint: "仅当此密钥来自完全独立的 Google Cloud 项目时才有帮助 —— 同一项目下的第二个密钥共享同一额度，不会增加可用量。",
     settings_get_key_title: "获取免费密钥",
     settings_get_key_step1: "前往 aistudio.google.com → 获取 API 密钥",
     settings_get_key_step2: "创建 API 密钥（默认无域名限制）",
@@ -2034,93 +2030,35 @@ function incrementClaudeUsageToday() {
   return next;
 }
 
-function useGeminiClient(geminiKey, fallbackKey, anthropicKey, aiProvider) {
-  // One attempt against a single key — used for both the primary key and, on quota exhaustion,
-  // the optional fallback key (which only helps if it's from a genuinely separate Google Cloud
-  // project — Google enforces quota per-project, so a second key in the *same* project shares
-  // the same bucket and wouldn't add any headroom).
+function useGeminiClient(geminiKey, anthropicKey, aiProvider) {
+  // One attempt against a single Gemini key. Deliberately no quota/rate-limit classification, no
+  // backoff-and-retry loop, and no artificial pacing between calls — Google's real quota/rate-limit
+  // behavior for a given account isn't reliably diagnosable from the client side (it depends on
+  // which project the key belongs to, billing status, current traffic, etc.), so this app no
+  // longer tries to guess at causes or durations. It just tries the request, once, and reports
+  // plainly if it didn't work — "🔄 Retry AI" is always available regardless of why it failed.
   const attemptWithKey = async (key, body) => {
-    const now = Date.now();
-    const minGapMs = 4200;
-    const waitMs = Math.max(0, (window.__lastGeminiCallAt||0) + minGapMs - now);
-    if (waitMs > 0) await new Promise(r => setTimeout(r, waitMs));
-    window.__lastGeminiCallAt = Date.now();
-
-    const model = "gemini-2.5-flash-lite"; // higher free-tier RPM/RPD than 2.5-flash, plenty capable for this use case
+    const model = "gemini-2.5-flash-lite";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-
-    const maxRetries = 1; // reduced further — each attempt now has its own timeout below, so total
-    // worst-case wait time stays bounded (roughly 2×15s + one short backoff) instead of open-ended.
-    let lastErr = null;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        // Photo analysis (image + a detailed itemized JSON breakdown) genuinely takes longer than
-        // a simple text prompt — 5s was cutting off plenty of requests that would have succeeded
-        // fine given a bit more room. That aggressive timeout made sense when a stuck request left
-        // the whole screen looking frozen; now the card shows the photo immediately with a visible,
-        // honest "AI is analyzing..." indicator, so there's no need to race to fail — 12s gives
-        // real analysis time to complete while still catching a genuinely hung connection.
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
-        let res;
-        try {
-          res = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body), signal: controller.signal });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-        if (res.ok) {
-          const data = await res.json();
-          window.__geminiRateLimitStreak = 0; // a success means we're not actually stuck — reset
-          return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        }
-        const errBody = await res.json().catch(() => ({}));
-        const msg = errBody?.error?.message || `HTTP ${res.status}`;
-        if (msg.includes("allowlist")) throw new Error("KEY_RESTRICTED");
-        if (res.status === 429) {
-          // Google's quota errors include a structured `details` array (QuotaFailure with a
-          // quotaId/quotaMetric, and often a RetryInfo with an exact retryDelay) — checking that
-          // is far more reliable than guessing from the free-text message, which doesn't always
-          // literally contain the word "day" even when it genuinely is the daily cap.
-          const details = errBody?.error?.details || [];
-          const quotaDetail = details.find(d => (d["@type"]||"").includes("QuotaFailure"));
-          const quotaText = [msg, ...(quotaDetail?.violations||[]).map(v => `${v.quotaId||""} ${v.quotaMetric||""}`)].join(" ");
-          const retryInfo = details.find(d => (d["@type"]||"").includes("RetryInfo"));
-          const retrySecondsFromApi = retryInfo?.retryDelay ? parseInt(retryInfo.retryDelay) : null;
-
-          const isDailyQuota = /day/i.test(quotaText);
-          if (isDailyQuota) {
-            const e = new Error("QUOTA_EXHAUSTED");
-            e.retrySeconds = retrySecondsFromApi; // Google's own number, when it gives one — more trustworthy than our own midnight-Pacific guess, and correct for paid/billed tiers too
-            throw e;
-          }
-
-          // Track rate-limit hits ACROSS separate calls (not just this call's own retries). If this
-          // keeps recurring across several different user actions even after waiting, it's not
-          // really a "brief burst" — the message below escalates once this streak builds up.
-          window.__geminiRateLimitStreak = (window.__geminiRateLimitStreak||0) + 1;
-
-          // This is a genuinely different situation from a timeout above — the server responded
-          // quickly, it's just asking us to wait briefly, so one short retry is still worthwhile.
-          if (attempt < maxRetries) {
-            const backoff = retrySecondsFromApi ? retrySecondsFromApi*1000 : 1500;
-            await new Promise(r => setTimeout(r, Math.min(backoff, 3000)));
-            lastErr = new Error("RATE_LIMITED");
-            lastErr.retrySeconds = retrySecondsFromApi;
-            continue;
-          }
-          const e = new Error("RATE_LIMITED");
-          e.retrySeconds = retrySecondsFromApi;
-          throw e;
-        }
-        throw new Error(msg);
-      } catch (err) {
-        if (err.message === "KEY_RESTRICTED" || err.message === "QUOTA_EXHAUSTED") throw err;
-        if (err.name === "AbortError") throw new Error("TIMED_OUT"); // fail immediately, no retry
-        lastErr = err;
-        if (attempt >= maxRetries) throw err;
-      }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // generous — photo analysis genuinely takes time, and the card already shows a clear "still working" indicator, so there's no need to race to fail
+    let res;
+    try {
+      res = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body), signal: controller.signal });
+    } catch (err) {
+      if (err.name === "AbortError") throw new Error("TIMED_OUT");
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    throw lastErr || new Error("Request failed after retries");
+    if (res.ok) {
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+    const errBody = await res.json().catch(() => ({}));
+    const msg = errBody?.error?.message || `HTTP ${res.status}`;
+    if (msg.includes("allowlist")) throw new Error("KEY_RESTRICTED");
+    throw new Error(msg);
   };
 
   // Extracts the plain prompt text + optional image from the Gemini-shaped `body` every call site
@@ -2135,7 +2073,7 @@ function useGeminiClient(geminiKey, fallbackKey, anthropicKey, aiProvider) {
     content.push({ type:"text", text: promptText });
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     let res;
     try {
       res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -2154,7 +2092,7 @@ function useGeminiClient(geminiKey, fallbackKey, anthropicKey, aiProvider) {
         signal: controller.signal
       });
     } catch (err) {
-      if (err.name === "AbortError") throw new Error("Claude request timed out — your connection may be slow or unstable right now.");
+      if (err.name === "AbortError") throw new Error("TIMED_OUT");
       throw err;
     } finally {
       clearTimeout(timeoutId);
@@ -2162,10 +2100,10 @@ function useGeminiClient(geminiKey, fallbackKey, anthropicKey, aiProvider) {
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
       const msg = errBody?.error?.message || `HTTP ${res.status}`;
-      if (res.status === 429) throw new Error("CLAUDE_RATE_LIMITED");
-      throw new Error("Claude: " + msg);
+      throw new Error(msg);
     }
     const data = await res.json();
+    incrementClaudeUsageToday(); // informational count shown in Settings, not a limit
     return (data.content || []).map(c => c.text || "").join("");
   };
 
@@ -2175,100 +2113,38 @@ function useGeminiClient(geminiKey, fallbackKey, anthropicKey, aiProvider) {
     const claudeKeyValid = claudeKey && claudeKey.startsWith("sk-ant-");
     if (!key && !claudeKeyValid) throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
 
-    // If the person has explicitly picked Claude as primary (only possible once they've entered a
-    // valid Claude key in Settings), try that first — an explicit choice, not a silent auto-switch.
-    // Gemini still serves as the safety-net fallback on failure, same principle as the reverse case.
-    if (aiProvider === "claude" && claudeKeyValid) {
+    // Whichever provider is set as primary in Settings goes first; the other (if a valid key is
+    // configured) is a simple one-shot safety net on failure — no classification of *why* the
+    // primary failed, it just tries the other one and reports the primary's error if both fail.
+    const primaryIsClaude = aiProvider === "claude" && claudeKeyValid;
+    if (primaryIsClaude) {
       try {
-        const result = await attemptWithClaude(claudeKey, body);
-        incrementClaudeUsageToday();
-        return result;
+        return await attemptWithClaude(claudeKey, body);
       } catch (err) {
-        if (!key) throw err;
-        try {
-          const result = await attemptWithKey(key, body);
-          return result;
-        } catch (geminiErr) { throw err; /* report the primary (Claude) error, not the fallback's */ }
+        if (err.message === "KEY_RESTRICTED" || !key) throw err;
+        try { return await attemptWithKey(key, body); }
+        catch (fallbackErr) { throw err; }
       }
     }
 
-    // The daily limit in Settings is a soft, INFORMATIONAL cap only — it warns in the UI once
-    // passed (see the budget indicator above the entry card) but never blocks a request. It's
-    // this app's own estimate of usage (Google doesn't expose a "check remaining quota"
-    // endpoint), and different accounts can have very different real headroom — e.g. a paid or
-    // shared/pooled Google account may have far more room than the default 15/day guess. Only a
-    // genuine Google-side error below (QUOTA_EXHAUSTED / RATE_LIMITED) still triggers the
-    // fallback-key or Claude path — this local counter no longer does on its own.
-    if (!key) {
-      if (claudeKeyValid) {
-        const result = await attemptWithClaude(claudeKey, body);
-        incrementClaudeUsageToday();
-        return result;
-      }
-      throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
-    }
+    if (!key) return await attemptWithClaude(claudeKey, body);
 
     try {
-      const result = await attemptWithKey(key, body);
-      return result;
+      return await attemptWithKey(key, body);
     } catch (err) {
-      // Only worth trying the Gemini fallback key for a genuine daily-quota block — it only helps
-      // if it's from a truly separate Google Cloud project (same-project keys share one bucket).
-      const fbKey = (fallbackKey||"").trim();
-      if (err.message === "QUOTA_EXHAUSTED" && fbKey) {
-        try {
-          const result = await attemptWithKey(fbKey, body);
-          return result;
-        } catch (fbErr) { /* fall through to Claude below if configured */ }
-      }
-      // Gemini (and its fallback key, if any) didn't work out — try Claude before giving up
-      // entirely, for either a daily-quota block or a persistent rate-limit situation.
-      // Guard against a key that isn't actually a valid Anthropic key (e.g. a Gemini key pasted
-      // into the wrong field by mistake) — real Anthropic keys always start with "sk-ant-", so
-      // anything else would just fail with a confusing "invalid x-api-key" from Anthropic's side.
-      // Skipping the attempt entirely here means the person sees the original, clearer Gemini
-      // error instead of a cryptic Claude one for a provider they may not even realize is involved.
-      if ((err.message === "QUOTA_EXHAUSTED" || err.message === "RATE_LIMITED") && claudeKey) {
-        if (!claudeKeyValid) {
-          err.claudeKeyLooksInvalid = true;
-          throw err;
-        }
-        const result = await attemptWithClaude(claudeKey, body);
-        incrementClaudeUsageToday();
-        return result;
-      }
-      throw err;
+      if (err.message === "KEY_RESTRICTED" || !claudeKeyValid) throw err;
+      try { return await attemptWithClaude(claudeKey, body); }
+      catch (fallbackErr) { throw err; }
     }
   };
 
   const friendlyGeminiError = (err) => {
-    if (err.claudeKeyLooksInvalid) {
-      return "Your Gemini key hit its limit, and the app tried the secondary Claude key in Settings as a backup — but that field doesn't contain a valid Claude key (real Anthropic keys start with \"sk-ant-\"). If you only meant to use Gemini, clear that field in Settings; otherwise paste a real Claude key from console.anthropic.com there. Manual entry works in the meantime.";
-    }
     if (err.message === "KEY_RESTRICTED") return "⚠️ Your key has domain restrictions. See Settings for a fix.";
-    if (err.message === "TIMED_OUT") return "AI is taking longer than usual to respond right now — this can happen when it's busy, not necessarily your connection. Tap 🔄 Retry AI in a moment, or fill in values by hand.";
-    if (err.message === "QUOTA_EXHAUSTED") {
-      if (err.retrySeconds) {
-        // Google itself gave us a concrete retry time in the error response — genuinely accurate
-        // regardless of free vs paid tier, so worth stating with confidence.
-        const mins = Math.ceil(err.retrySeconds / 60);
-        return `Gemini reports today's quota is used up, and says to try again in about ${mins} minute${mins===1?"":"s"}. Manual entry works meanwhile — tap 🔄 Retry AI after that.`;
-      }
-      // No concrete number from Google here, and we have no way to know if this account is on
-      // free or paid tier — stating a specific reset time (like a midnight-Pacific guess) would
-      // be presenting an assumption as fact. Point to the real source of truth instead.
-      return "Gemini reports today's quota is used up. We don't have an exact reset time for this from Google — check your real usage and limits at aistudio.google.com for the full picture. Manual entry works meanwhile, or tap 🔄 Retry AI anytime.";
-    }
-    if (err.message === "CLAUDE_RATE_LIMITED") return "Claude is rate-limited right now too — please wait a bit and try again, or use manual entry.";
-    if (err.message === "RATE_LIMITED") {
-      const streak = window.__geminiRateLimitStreak || 0;
-      if (streak >= 4) {
-        return "AI requests keep getting rate-limited even after waiting several times — could be a daily cap, temporary throttling, or something else on Google's side; not something we can pin down for certain from here. Manual entry works in the meantime; check aistudio.google.com for your actual usage, or add a Claude key in Settings as a second provider.";
-      }
-      const waitText = err.retrySeconds ? `about ${err.retrySeconds}s` : "a few seconds";
-      return `AI is getting a lot of requests right now — please wait ${waitText} and try again.`;
-    }
-    return "AI failed: " + err.message;
+    if (err.message === "TIMED_OUT") return "AI didn't respond in time — it may be slow or busy right now. Tap 🔄 Retry AI to try again, or fill in values by hand.";
+    // Anything else is the provider's own error message, shown plainly — this app doesn't try to
+    // classify the cause or guess how long it'll last, since that isn't reliably knowable from
+    // the client side. Retry is always available regardless of what the error was.
+    return `AI request didn't go through: ${err.message}. Tap 🔄 Retry AI to try again, or fill in values by hand.`;
   };
 
   return { callGemini, friendlyGeminiError };
@@ -3444,7 +3320,6 @@ function NutriLogPro({ session, onLogout }) {
   const [expandedWinBox, setExpandedWinBox] = useState(null);
 
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem("nutrilog_gemini_key") || "");
-  const [geminiFallbackKey, setGeminiFallbackKey] = useState(() => localStorage.getItem("nutrilog_gemini_fallback_key") || "");
   const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem("nutrilog_anthropic_key") || "");
   // Which provider to try FIRST when both keys are configured — explicit person's choice instead
   // of a silent automatic switch, since an unexpected auto-fallback was confusing before.
@@ -3535,7 +3410,6 @@ function NutriLogPro({ session, onLogout }) {
   useEffect(() => { localStorage.setItem("nutrilog_lang", lang); }, [lang]);
   useEffect(() => { localStorage.setItem("nutrilog_palette", palette); }, [palette]);
   useEffect(() => { localStorage.setItem("nutrilog_gemini_key", geminiKey); }, [geminiKey]);
-  useEffect(() => { localStorage.setItem("nutrilog_gemini_fallback_key", geminiFallbackKey); }, [geminiFallbackKey]);
   useEffect(() => { localStorage.setItem("nutrilog_anthropic_key", anthropicKey); }, [anthropicKey]);
   useEffect(() => { localStorage.setItem("nutrilog_ai_provider", aiProvider); }, [aiProvider]);
 
@@ -4102,7 +3976,7 @@ function NutriLogPro({ session, onLogout }) {
   };
 
   // ── AI calls (Gemini, BYO key) ──
-  const { callGemini, friendlyGeminiError } = useGeminiClient(geminiKey, geminiFallbackKey, anthropicKey, aiProvider);
+  const { callGemini, friendlyGeminiError } = useGeminiClient(geminiKey, anthropicKey, aiProvider);
 
   const {
     manualCal, setManualCal, manualDesc, setManualDesc, manualProt, setManualProt,
@@ -5271,15 +5145,9 @@ function NutriLogPro({ session, onLogout }) {
                         )}
 
                         <div style={{ marginTop:10 }}>
-                          <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{T("settings_fallback_key_label")}</div>
-                          <input type="password" className="inp" placeholder={T("settings_api_key_placeholder")} value={geminiFallbackKey} onChange={e => setGeminiFallbackKey(e.target.value)} />
-                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{T("settings_fallback_key_hint")}</div>
-                        </div>
-
-                        <div style={{ marginTop:10 }}>
                           <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{T("settings_anthropic_label")}</div>
                           <input type="password" className="inp" placeholder="sk-ant-..." value={anthropicKey} onChange={e => setAnthropicKey(e.target.value)} />
-                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{L("A genuinely independent provider from Google. Pick which one to use as primary below — the other still steps in automatically if your primary one hits a quota or rate limit. Get a key at console.anthropic.com.","与 Google 完全独立的服务商。请在下方选择要优先使用的服务商 —— 若主要服务商遇到限额或限流，另一个仍会自动接手。可前往 console.anthropic.com 获取密钥。")}</div>
+                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{L("A genuinely independent provider from Google. Pick which one to use as primary below — if you set one, the other steps in automatically as a one-time backup if the primary fails for any reason. Get a key at console.anthropic.com.","与 Google 完全独立的服务商。请在下方选择要优先使用的服务商 —— 如果设置了备用服务商，主要服务商一旦失败（无论原因），另一个会自动作为一次性备援。可前往 console.anthropic.com 获取密钥。")}</div>
                         </div>
 
                         {anthropicKey.trim() && (
