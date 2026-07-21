@@ -195,13 +195,9 @@ const STRINGS = {
     settings_ai_settings: "AI Settings",
     settings_configure_goals: "Configure Goals",
     settings_api_key_placeholder: "Paste Gemini API key here...",
-    settings_usage_today: "AI calls used today",
     settings_mb_today: "Data uploaded today (est.)",
     settings_claude_calls_today: "Claude calls used today",
     settings_anthropic_label: "Claude API key (secondary provider, optional)",
-    settings_anthropic_hint: "A genuinely independent provider from Google — used automatically once your Gemini limit is reached or Gemini is rate-limited, so AI photo analysis can keep working. Get a key at console.anthropic.com.",
-    settings_daily_limit_label: "Daily AI limit",
-    settings_daily_limit_hint: "A warning threshold only — this app's own estimate of your free Google quota, not Google's actual limit. Past it, AI Photo/Text Search still works as normal; you'll just see a heads-up. Set it to whatever fits your account's real headroom.",
     settings_fallback_key_label: "Fallback API key (optional)",
     settings_fallback_key_hint: "Only helps if this key is from a genuinely separate Google Cloud project — a second key in the same project shares the same quota and won't add headroom.",
     settings_get_key_title: "Get a free key",
@@ -273,13 +269,9 @@ const STRINGS = {
     settings_ai_settings: "AI 设置",
     settings_configure_goals: "设置目标",
     settings_api_key_placeholder: "粘贴您的 Gemini API 密钥...",
-    settings_usage_today: "今日已用 AI 次数",
     settings_mb_today: "今日已上传数据量（估算）",
     settings_claude_calls_today: "今日已用 Claude 次数",
     settings_anthropic_label: "Claude API 密钥（备用服务商，可选）",
-    settings_anthropic_hint: "与 Google 完全独立的服务商 —— 当 Gemini 达到限额或被限流时会自动启用，让 AI 拍照分析得以继续工作。可前往 console.anthropic.com 获取密钥。",
-    settings_daily_limit_label: "每日 AI 上限",
-    settings_daily_limit_hint: "仅作为提醒阈值 —— 这是本应用对您免费 Google 额度的估算，并非 Google 本身的实际限制。超过此数值后，AI 图片/文字识别仍可正常使用，只是会显示提醒。可根据您账号实际的额度空间自行设置。",
     settings_fallback_key_label: "备用 API 密钥（可选）",
     settings_fallback_key_hint: "仅当此密钥来自完全独立的 Google Cloud 项目时才有帮助 —— 同一项目下的第二个密钥共享同一额度，不会增加可用量。",
     settings_get_key_title: "获取免费密钥",
@@ -2013,41 +2005,6 @@ function useFavorites({ userId, today, activeSlot, setDayData, setError, L }) {
 // ════════════════════════════════════════════════════════════
 // HOOK — Gemini API client (rate limiting, retries, error mapping)
 // ════════════════════════════════════════════════════════════
-// Reads/writes a simple daily usage counter in localStorage, keyed by today's date so it resets
-// naturally each day with no server involvement. This is OUR OWN count of requests made through
-// this app — Google doesn't expose a "check remaining quota" endpoint, so this is an estimate
-// (it can't see usage from other apps on the same key), not a live sync with Google's real counter.
-// Google's RPD (requests-per-day) quotas reset at midnight Pacific time specifically — this
-// computes how long that actually is from right now, in the user's own local time, so error
-// messages can say "in about 3h 20m" instead of just "at midnight Pacific," which most people
-// can't quickly convert in their head.
-function pacificResetCountdown() {
-  const now = new Date();
-  // Get the current wall-clock time as it reads in Los Angeles, then find the next local midnight
-  // there — this naturally accounts for Pacific/Daylight time without hardcoding a fixed UTC offset.
-  const pacificNowStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
-  const pacificNow = new Date(pacificNowStr);
-  const nextMidnightPacific = new Date(pacificNow);
-  nextMidnightPacific.setHours(24, 0, 0, 0);
-  const diffMs = nextMidnightPacific - pacificNow;
-  const resetLocal = new Date(now.getTime() + diffMs);
-  const hours = Math.floor(diffMs / 3600000);
-  const mins = Math.round((diffMs % 3600000) / 60000);
-  const countdownText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-  const clockText = resetLocal.toLocaleTimeString([], { hour:"numeric", minute:"2-digit" });
-  return { countdownText, clockText };
-}
-
-function getAiUsageToday() {
-  const key = `nutrilog_ai_usage_${todayKey(0)}`;
-  return parseInt(localStorage.getItem(key) || "0", 10);
-}
-function incrementAiUsageToday() {
-  const key = `nutrilog_ai_usage_${todayKey(0)}`;
-  const next = getAiUsageToday() + 1;
-  localStorage.setItem(key, String(next));
-  return next;
-}
 
 // Tracks cumulative uploaded image size per day (post-compression — this is the actual size sent
 // over the wire, not the original photo size), so the user can plan around real-world MB usage
@@ -2077,7 +2034,7 @@ function incrementClaudeUsageToday() {
   return next;
 }
 
-function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
+function useGeminiClient(geminiKey, fallbackKey, anthropicKey, aiProvider) {
   // One attempt against a single key — used for both the primary key and, on quota exhaustion,
   // the optional fallback key (which only helps if it's from a genuinely separate Google Cloud
   // project — Google enforces quota per-project, so a second key in the *same* project shares
@@ -2131,7 +2088,11 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
           const retrySecondsFromApi = retryInfo?.retryDelay ? parseInt(retryInfo.retryDelay) : null;
 
           const isDailyQuota = /day/i.test(quotaText);
-          if (isDailyQuota) throw new Error("QUOTA_EXHAUSTED");
+          if (isDailyQuota) {
+            const e = new Error("QUOTA_EXHAUSTED");
+            e.retrySeconds = retrySecondsFromApi; // Google's own number, when it gives one — more trustworthy than our own midnight-Pacific guess, and correct for paid/billed tiers too
+            throw e;
+          }
 
           // Track rate-limit hits ACROSS separate calls (not just this call's own retries). If this
           // keeps recurring across several different user actions even after waiting, it's not
@@ -2211,7 +2172,25 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
   const callGemini = async (body) => {
     const key = (geminiKey||"").trim();
     const claudeKey = (anthropicKey||"").trim();
-    if (!key && !claudeKey) throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
+    const claudeKeyValid = claudeKey && claudeKey.startsWith("sk-ant-");
+    if (!key && !claudeKeyValid) throw new Error("No API key set. Open Settings (gear icon) and paste your Gemini API key.");
+
+    // If the person has explicitly picked Claude as primary (only possible once they've entered a
+    // valid Claude key in Settings), try that first — an explicit choice, not a silent auto-switch.
+    // Gemini still serves as the safety-net fallback on failure, same principle as the reverse case.
+    if (aiProvider === "claude" && claudeKeyValid) {
+      try {
+        const result = await attemptWithClaude(claudeKey, body);
+        incrementClaudeUsageToday();
+        return result;
+      } catch (err) {
+        if (!key) throw err;
+        try {
+          const result = await attemptWithKey(key, body);
+          return result;
+        } catch (geminiErr) { throw err; /* report the primary (Claude) error, not the fallback's */ }
+      }
+    }
 
     // The daily limit in Settings is a soft, INFORMATIONAL cap only — it warns in the UI once
     // passed (see the budget indicator above the entry card) but never blocks a request. It's
@@ -2221,7 +2200,7 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
     // genuine Google-side error below (QUOTA_EXHAUSTED / RATE_LIMITED) still triggers the
     // fallback-key or Claude path — this local counter no longer does on its own.
     if (!key) {
-      if (claudeKey && claudeKey.startsWith("sk-ant-")) {
+      if (claudeKeyValid) {
         const result = await attemptWithClaude(claudeKey, body);
         incrementClaudeUsageToday();
         return result;
@@ -2231,7 +2210,6 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
 
     try {
       const result = await attemptWithKey(key, body);
-      incrementAiUsageToday();
       return result;
     } catch (err) {
       // Only worth trying the Gemini fallback key for a genuine daily-quota block — it only helps
@@ -2240,7 +2218,6 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
       if (err.message === "QUOTA_EXHAUSTED" && fbKey) {
         try {
           const result = await attemptWithKey(fbKey, body);
-          incrementAiUsageToday();
           return result;
         } catch (fbErr) { /* fall through to Claude below if configured */ }
       }
@@ -2252,7 +2229,7 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
       // Skipping the attempt entirely here means the person sees the original, clearer Gemini
       // error instead of a cryptic Claude one for a provider they may not even realize is involved.
       if ((err.message === "QUOTA_EXHAUSTED" || err.message === "RATE_LIMITED") && claudeKey) {
-        if (!claudeKey.startsWith("sk-ant-")) {
+        if (!claudeKeyValid) {
           err.claudeKeyLooksInvalid = true;
           throw err;
         }
@@ -2271,15 +2248,22 @@ function useGeminiClient(geminiKey, fallbackKey, dailyLimit, anthropicKey) {
     if (err.message === "KEY_RESTRICTED") return "⚠️ Your key has domain restrictions. See Settings for a fix.";
     if (err.message === "TIMED_OUT") return "AI is taking longer than usual to respond right now — this can happen when it's busy, not necessarily your connection. Tap 🔄 Retry AI in a moment, or fill in values by hand.";
     if (err.message === "QUOTA_EXHAUSTED") {
-      const { countdownText, clockText } = pacificResetCountdown();
-      return `You've used up today's free AI quota. It resets in about ${countdownText} (around ${clockText} your time) — manual entry works meanwhile. If this happens often, enabling billing on your Google AI Studio project removes the daily cap entirely (Gemini Flash-Lite costs a fraction of a cent per request), or add a Claude key in Settings as a second provider.`;
+      if (err.retrySeconds) {
+        // Google itself gave us a concrete retry time in the error response — genuinely accurate
+        // regardless of free vs paid tier, so worth stating with confidence.
+        const mins = Math.ceil(err.retrySeconds / 60);
+        return `Gemini reports today's quota is used up, and says to try again in about ${mins} minute${mins===1?"":"s"}. Manual entry works meanwhile — tap 🔄 Retry AI after that.`;
+      }
+      // No concrete number from Google here, and we have no way to know if this account is on
+      // free or paid tier — stating a specific reset time (like a midnight-Pacific guess) would
+      // be presenting an assumption as fact. Point to the real source of truth instead.
+      return "Gemini reports today's quota is used up. We don't have an exact reset time for this from Google — check your real usage and limits at aistudio.google.com for the full picture. Manual entry works meanwhile, or tap 🔄 Retry AI anytime.";
     }
     if (err.message === "CLAUDE_RATE_LIMITED") return "Claude is rate-limited right now too — please wait a bit and try again, or use manual entry.";
     if (err.message === "RATE_LIMITED") {
       const streak = window.__geminiRateLimitStreak || 0;
       if (streak >= 4) {
-        const { countdownText } = pacificResetCountdown();
-        return `AI requests keep getting rate-limited even after waiting — that usually means your key's free daily limit is nearly used up, not a brief burst (it would fully reset in about ${countdownText}, if so). Manual entry works in the meantime; you can check your actual usage at aistudio.google.com, enable billing to remove the daily cap, or add a Claude key in Settings as a second provider.`;
+        return "AI requests keep getting rate-limited even after waiting several times — could be a daily cap, temporary throttling, or something else on Google's side; not something we can pin down for certain from here. Manual entry works in the meantime; check aistudio.google.com for your actual usage, or add a Claude key in Settings as a second provider.";
       }
       const waitText = err.retrySeconds ? `about ${err.retrySeconds}s` : "a few seconds";
       return `AI is getting a lot of requests right now — please wait ${waitText} and try again.`;
@@ -3462,7 +3446,9 @@ function NutriLogPro({ session, onLogout }) {
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem("nutrilog_gemini_key") || "");
   const [geminiFallbackKey, setGeminiFallbackKey] = useState(() => localStorage.getItem("nutrilog_gemini_fallback_key") || "");
   const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem("nutrilog_anthropic_key") || "");
-  const [aiDailyLimit, setAiDailyLimit] = useState(() => parseInt(localStorage.getItem("nutrilog_ai_daily_limit")||"15", 10));
+  // Which provider to try FIRST when both keys are configured — explicit person's choice instead
+  // of a silent automatic switch, since an unexpected auto-fallback was confusing before.
+  const [aiProvider, setAiProvider] = useState(() => localStorage.getItem("nutrilog_ai_provider") || "gemini");
   const [showSettings, setShowSettings] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [paletteSettingsOpen, setPaletteSettingsOpen] = useState(false);
@@ -3551,7 +3537,7 @@ function NutriLogPro({ session, onLogout }) {
   useEffect(() => { localStorage.setItem("nutrilog_gemini_key", geminiKey); }, [geminiKey]);
   useEffect(() => { localStorage.setItem("nutrilog_gemini_fallback_key", geminiFallbackKey); }, [geminiFallbackKey]);
   useEffect(() => { localStorage.setItem("nutrilog_anthropic_key", anthropicKey); }, [anthropicKey]);
-  useEffect(() => { localStorage.setItem("nutrilog_ai_daily_limit", String(aiDailyLimit)); }, [aiDailyLimit]);
+  useEffect(() => { localStorage.setItem("nutrilog_ai_provider", aiProvider); }, [aiProvider]);
 
   // Load today's data + targets + weight on mount.
   // Targets (which hold day_cutoff_hour) are fetched FIRST, then used to compute the
@@ -4116,7 +4102,7 @@ function NutriLogPro({ session, onLogout }) {
   };
 
   // ── AI calls (Gemini, BYO key) ──
-  const { callGemini, friendlyGeminiError } = useGeminiClient(geminiKey, geminiFallbackKey, aiDailyLimit, anthropicKey);
+  const { callGemini, friendlyGeminiError } = useGeminiClient(geminiKey, geminiFallbackKey, anthropicKey, aiProvider);
 
   const {
     manualCal, setManualCal, manualDesc, setManualDesc, manualProt, setManualProt,
@@ -5274,10 +5260,6 @@ function NutriLogPro({ session, onLogout }) {
                         </div>
 
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, background:C.surface, borderRadius:12, padding:"10px 12px" }}>
-                          <span style={{ fontSize:11, color:C.textMuted }}>{T("settings_usage_today")}</span>
-                          <span style={{ fontSize:13, fontWeight:"800", color:C.pink, fontFamily:"'DM Sans',sans-serif" }}>{Math.min(getAiUsageToday(), aiDailyLimit)} / {aiDailyLimit}</span>
-                        </div>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6, background:C.surface, borderRadius:12, padding:"10px 12px" }}>
                           <span style={{ fontSize:11, color:C.textMuted }}>{T("settings_mb_today")}</span>
                           <span style={{ fontSize:13, fontWeight:"800", color:C.pink, fontFamily:"'DM Sans',sans-serif" }}>{(getAiBytesToday()/1024/1024).toFixed(2)} MB</span>
                         </div>
@@ -5289,12 +5271,6 @@ function NutriLogPro({ session, onLogout }) {
                         )}
 
                         <div style={{ marginTop:10 }}>
-                          <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{T("settings_daily_limit_label")}</div>
-                          <input type="number" className="inp" min="1" value={aiDailyLimit} onChange={e => setAiDailyLimit(Math.max(1, parseInt(e.target.value)||1))} />
-                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{T("settings_daily_limit_hint")}</div>
-                        </div>
-
-                        <div style={{ marginTop:10 }}>
                           <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{T("settings_fallback_key_label")}</div>
                           <input type="password" className="inp" placeholder={T("settings_api_key_placeholder")} value={geminiFallbackKey} onChange={e => setGeminiFallbackKey(e.target.value)} />
                           <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{T("settings_fallback_key_hint")}</div>
@@ -5303,8 +5279,19 @@ function NutriLogPro({ session, onLogout }) {
                         <div style={{ marginTop:10 }}>
                           <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{T("settings_anthropic_label")}</div>
                           <input type="password" className="inp" placeholder="sk-ant-..." value={anthropicKey} onChange={e => setAnthropicKey(e.target.value)} />
-                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{T("settings_anthropic_hint")}</div>
+                          <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{L("A genuinely independent provider from Google. Pick which one to use as primary below — the other still steps in automatically if your primary one hits a quota or rate limit. Get a key at console.anthropic.com.","与 Google 完全独立的服务商。请在下方选择要优先使用的服务商 —— 若主要服务商遇到限额或限流，另一个仍会自动接手。可前往 console.anthropic.com 获取密钥。")}</div>
                         </div>
+
+                        {anthropicKey.trim() && (
+                          <div style={{ marginTop:10 }}>
+                            <div style={{ fontSize:11, fontWeight:"700", color:C.textMuted, marginBottom:4 }}>{L("PRIMARY AI PROVIDER","主要 AI 服务商")}</div>
+                            <div style={{ display:"flex", gap:8 }}>
+                              <button onClick={() => setAiProvider("gemini")} className={aiProvider==="gemini"?"":"ghost-btn"} style={aiProvider==="gemini"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>Gemini</button>
+                              <button onClick={() => setAiProvider("claude")} className={aiProvider==="claude"?"":"ghost-btn"} style={aiProvider==="claude"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>Claude</button>
+                            </div>
+                            <div style={{ fontSize:10, color:C.textDim, marginTop:4, fontStyle:"italic", lineHeight:1.5 }}>{L("Your explicit choice — no automatic switching between providers unless the primary one actually fails.","这是您的明确选择 —— 除非主要服务商真正失败，否则不会自动切换。")}</div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -6147,19 +6134,6 @@ function NutriLogPro({ session, onLogout }) {
               </div>
             )}
 
-                {(() => {
-                  const used = getAiUsageToday();
-                  const over = used > aiDailyLimit;
-                  const remaining = Math.max(0, aiDailyLimit - used);
-                  const color = over ? C.red : remaining === 0 ? C.red : remaining <= Math.max(1, Math.round(aiDailyLimit*0.2)) ? C.caution : C.textDim;
-                  return (
-                    <div style={{ fontSize:10.5, color, textAlign:"center", marginBottom:14, fontStyle:"italic" }}>
-                      {over
-                        ? L(`⚠️ ${used} of ${aiDailyLimit} AI calls used today — past your set limit, but AI Photo/Text Search will keep working`,`⚠️ 今日已使用 AI 次数 ${used} / ${aiDailyLimit} —— 已超出设定上限，但 AI 图片/文字识别仍可继续使用`)
-                        : L(`🤖 ${remaining} of ${aiDailyLimit} AI calls left today (photo + Suggest share this budget)`, `🤖 今日剩余 AI 次数 ${remaining} / ${aiDailyLimit}（拍照分析与 AI建议 共用此额度）`)}
-                    </div>
-                  );
-                })()}
                 {favMeals.length > 0 && (
                   <div className="card" style={{ padding:12, marginBottom:12 }}>
                     <div style={{ fontSize:11, fontWeight:"700", color:C.text, letterSpacing:"0.05em", marginBottom:8, fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:6 }}>★ {L("MY FAVORITES","我的收藏")}</div>
