@@ -1754,28 +1754,30 @@ const PendingCard = React.memo(function PendingCard({ entry, onConfirm, onCancel
 
 
 // ── Simple SVG bar chart: consumed vs burned per day, with target line ──
-const TrendChart = React.memo(function TrendChart({ days, target, theme, C }) {
+const TrendChart = React.memo(function TrendChart({ days, theme, C }) {
   const textColor = C.textMuted;
   const consumedColor = C.pink;
   const burnedColor = C.chartBurned;
   if (!days.length) return <div style={{ fontSize:12, color:textColor, textAlign:"center", padding:"20px 0" }}>{(localStorage.getItem("nutrilog_lang")||"en")==="zh" ? "数据还不够" : "Not enough data yet"}</div>;
 
-  const maxVal = Math.max(target, ...days.map(d=>d.consumed), ...days.map(d=>d.burned), 100) * 1.15;
+  const maxVal = Math.max(...days.map(d=>d.target||0), ...days.map(d=>d.consumed), ...days.map(d=>d.burned), 100) * 1.15;
   const w = 320, h = 140, padBottom = 20, padTop = 6;
   const barW = (w / days.length) * 0.62;
   const gap = (w / days.length) - barW;
-  const targetY = padTop + (1 - target/maxVal) * (h-padBottom-padTop);
 
   return (
     <svg viewBox={`0 0 ${w} ${h+18}`} style={{ width:"100%", height:"auto" }}>
-      <line x1="0" y1={targetY} x2={w} y2={targetY} stroke={textColor} strokeWidth="1" strokeDasharray="3,3" opacity="0.5" />
       {days.map((d,i) => {
         const x = i * (barW+gap) + gap/2;
         const consH = (d.consumed/maxVal) * (h-padBottom-padTop);
         const burnH = (d.burned/maxVal) * (h-padBottom-padTop);
         const baseY = h - padBottom;
+        // Each day's own target line — a big workout (or none) genuinely changes that day's real
+        // allowance, so this is a short segment per day rather than one flat line for the whole week.
+        const dayTargetY = d.target != null ? padTop + (1 - d.target/maxVal) * (h-padBottom-padTop) : null;
         return (
           <g key={i}>
+            {dayTargetY != null && <line x1={x-1} y1={dayTargetY} x2={x+barW+1} y2={dayTargetY} stroke={textColor} strokeWidth="1" strokeDasharray="3,3" opacity="0.5" />}
             <rect x={x} y={baseY-consH} width={barW*0.46} height={consH} fill={consumedColor} rx="2" />
             <rect x={x+barW*0.5} y={baseY-burnH} width={barW*0.46} height={burnH} fill={burnedColor} rx="2" />
             <text x={x+barW/2} y={h+14} textAnchor="middle" fontSize="9" fill={textColor} fontFamily="'DM Sans',sans-serif">{d.label}</text>
@@ -4555,17 +4557,22 @@ function NutriLogPro({ session, onLogout }) {
       const d = new Date(); d.setDate(d.getDate()-i);
       const key = localDateKey(d);
       const entry = byDate[key] || {cons:0,burn:0,water:0};
-      out.push({ label: d.toLocaleDateString("en-US",{weekday:"short"}).slice(0,1), consumed: entry.cons, burned: entry.burn, water: entry.water, key });
+      // Each day gets ITS OWN target — that day's own workout boost, that day's own logged
+      // weight/TDEE, and whichever weekly plan was active then — not a single flat number
+      // borrowed from today. A big workout on one day (or none on another) genuinely changes
+      // that day's real allowance, so the reference line needs to reflect that per day.
+      const dayTarget = computeTargetsLocal(entry.burn, key).calories;
+      out.push({ label: d.toLocaleDateString("en-US",{weekday:"short"}).slice(0,1), consumed: entry.cons, burned: entry.burn, water: entry.water, target: dayTarget, key });
     }
     return out;
-  }, [histRangeData]);
+  }, [histRangeData, computeTargetsLocal]);
 
   // ── This calendar week (Mon–Sun) calorie target hit/miss, for the streak dots on Main ──
   const streakWeek = useMemo(() => {
     const byDate = {};
-    histRangeData.meals.forEach(m => { byDate[m.log_date] = (byDate[m.log_date]||0) + Number(m.calories||0); });
-    histRangeData.workouts.forEach(w => { byDate[w.log_date] = (byDate[w.log_date]||0) - Number(w.calories||0); });
-    (histRangeData.drinks||[]).forEach(d => { byDate[d.log_date] = (byDate[d.log_date]||0) + Number(d.calories||0); });
+    histRangeData.meals.forEach(m => { const e = (byDate[m.log_date] ||= {cons:0, burn:0}); e.cons += Number(m.calories||0); });
+    histRangeData.workouts.forEach(w => { const e = (byDate[w.log_date] ||= {cons:0, burn:0}); e.burn += Number(w.calories||0); });
+    (histRangeData.drinks||[]).forEach(d => { const e = (byDate[d.log_date] ||= {cons:0, burn:0}); e.cons += Number(d.calories||0); });
     const todayKeyStr = todayKey(baseTargets.day_cutoff_hour);
     const now = new Date();
     const dow = now.getDay(); // 0=Sun..6=Sat
@@ -4578,13 +4585,18 @@ function NutriLogPro({ session, onLogout }) {
       const key = localDateKey(d);
       const isToday = key === todayKeyStr;
       const isFuture = d > now && !isToday;
-      const dayNet = isToday ? net : byDate[key];
+      const dayEntry = byDate[key];
+      const dayNet = isToday ? net : (dayEntry ? dayEntry.cons - dayEntry.burn : undefined);
       // Today is always shown as "in progress" (pending) even once some calories are logged,
       // since the day isn't over yet — only past days get a final pass/fail checkmark.
       const evaluated = !isFuture && !isToday && dayNet !== undefined;
       // Goal-aware deviation: for "lose", going over target is bad (deviation = how far over).
       // For "gain", going under target is bad (deviation = how far under). "maintain" treats over as bad.
-      const target = baseTargets.calories || 1;
+      // Each day is judged against ITS OWN target — that day's own workout boost and whichever
+      // weekly plan was active then — not today's flat number, since a workout (or lack of one)
+      // on a different day genuinely changes what that day's real allowance was.
+      const dayBurn = isToday ? burned : (dayEntry?.burn || 0);
+      const target = isToday ? (targets.calories || 1) : (computeTargetsLocal(dayBurn, key).calories || 1);
       const deviation = evaluated
         ? (baseTargets.goal === "gain" ? (target - dayNet) / target : (dayNet - target) / target)
         : 0;
@@ -4658,7 +4670,7 @@ function NutriLogPro({ session, onLogout }) {
     }
 
     return { days, weekNum, dateRangeLabel, hits, tracked: tracked.length, message };
-  }, [histRangeData, baseTargets.day_cutoff_hour, baseTargets.calories, baseTargets.goal, net, lang]);
+  }, [histRangeData, baseTargets.day_cutoff_hour, baseTargets.goal, net, burned, targets.calories, computeTargetsLocal, lang]);
   const streakCount = useMemo(() => {
     const byDate = {};
     histRangeData.meals.forEach(m => { byDate[m.log_date] = (byDate[m.log_date]||0) + Number(m.calories||0); });
@@ -5824,7 +5836,7 @@ function NutriLogPro({ session, onLogout }) {
                   <span><span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:C.green, marginRight:4 }}></span>{L("Burned","消耗")}</span>
                 </div>
               </div>
-              <TrendChart days={last7Days} target={targets.calories} theme={theme} C={C} />
+              <TrendChart days={last7Days} theme={theme} C={C} />
             </div>
 
             {(() => {
