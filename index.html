@@ -1352,43 +1352,39 @@ function PhotoFocalPointPicker({ imageUrl, focalX, focalY, onChange, C, L }) {
 // One comment within a post's thread — its own tiny reaction bar, same mechanics as the post's
 // (tap a pill to add/switch yours, + for the full picker), just more compact.
 function CommentRow({ postId, comment, userId, onReact, onRemove, C, L }) {
-  const activeEmojis = Object.entries(comment.reactions || {}).filter(([,n]) => n > 0);
+  const totalReactions = Object.values(comment.reactions || {}).reduce((s,n) => s+n, 0);
+  const hasMyReaction = !!comment.my_reaction;
+  const iconStyle = { display:"flex", alignItems:"center", justifyContent:"center", width:16, height:16, flexShrink:0, cursor:"pointer", fontSize:12, lineHeight:1 };
   return (
-    <div style={{ fontSize:11, lineHeight:1.4 }}>
-      <span style={{ fontWeight:"700", color:C.text }}>{comment.display_name}:</span>{" "}
-      <span style={{ color:C.textMuted }}>{comment.comment}</span>
-      <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:3 }}>
-        {activeEmojis.map(([emoji, count]) => (
-          comment.my_reaction === emoji ? (
-            <MyReactionPill key={emoji} emoji={emoji} count={count} size="comment" C={C} L={L}
-              onRemove={() => onReact(postId, comment, emoji)} onSwitch={(e) => onReact(postId, comment, e)} />
-          ) : (
-            <span
-              key={emoji} onClick={() => onReact(postId, comment, emoji)}
-              style={{ display:"flex", alignItems:"center", gap:2, background:"transparent", border:`1px solid ${C.border}`, borderRadius:999, padding:"1px 5px", cursor:"pointer", fontSize:9.5 }}
-            >
-              {emoji}<span style={{ color:C.textMuted }}>{count}</span>
-            </span>
-          )
-        ))}
-        {!comment.my_reaction && (
-          <EmptyHeartTrigger size="comment" C={C} L={L}
-            onQuickReact={() => onReact(postId, comment, "❤️")}
-            onPick={(emoji) => onReact(postId, comment, emoji)}
-          />
-        )}
-        {comment.user_id === userId && (
-          <span onClick={() => onRemove(postId, comment.comment_id)} title={L("Delete","删除")} style={{ display:"flex", alignItems:"center", justifyContent:"center", width:16, height:16, marginLeft:"auto", cursor:"pointer", color:C.textDim, fontSize:12, lineHeight:1 }}>×</span>
-        )}
+    <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, lineHeight:1.4 }}>
+      <div style={{ flex:1, minWidth:0 }}>
+        <span style={{ fontWeight:"700", color:C.text }}>{comment.display_name}:</span>{" "}
+        <span style={{ color:C.textMuted }}>{comment.comment}</span>
       </div>
+      {/* Minimized to the same size as the delete cross — a simple heart toggle rather than the
+          full multi-emoji picker posts get, since a comment row needs to stay this compact. */}
+      <span
+        onClick={() => onReact(postId, comment, "❤️")}
+        title={L("React","反应")}
+        style={{ ...iconStyle, gap:2, color: hasMyReaction ? C.pink : C.textDim, width: totalReactions>0 ? "auto" : 16 }}
+      >
+        {hasMyReaction ? "❤️" : "🤍"}{totalReactions > 0 && <span style={{ fontSize:10, marginLeft:1 }}>{totalReactions}</span>}
+      </span>
+      {comment.user_id === userId && (
+        <span onClick={() => onRemove(postId, comment.comment_id)} title={L("Delete","删除")} style={{ ...iconStyle, color:C.textDim }}>×</span>
+      )}
     </div>
   );
 }
 
-function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, comments, commentDraft, onCommentDraftChange, onSubmitComment, onRemoveComment, onReactComment, onImageClick, C, lang, L, T }) {
+function MealPostCard({ post, userId, onReact, onLoadComments, comments, commentDraft, onCommentDraftChange, onSubmitComment, onRemoveComment, onReactComment, onImageClick, C, lang, L, T }) {
   const activeEmojis = Object.entries(post.reactions || {}).filter(([,n]) => n > 0);
   const commentList = Array.isArray(comments) ? comments : [];
   const dateLabel = post.created_at ? new Date(post.created_at).toLocaleDateString(lang==="zh"?"zh-CN":"en-US", { month:"short", day:"numeric" }) : "";
+
+  // Comments are always visible now (no tap-to-expand), so load them as soon as this card mounts
+  // instead of waiting for an interaction — onLoadComments itself skips the fetch if already cached.
+  useEffect(() => { onLoadComments(post.post_id); }, [post.post_id]);
 
   return (
     <div className="card" style={{ padding:0, overflow:"hidden" }}>
@@ -1407,7 +1403,7 @@ function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, c
         <div style={{ fontSize:12, color:C.textDim, flexShrink:0 }}>{dateLabel}</div>
       </div>
 
-      {/* Meal name + kcal — moved here, between the header and the photo */}
+      {/* Meal name + kcal — between the header and the photo */}
       <div style={{ padding:"0 14px 10px", fontSize:12.5 }}>
         <span style={{ fontWeight:"700", color:C.text }}>{post.meal_name}</span>
         <span style={{ color:C.textMuted }}> · {Math.round(post.calories)} kcal</span>
@@ -1442,39 +1438,37 @@ function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, c
               onPick={(emoji) => onReact(post, emoji)}
             />
           )}
-          <button onClick={() => onToggleComments(post.post_id)} style={{ display:"flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", color:C.textMuted, fontSize:11.5, marginLeft:"auto", padding:0 }}>
+          <span style={{ display:"flex", alignItems:"center", gap:3, color:C.textMuted, fontSize:11.5, marginLeft:"auto" }}>
             💬 {post.comment_count||0}
-          </button>
+          </span>
         </div>
 
         {post.comment && <div style={{ fontSize:10.5, color:C.textMuted, marginTop:7, fontStyle:"italic" }}>"{post.comment}"</div>}
 
-        {/* Row 4 — comments */}
-        {commentsOpen && (
-          <div style={{ marginTop:9, paddingTop:9, borderTop:`1px dashed ${C.border}66` }}>
-            {comments === "loading" ? (
-              <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic", textAlign:"center", padding:"6px 0" }}>{L("Loading…","加载中…")}</div>
-            ) : (
-              <React.Fragment>
-                {commentList.length === 0 && <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic", marginBottom:6 }}>{L("No comments yet — say something nice!","还没有评论 —— 留下一句吧！")}</div>}
-                <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:8, maxHeight:140, overflowY:"auto" }}>
-                  {commentList.map(c => (
-                    <CommentRow key={c.comment_id} postId={post.post_id} comment={c} userId={userId} onReact={onReactComment} onRemove={onRemoveComment} C={C} L={L} />
-                  ))}
-                </div>
-              </React.Fragment>
-            )}
-            <div style={{ display:"flex", gap:6 }}>
-              <input
-                className="inp" value={commentDraft||""} onChange={e => onCommentDraftChange(post.post_id, e.target.value)}
-                placeholder={L("Add a comment…","添加评论…")}
-                onKeyDown={e => { if (e.key === "Enter") onSubmitComment(post.post_id); }}
-                style={{ flex:1, fontSize:11.5, padding:"7px 10px" }}
-              />
-              <button onClick={() => onSubmitComment(post.post_id)} style={{ background:C.pink, border:"none", borderRadius:8, color:"#fff", fontSize:11.5, fontWeight:"700", padding:"0 12px", cursor:"pointer" }}>{L("Post","发送")}</button>
-            </div>
+        {/* Row 5 — comments, always shown */}
+        <div style={{ marginTop:9, paddingTop:9, borderTop:`1px dashed ${C.border}66` }}>
+          {comments === "loading" ? (
+            <div style={{ fontSize:12, color:C.textDim, fontStyle:"italic", textAlign:"center", padding:"6px 0" }}>{L("Loading…","加载中…")}</div>
+          ) : (
+            <React.Fragment>
+              {commentList.length === 0 && <div style={{ fontSize:12, color:C.textDim, fontStyle:"italic", marginBottom:6 }}>{L("No comments yet — say something nice!","还没有评论 —— 留下一句吧！")}</div>}
+              <div style={{ display:"flex", flexDirection:"column", gap:7, marginBottom:8, maxHeight:160, overflowY:"auto" }}>
+                {commentList.map(c => (
+                  <CommentRow key={c.comment_id} postId={post.post_id} comment={c} userId={userId} onReact={onReactComment} onRemove={onRemoveComment} C={C} L={L} />
+                ))}
+              </div>
+            </React.Fragment>
+          )}
+          <div style={{ display:"flex", gap:6 }}>
+            <input
+              className="inp" value={commentDraft||""} onChange={e => onCommentDraftChange(post.post_id, e.target.value)}
+              placeholder={L("Add a comment…","添加评论…")}
+              onKeyDown={e => { if (e.key === "Enter") onSubmitComment(post.post_id); }}
+              style={{ flex:1, fontSize:12.5, padding:"7px 10px" }}
+            />
+            <button onClick={() => onSubmitComment(post.post_id)} style={{ background:C.pink, border:"none", borderRadius:8, color:"#fff", fontSize:12.5, fontWeight:"700", padding:"0 12px", cursor:"pointer" }}>{L("Post","发送")}</button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -3998,23 +3992,20 @@ function NutriLogPro({ session, onLogout }) {
     }
   }, [userId]);
 
-  // Comments — fetched lazily per post (only once that post's comment section is opened), and
-  // kept in their own map keyed by post_id so switching between several open posts doesn't
-  // re-fetch anything already loaded.
-  const [openCommentPosts, setOpenCommentPosts] = useState({}); // { [post_id]: true }
+  // Comments — always visible now (not gated behind a tap-to-expand), but still fetched lazily
+  // per post the first time each post card mounts, and cached so it only happens once per post
+  // per session.
   const [postComments, setPostComments] = useState({}); // { [post_id]: comment[] | "loading" }
   const [commentDrafts, setCommentDrafts] = useState({}); // { [post_id]: string }
-  const toggleCommentSection = useCallback(async (postId) => {
-    setOpenCommentPosts(prev => ({ ...prev, [postId]: !prev[postId] }));
-    if (!postComments[postId]) {
-      setPostComments(prev => ({ ...prev, [postId]: "loading" }));
-      try {
-        const rows = await DataAPI.getPostComments(postId, userId);
-        setPostComments(prev => ({ ...prev, [postId]: rows }));
-      } catch (err) {
-        setPostComments(prev => ({ ...prev, [postId]: [] }));
-        setError(L("Failed to load comments: ","加载评论失败：") + err.message);
-      }
+  const loadCommentsIfNeeded = useCallback(async (postId) => {
+    if (postComments[postId]) return;
+    setPostComments(prev => ({ ...prev, [postId]: "loading" }));
+    try {
+      const rows = await DataAPI.getPostComments(postId, userId);
+      setPostComments(prev => ({ ...prev, [postId]: rows }));
+    } catch (err) {
+      setPostComments(prev => ({ ...prev, [postId]: [] }));
+      setError(L("Failed to load comments: ","加载评论失败：") + err.message);
     }
   }, [postComments, userId]);
   const submitComment = useCallback(async (postId) => {
@@ -7514,8 +7505,7 @@ function NutriLogPro({ session, onLogout }) {
                           <MealPostCard
                             key={post.post_id} post={post} userId={userId}
                             onReact={setPostReaction}
-                            commentsOpen={!!openCommentPosts[post.post_id]}
-                            onToggleComments={toggleCommentSection}
+                            onLoadComments={loadCommentsIfNeeded}
                             comments={postComments[post.post_id]}
                             commentDraft={commentDrafts[post.post_id]}
                             onCommentDraftChange={(postId, val) => setCommentDrafts(prev => ({ ...prev, [postId]: val }))}
