@@ -1228,6 +1228,53 @@ function PhotoLightbox({ src, onClose }) {
 }
 
 const REACTION_EMOJIS = ["❤️", "🔥", "👏", "😋", "💪"];
+const POST_PHOTO_ASPECT = "4 / 3"; // fixed rectangular frame every Best Meal photo displays at
+
+// Drag-to-reposition focal point picker, Instagram-style — shows the photo at the EXACT aspect
+// ratio and crop behavior it'll actually display at in the feed, so there's no guessing between
+// what you set here and what shows up there. Dragging pans the photo; the focal point (0-100 on
+// each axis) is just fed straight into CSS object-position on both this preview and the real card.
+function PhotoFocalPointPicker({ imageUrl, focalX, focalY, onChange, C, L }) {
+  const containerRef = useRef(null);
+  const draggingRef = useRef(false);
+  const startRef = useRef({ x:0, y:0, focalX:50, focalY:50 });
+
+  const beginDrag = (clientX, clientY) => {
+    draggingRef.current = true;
+    startRef.current = { x: clientX, y: clientY, focalX, focalY };
+  };
+  const continueDrag = (clientX, clientY) => {
+    if (!draggingRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const dx = clientX - startRef.current.x;
+    const dy = clientY - startRef.current.y;
+    // Dragging the photo right should reveal more of its left side — object-position moves the
+    // opposite way from the drag direction, same as panning a map.
+    const newX = Math.max(0, Math.min(100, startRef.current.focalX - (dx / rect.width) * 100));
+    const newY = Math.max(0, Math.min(100, startRef.current.focalY - (dy / rect.height) * 100));
+    onChange(newX, newY);
+  };
+  const endDrag = () => { draggingRef.current = false; };
+
+  return (
+    <div style={{ marginBottom:12 }}>
+      <div
+        ref={containerRef}
+        onMouseDown={e => beginDrag(e.clientX, e.clientY)}
+        onMouseMove={e => continueDrag(e.clientX, e.clientY)}
+        onMouseUp={endDrag} onMouseLeave={endDrag}
+        onTouchStart={e => beginDrag(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={e => continueDrag(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={endDrag}
+        style={{ width:"100%", aspectRatio:POST_PHOTO_ASPECT, borderRadius:12, overflow:"hidden", cursor:"grab", position:"relative", touchAction:"none", background:C.surface }}
+      >
+        <img src={imageUrl} alt="" draggable={false} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:`${focalX}% ${focalY}%`, pointerEvents:"none", userSelect:"none" }} />
+      </div>
+      <div style={{ fontSize:10, color:C.textDim, textAlign:"center", marginTop:6, fontStyle:"italic" }}>{L("🤏 Drag the photo to choose what shows","🤏 拖动照片以选择显示区域")}</div>
+    </div>
+  );
+}
+
 
 // One Best Meal post: photo, reaction bar (tap an existing pill to add/switch your own, or the +
 // to pick from all five), and an expandable comment thread fetched lazily on first open.
@@ -1269,26 +1316,35 @@ function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, c
   const [pickerOpen, setPickerOpen] = useState(false);
   const activeEmojis = Object.entries(post.reactions || {}).filter(([,n]) => n > 0);
   const commentList = Array.isArray(comments) ? comments : [];
+  const dateLabel = post.created_at ? new Date(post.created_at).toLocaleDateString(lang==="zh"?"zh-CN":"en-US", { month:"short", day:"numeric" }) : "";
 
   return (
     <div className="card" style={{ padding:0, overflow:"hidden" }}>
-      <img src={post.image_url} alt={post.meal_name} onClick={onImageClick} style={{ width:"100%", height:200, objectFit:"cover", display:"block", cursor:"zoom-in" }} />
-      <div style={{ padding:"8px 10px" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+      {/* Row 1 — avatar + name left, post date right */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", gap:8 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
           {post.avatar_url ? (
-            <img src={post.avatar_url} alt={post.display_name} style={{ width:18, height:18, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+            <img src={post.avatar_url} alt={post.display_name} style={{ width:28, height:28, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
           ) : (
-            <div style={{ width:18, height:18, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, flexShrink:0 }}>
+            <div style={{ width:28, height:28, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>
               {post.gender === "female" ? "👩" : post.gender === "male" ? "👨" : "🙂"}
             </div>
           )}
-          <div style={{ fontSize:10.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
+          <div style={{ fontSize:12.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
         </div>
-        <div style={{ fontSize:11.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.meal_name}</div>
-        <div style={{ fontSize:10, color:C.textMuted, marginTop:2 }}>{Math.round(post.calories)} kcal</div>
-        {post.comment && <div style={{ fontSize:10.5, color:C.textMuted, marginTop:4, fontStyle:"italic", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>"{post.comment}"</div>}
+        <div style={{ fontSize:10.5, color:C.textDim, flexShrink:0 }}>{dateLabel}</div>
+      </div>
 
-        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:5, marginTop:7, position:"relative" }}>
+      {/* Row 2 — photo, fixed rectangular frame, cropped to whatever focal point the poster chose
+          rather than always centering (see PhotoFocalPointPicker) */}
+      <div onClick={onImageClick} style={{ width:"100%", aspectRatio:POST_PHOTO_ASPECT, overflow:"hidden", cursor:"zoom-in", background:C.surface }}>
+        <img src={post.image_url} alt={post.meal_name} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:`${post.focal_x??50}% ${post.focal_y??50}%`, display:"block" }} />
+      </div>
+
+      <div style={{ padding:"9px 12px 10px" }}>
+        {/* Row 3 — reactions + comment count. Purely additive/subtractive changes to this row
+            only — nothing here ever affects the photo block above. */}
+        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:5, position:"relative" }}>
           {activeEmojis.map(([emoji, count]) => (
             <button
               key={emoji} onClick={() => onReact(post, emoji)}
@@ -1310,8 +1366,16 @@ function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, c
           </button>
         </div>
 
+        {/* Meal name / kcal / caption — Instagram-style, right under the action row */}
+        <div style={{ fontSize:11.5, marginTop:8 }}>
+          <span style={{ fontWeight:"700", color:C.text }}>{post.meal_name}</span>
+          <span style={{ color:C.textMuted }}> · {Math.round(post.calories)} kcal</span>
+        </div>
+        {post.comment && <div style={{ fontSize:10.5, color:C.textMuted, marginTop:3, fontStyle:"italic" }}>"{post.comment}"</div>}
+
+        {/* Row 4 — comments */}
         {commentsOpen && (
-          <div style={{ marginTop:8, paddingTop:8, borderTop:`1px dashed ${C.border}66` }}>
+          <div style={{ marginTop:9, paddingTop:9, borderTop:`1px dashed ${C.border}66` }}>
             {comments === "loading" ? (
               <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic", textAlign:"center", padding:"6px 0" }}>{L("Loading…","加载中…")}</div>
             ) : (
@@ -3490,6 +3554,15 @@ function NutriLogPro({ session, onLogout }) {
   const [mealPostPickerOpen, setMealPostPickerOpen] = useState(false);
   const [mealPostSelectedId, setMealPostSelectedId] = useState(null);
   const [mealPostSearch, setMealPostSearch] = useState("");
+  const [mealPostFocalX, setMealPostFocalX] = useState(50);
+  const [mealPostFocalY, setMealPostFocalY] = useState(50);
+  // Picking a NEW photo resets the focal point to center — repositioning only makes sense once
+  // there's an actual photo showing to drag around.
+  const pickMealPostPhoto = useCallback((mealId) => {
+    setMealPostSelectedId(mealId);
+    setMealPostFocalX(50);
+    setMealPostFocalY(50);
+  }, []);
   const [mealPostComment, setMealPostComment] = useState("");
   const [mealPostSaving, setMealPostSaving] = useState(false);
   const [mealPostSaveError, setMealPostSaveError] = useState(null);
@@ -3802,11 +3875,11 @@ function NutriLogPro({ session, onLogout }) {
     setMealPostSaveError(null);
     try {
       const saved = await DataAPI.upsertMealPost(userId, prevWeekMondayKey, {
-        ...base, comment: mealPostComment.trim() || null
+        ...base, comment: mealPostComment.trim() || null, focal_x: mealPostFocalX, focal_y: mealPostFocalY
       });
       setMealPosts(prev => {
         const withoutMine = (prev||[]).filter(p => p.user_id !== userId);
-        return [...withoutMine, { post_id:saved.id, user_id:userId, display_name:baseTargets.display_name, avatar_url:baseTargets.avatar_url, gender:baseTargets.gender, meal_id:saved.meal_id, image_url:saved.image_url, meal_name:saved.meal_name, calories:saved.calories, comment:saved.comment, created_at:saved.created_at, reactions: myMealPost?.reactions||{}, my_reaction: myMealPost?.my_reaction||null, comment_count: myMealPost?.comment_count||0 }];
+        return [...withoutMine, { post_id:saved.id, user_id:userId, display_name:baseTargets.display_name, avatar_url:baseTargets.avatar_url, gender:baseTargets.gender, meal_id:saved.meal_id, image_url:saved.image_url, meal_name:saved.meal_name, calories:saved.calories, comment:saved.comment, focal_x:saved.focal_x, focal_y:saved.focal_y, created_at:saved.updated_at, reactions: myMealPost?.reactions||{}, my_reaction: myMealPost?.my_reaction||null, comment_count: myMealPost?.comment_count||0 }];
       });
       setMealPostPickerOpen(false);
       setMealPostSelectedId(null);
@@ -7249,14 +7322,14 @@ function NutriLogPro({ session, onLogout }) {
                       <div className="card" style={{ padding:"14px 16px", marginBottom:14 }}>
                         {myMealPost && !mealPostPickerOpen ? (
                           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                            <img src={myMealPost.image_url} alt={myMealPost.meal_name} onClick={() => setLightboxImage(myMealPost.image_url)} style={{ width:44, height:44, borderRadius:10, objectFit:"cover", flexShrink:0, cursor:"zoom-in" }} />
+                            <img src={myMealPost.image_url} alt={myMealPost.meal_name} onClick={() => setLightboxImage(myMealPost.image_url)} style={{ width:44, height:44, borderRadius:10, objectFit:"cover", objectPosition:`${myMealPost.focal_x??50}% ${myMealPost.focal_y??50}%`, flexShrink:0, cursor:"zoom-in" }} />
                             <div style={{ flex:1, minWidth:0 }}>
                               <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{myMealPost.meal_name}</div>
                               <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>
                                 {Object.entries(myMealPost.reactions||{}).filter(([,n])=>n>0).map(([e,n]) => `${e}${n}`).join(" ") || L("No reactions yet","还没有反应")} · 💬 {myMealPost.comment_count||0}
                               </div>
                             </div>
-                            <button className="ghost-btn" style={{ padding:"7px 12px", fontSize:11.5, flexShrink:0 }} onClick={() => { setMealPostPickerOpen(true); setMealPostSelectedId(myMealPost.meal_id||null); setMealPostComment(myMealPost.comment||""); }}>
+                            <button className="ghost-btn" style={{ padding:"7px 12px", fontSize:11.5, flexShrink:0 }} onClick={() => { setMealPostPickerOpen(true); setMealPostSelectedId(myMealPost.meal_id||null); setMealPostComment(myMealPost.comment||""); setMealPostFocalX(myMealPost.focal_x ?? 50); setMealPostFocalY(myMealPost.focal_y ?? 50); }}>
                               {L("Edit","编辑")}
                             </button>
                             <button className="ghost-btn" style={{ padding:"7px 12px", fontSize:11.5, color:C.red, borderColor:C.red, flexShrink:0 }} onClick={deleteMyMealPost}>
@@ -7285,7 +7358,7 @@ function NutriLogPro({ session, onLogout }) {
                                     const renderGrid = (list) => (
                                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
                                         {list.map(m => (
-                                          <div key={m.id} onClick={() => setMealPostSelectedId(m.id)} style={{ position:"relative", borderRadius:10, overflow:"hidden", cursor:"pointer", border: mealPostSelectedId===m.id ? `2px solid ${C.pink}` : "2px solid transparent" }}>
+                                          <div key={m.id} onClick={() => pickMealPostPhoto(m.id)} style={{ position:"relative", borderRadius:10, overflow:"hidden", cursor:"pointer", border: mealPostSelectedId===m.id ? `2px solid ${C.pink}` : "2px solid transparent" }}>
                                             <img src={m.image_url} alt={m.name} style={{ width:"100%", height:70, objectFit:"cover", display:"block" }} />
                                             {mealPostSelectedId===m.id && <div style={{ position:"absolute", top:4, right:4, background:C.pink, color:"#fff", borderRadius:"50%", width:18, height:18, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>✓</div>}
                                           </div>
@@ -7315,6 +7388,18 @@ function NutriLogPro({ session, onLogout }) {
                                 </div>
                               </React.Fragment>
                             )}
+                            {(() => {
+                              const selectedMeal = myPhotoMeals.find(m => m.id === mealPostSelectedId);
+                              const previewUrl = selectedMeal ? selectedMeal.image_url : (myMealPost ? myMealPost.image_url : null);
+                              if (!previewUrl) return null;
+                              return (
+                                <PhotoFocalPointPicker
+                                  imageUrl={previewUrl} focalX={mealPostFocalX} focalY={mealPostFocalY}
+                                  onChange={(x,y) => { setMealPostFocalX(x); setMealPostFocalY(y); }}
+                                  C={C} L={L}
+                                />
+                              );
+                            })()}
                             <textarea
                               className="inp"
                               placeholder={L("Add a comment (optional)","添加评论（可选）")}
