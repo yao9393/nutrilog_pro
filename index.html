@@ -179,7 +179,7 @@ const STRINGS = {
     gallery_empty: "No meal photos yet — snap a photo next time you log a meal and it'll show up here.",
     gallery_hint: "Browse past meal photos and tap ☆ to save any of them as a favorite. This is just browsing — it won't add anything to today's log.",
     leaderboard_optin_label: "Show me on the leaderboard",
-    leaderboard_optin_hint: "Off by default. When on, other opted-in users can see your display name and how many days you hit target each week, and you can post one Best Meal photo per week for others to see and like (see below) — nothing else is ever shared (no food logs, weight, etc.).",
+    leaderboard_optin_hint: "Off by default. When on, other opted-in users can see your display name and how many days you hit target each week, and you can post one Best Meal photo per week for others to see, react to, and comment on (see below) — nothing else is ever shared (no food logs, weight, etc.).",
     leaderboard_need_name: "Set a display name in your Profile (👤 on Main) to join the leaderboard.",
     leaderboard_empty: "No one's opted in yet for this week. Be the first!",
     leaderboard_not_set_up: "Leaderboard isn't set up yet — this needs a one-time database migration. Ask your developer to run it.",
@@ -251,7 +251,7 @@ const STRINGS = {
     gallery_empty: "还没有餐食照片 —— 下次记录时拍张照片，就会出现在这里。",
     gallery_hint: "浏览过往的餐食照片，点击 ☆ 即可收藏为最爱。这里只是浏览，不会加入今天的记录。",
     leaderboard_optin_label: "在排行榜显示我",
-    leaderboard_optin_hint: "默认关闭。开启后，其他已开启此设置的用户可以看到您的显示名称与每周达标天数，并且您每周可以发布一张「本周最佳美食」照片供他人查看和点赞（见下方）—— 不会分享其他任何内容（饮食记录、体重等）。",
+    leaderboard_optin_hint: "默认关闭。开启后，其他已开启此设置的用户可以看到您的显示名称与每周达标天数，并且您每周可以发布一张「本周最佳美食」照片供他人查看、做出反应与评论（见下方）—— 不会分享其他任何内容（饮食记录、体重等）。",
     leaderboard_need_name: "请先在个人资料 (主页的 👤) 中设置显示名称，才能加入排行榜。",
     leaderboard_empty: "本周还没有人开启排行榜，快来当第一个吧！",
     leaderboard_not_set_up: "排行榜尚未设置 —— 需要一次性的数据库迁移，请联系开发者执行。",
@@ -1038,12 +1038,62 @@ const DataAPI = {
     const { error } = await supabase.from('meal_posts').delete().eq('id', id);
     if (error) throw error;
   },
-  async likeMealPost(postId, userId) {
-    const { error } = await supabase.from('meal_post_likes').insert({ post_id: postId, user_id: userId });
+  async setMealPostReaction(postId, userId, reaction) {
+    // Upsert on (post_id, user_id) — switching reactions updates the existing row rather than
+    // creating a duplicate, since the migration adds a unique constraint on that pair.
+    const { error } = await supabase.from('meal_post_likes')
+      .upsert({ post_id: postId, user_id: userId, reaction }, { onConflict: 'post_id,user_id' });
     if (error) throw error;
   },
-  async unlikeMealPost(postId, userId) {
+  async removeMealPostReaction(postId, userId) {
     const { error } = await supabase.from('meal_post_likes').delete().eq('post_id', postId).eq('user_id', userId);
+    if (error) throw error;
+  },
+  async getPostComments(postId, viewerId) {
+    const { data, error } = await supabase.rpc('get_post_comments', { p_post_id: postId, p_viewer_id: viewerId });
+    if (error) throw error;
+    return data || [];
+  },
+  async addPostComment(postId, userId, comment) {
+    const { data, error } = await supabase.from('meal_post_comments')
+      .insert({ post_id: postId, user_id: userId, comment })
+      .select().single();
+    if (error) throw error;
+    return data;
+  },
+  async deletePostComment(commentId) {
+    const { error } = await supabase.from('meal_post_comments').delete().eq('id', commentId);
+    if (error) throw error;
+  },
+  async setCommentReaction(commentId, userId, reaction) {
+    const { error } = await supabase.from('meal_post_comment_likes')
+      .upsert({ comment_id: commentId, user_id: userId, reaction }, { onConflict: 'comment_id,user_id' });
+    if (error) throw error;
+  },
+  async removeCommentReaction(commentId, userId) {
+    const { error } = await supabase.from('meal_post_comment_likes').delete().eq('comment_id', commentId).eq('user_id', userId);
+    if (error) throw error;
+  },
+
+  // ── In-app notifications: written directly by whoever performs the action
+  // (reacting/commenting), not by a server trigger — see the migration file
+  // for why. Only covers activity from while people are actively using the
+  // app, not true background push. ──
+  async createNotification({ userId, actorUserId, type, postId, commentId, reaction }) {
+    if (userId === actorUserId) return; // never notify yourself
+    const { error } = await supabase.from('notifications').insert({
+      user_id: userId, actor_user_id: actorUserId, type, post_id: postId||null, comment_id: commentId||null, reaction: reaction||null
+    });
+    if (error) throw error;
+  },
+  async getMyNotifications(userId) {
+    const { data, error } = await supabase.rpc('get_my_notifications', { p_user_id: userId });
+    if (error) throw error;
+    return data || [];
+  },
+  async markNotificationsRead(notificationIds) {
+    if (!notificationIds.length) return;
+    const { error } = await supabase.from('notifications').update({ read: true }).in('id', notificationIds);
     if (error) throw error;
   },
 
@@ -1173,6 +1223,119 @@ function PhotoLightbox({ src, onClose }) {
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:2100, display:"flex", alignItems:"center", justifyContent:"center", padding:20, cursor:"zoom-out" }}>
       <button onClick={onClose} style={{ position:"absolute", top:16, right:16, background:"rgba(255,255,255,0.15)", border:"none", borderRadius:"50%", width:36, height:36, color:"#fff", fontSize:20, cursor:"pointer", lineHeight:1 }}>×</button>
       <img src={src} alt="" style={{ maxWidth:"92vw", maxHeight:"88vh", objectFit:"contain", borderRadius:8 }} />
+    </div>
+  );
+}
+
+const REACTION_EMOJIS = ["❤️", "🔥", "👏", "😋", "💪"];
+
+// One Best Meal post: photo, reaction bar (tap an existing pill to add/switch your own, or the +
+// to pick from all five), and an expandable comment thread fetched lazily on first open.
+// One comment within a post's thread — its own tiny reaction bar, same mechanics as the post's
+// (tap a pill to add/switch yours, + for the full picker), just more compact.
+function CommentRow({ postId, comment, userId, onReact, onRemove, C, L }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const activeEmojis = Object.entries(comment.reactions || {}).filter(([,n]) => n > 0);
+  return (
+    <div style={{ fontSize:11, lineHeight:1.4 }}>
+      <span style={{ fontWeight:"700", color:C.text }}>{comment.display_name}</span>{" "}
+      <span style={{ color:C.textMuted }}>{comment.comment}</span>
+      {comment.user_id === userId && (
+        <span onClick={() => onRemove(postId, comment.comment_id)} style={{ color:C.textDim, cursor:"pointer", marginLeft:6, fontSize:10.5 }}>{L("delete","删除")}</span>
+      )}
+      <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2, position:"relative" }}>
+        {activeEmojis.map(([emoji, count]) => (
+          <span
+            key={emoji} onClick={() => onReact(postId, comment, emoji)}
+            style={{ display:"flex", alignItems:"center", gap:2, background: comment.my_reaction===emoji ? C.pinkGlow : "transparent", border:`1px solid ${comment.my_reaction===emoji ? C.pinkDim : C.border}`, borderRadius:999, padding:"1px 5px", cursor:"pointer", fontSize:9.5 }}
+          >
+            {emoji}<span style={{ color:C.textMuted }}>{count}</span>
+          </span>
+        ))}
+        <span onClick={() => setPickerOpen(!pickerOpen)} style={{ color:C.textDim, cursor:"pointer", fontSize:9.5 }}>{L("react","反应")}</span>
+        {pickerOpen && (
+          <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:3, display:"flex", gap:3, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"3px 5px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:5 }}>
+            {REACTION_EMOJIS.map(emoji => (
+              <span key={emoji} onClick={() => { onReact(postId, comment, emoji); setPickerOpen(false); }} style={{ cursor:"pointer", fontSize:14 }}>{emoji}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, comments, commentDraft, onCommentDraftChange, onSubmitComment, onRemoveComment, onReactComment, onImageClick, C, lang, L, T }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const activeEmojis = Object.entries(post.reactions || {}).filter(([,n]) => n > 0);
+  const commentList = Array.isArray(comments) ? comments : [];
+
+  return (
+    <div className="card" style={{ padding:0, overflow:"hidden" }}>
+      <img src={post.image_url} alt={post.meal_name} onClick={onImageClick} style={{ width:"100%", height:120, objectFit:"cover", display:"block", cursor:"zoom-in" }} />
+      <div style={{ padding:"8px 10px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+          {post.avatar_url ? (
+            <img src={post.avatar_url} alt={post.display_name} style={{ width:18, height:18, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+          ) : (
+            <div style={{ width:18, height:18, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, flexShrink:0 }}>
+              {post.gender === "female" ? "👩" : post.gender === "male" ? "👨" : "🙂"}
+            </div>
+          )}
+          <div style={{ fontSize:10.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
+        </div>
+        <div style={{ fontSize:11.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.meal_name}</div>
+        <div style={{ fontSize:10, color:C.textMuted, marginTop:2 }}>{Math.round(post.calories)} kcal</div>
+        {post.comment && <div style={{ fontSize:10.5, color:C.textMuted, marginTop:4, fontStyle:"italic", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>"{post.comment}"</div>}
+
+        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:5, marginTop:7, position:"relative" }}>
+          {activeEmojis.map(([emoji, count]) => (
+            <button
+              key={emoji} onClick={() => onReact(post, emoji)}
+              style={{ display:"flex", alignItems:"center", gap:3, background: post.my_reaction===emoji ? C.pinkGlow : "transparent", border:`1px solid ${post.my_reaction===emoji ? C.pinkDim : C.border}`, borderRadius:999, padding:"2px 7px", cursor:"pointer", fontSize:11.5 }}
+            >
+              <span>{emoji}</span><span style={{ color:C.textMuted, fontSize:10 }}>{count}</span>
+            </button>
+          ))}
+          <button onClick={() => setPickerOpen(!pickerOpen)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:999, width:22, height:22, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:C.textMuted, fontSize:13, lineHeight:1 }}>+</button>
+          {pickerOpen && (
+            <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:4, display:"flex", gap:4, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"4px 6px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:5 }}>
+              {REACTION_EMOJIS.map(emoji => (
+                <span key={emoji} onClick={() => { onReact(post, emoji); setPickerOpen(false); }} style={{ cursor:"pointer", fontSize:16, padding:"2px 3px" }}>{emoji}</span>
+              ))}
+            </div>
+          )}
+          <button onClick={() => onToggleComments(post.post_id)} style={{ display:"flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", color:C.textMuted, fontSize:11.5, marginLeft:"auto", padding:0 }}>
+            💬 {post.comment_count||0}
+          </button>
+        </div>
+
+        {commentsOpen && (
+          <div style={{ marginTop:8, paddingTop:8, borderTop:`1px dashed ${C.border}66` }}>
+            {comments === "loading" ? (
+              <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic", textAlign:"center", padding:"6px 0" }}>{L("Loading…","加载中…")}</div>
+            ) : (
+              <React.Fragment>
+                {commentList.length === 0 && <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic", marginBottom:6 }}>{L("No comments yet — say something nice!","还没有评论 —— 留下一句吧！")}</div>}
+                <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:8, maxHeight:140, overflowY:"auto" }}>
+                  {commentList.map(c => (
+                    <CommentRow key={c.comment_id} postId={post.post_id} comment={c} userId={userId} onReact={onReactComment} onRemove={onRemoveComment} C={C} L={L} />
+                  ))}
+                </div>
+              </React.Fragment>
+            )}
+            <div style={{ display:"flex", gap:6 }}>
+              <input
+                className="inp" value={commentDraft||""} onChange={e => onCommentDraftChange(post.post_id, e.target.value)}
+                placeholder={L("Add a comment…","添加评论…")}
+                onKeyDown={e => { if (e.key === "Enter") onSubmitComment(post.post_id); }}
+                style={{ flex:1, fontSize:11.5, padding:"7px 10px" }}
+              />
+              <button onClick={() => onSubmitComment(post.post_id)} style={{ background:C.pink, border:"none", borderRadius:8, color:"#fff", fontSize:11.5, fontWeight:"700", padding:"0 12px", cursor:"pointer" }}>{L("Post","发送")}</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -3268,10 +3431,65 @@ function NutriLogPro({ session, onLogout }) {
   const [leaderboardError, setLeaderboardError] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [mealPosts, setMealPosts] = useState(null); // null = not loaded yet
+
+  // In-app notifications — fetched once on load (not per-tab, since a bell icon in the header
+  // should reflect activity regardless of which tab is open) and re-fetched on a slow poll while
+  // the app is open. Real push (arriving even when the app is closed) isn't covered — see the
+  // migration file's note on what that would additionally require.
+  //
+  // Two independent categories, plus a master switch: "social" (reactions/comments on Best Meal
+  // posts) and "system" (the haven't-logged-yet reminders). The master overrides both when off,
+  // without needing to touch either sub-toggle's own stored value — effective state is always
+  // (master && category), so turning the master back on restores whatever the sub-toggles were
+  // already set to.
+  const [notifMasterOn, setNotifMasterOn] = useState(() => localStorage.getItem("nutrilog_notif_master") !== "false"); // default on
+  const [notifSocialOn, setNotifSocialOn] = useState(() => localStorage.getItem("nutrilog_notif_social") !== "false"); // default on
+  useEffect(() => { localStorage.setItem("nutrilog_notif_master", String(notifMasterOn)); }, [notifMasterOn]);
+  useEffect(() => { localStorage.setItem("nutrilog_notif_social", String(notifSocialOn)); }, [notifSocialOn]);
+  const socialNotifsEnabled = notifMasterOn && notifSocialOn;
+
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const unreadNotifCount = socialNotifsEnabled ? notifications.filter(n => !n.read).length : 0;
+  const refreshNotifications = useCallback(async () => {
+    if (!userId || !socialNotifsEnabled) return;
+    try {
+      const rows = await DataAPI.getMyNotifications(userId);
+      setNotifications(rows);
+    } catch (err) { /* silent — a failed notification fetch shouldn't interrupt anything else */ }
+  }, [userId, socialNotifsEnabled]);
+  useEffect(() => {
+    if (!socialNotifsEnabled) { setNotifications([]); return; }
+    refreshNotifications();
+    const interval = setInterval(refreshNotifications, 60000); // light poll while the app is open
+    return () => clearInterval(interval);
+  }, [refreshNotifications, socialNotifsEnabled]);
+  const openNotifications = useCallback(() => {
+    setShowNotifications(prev => {
+      const opening = !prev;
+      if (opening) {
+        const unreadIds = notifications.filter(n => !n.read).map(n => n.notification_id);
+        if (unreadIds.length) {
+          setNotifications(cur => cur.map(n => ({ ...n, read: true })));
+          DataAPI.markNotificationsRead(unreadIds).catch(() => {});
+        }
+      }
+      return opening;
+    });
+  }, [notifications]);
+  const notificationText = (n) => {
+    const name = n.actor_display_name || (lang==="zh"?"有人":"Someone");
+    if (n.type === "post_reaction") return L(`${name} reacted ${n.reaction||"❤️"} to your Best Meal post`, `${name} 对你的「最佳美食」帖子做出了 ${n.reaction||"❤️"} 反应`);
+    if (n.type === "post_comment") return L(`${name} commented on your Best Meal post`, `${name} 评论了你的「最佳美食」帖子`);
+    if (n.type === "comment_reaction") return L(`${name} reacted ${n.reaction||"❤️"} to your comment`, `${name} 对你的评论做出了 ${n.reaction||"❤️"} 反应`);
+    return "";
+  };
+
   const [mealPostsError, setMealPostsError] = useState(null);
   const [mealPostsLoading, setMealPostsLoading] = useState(false);
   const [mealPostPickerOpen, setMealPostPickerOpen] = useState(false);
   const [mealPostSelectedId, setMealPostSelectedId] = useState(null);
+  const [mealPostSearch, setMealPostSearch] = useState("");
   const [mealPostComment, setMealPostComment] = useState("");
   const [mealPostSaving, setMealPostSaving] = useState(false);
   const [mealPostSaveError, setMealPostSaveError] = useState(null);
@@ -3467,6 +3685,10 @@ function NutriLogPro({ session, onLogout }) {
     const prevMonday = new Date(thisMonday); prevMonday.setDate(thisMonday.getDate() - 7);
     return localDateKey(prevMonday);
   }, []);
+  const prevWeekSundayKey = useMemo(() => {
+    const sunday = new Date(prevWeekMondayKey+"T00:00:00"); sunday.setDate(sunday.getDate()+6);
+    return localDateKey(sunday);
+  }, [prevWeekMondayKey]);
 
   // Rolling "-1 day" leaderboard window: on Monday, this week has no concluded days yet, so we
   // fall back to last week's complete (Day 7) result. Tue-Sun show THIS week, with the label
@@ -3544,21 +3766,20 @@ function NutriLogPro({ session, onLogout }) {
     })();
   }, [activeTab, socialSubTab, userId]);
 
-  // Candidate photos for "Best Meal of the Week": the user's own logged meals from last week
-  // that have a saved photo — reusing the already-uploaded image rather than a fresh upload.
-  const lastWeekPhotoMeals = useMemo(() => {
-    const prevSunday = new Date(prevWeekMondayKey+"T00:00:00"); prevSunday.setDate(prevSunday.getDate()+6);
-    const prevSundayKey = localDateKey(prevSunday);
+  // Candidate photos for "Best Meal of the Week": ANY of the user's own logged meals that have a
+  // saved photo, not just last week's — reusing an older favorite shot is just as valid as a
+  // recent one, and this is the same photo history already shown in the Gallery sub-tab.
+  const myPhotoMeals = useMemo(() => {
     return histRangeData.meals
-      .filter(m => m.image_url && m.log_date >= prevWeekMondayKey && m.log_date <= prevSundayKey)
+      .filter(m => m.image_url)
       .slice()
       .sort((a,b) => new Date(b.logged_at||b.log_date) - new Date(a.logged_at||a.log_date));
-  }, [histRangeData, prevWeekMondayKey]);
+  }, [histRangeData]);
 
   const myMealPost = mealPosts ? mealPosts.find(p => p.user_id === userId) || null : null;
 
   const submitMealPost = useCallback(async () => {
-    const meal = lastWeekPhotoMeals.find(m => m.id === mealPostSelectedId);
+    const meal = myPhotoMeals.find(m => m.id === mealPostSelectedId);
     // Falls back to the existing post's own saved fields when the user is only editing the
     // comment (no new photo re-selected) — this used to silently fail whenever mealPostSelectedId
     // wasn't a fresh pick, e.g. before meal_id was exposed by the feed RPC, or if the original
@@ -3575,7 +3796,7 @@ function NutriLogPro({ session, onLogout }) {
       });
       setMealPosts(prev => {
         const withoutMine = (prev||[]).filter(p => p.user_id !== userId);
-        return [...withoutMine, { post_id:saved.id, user_id:userId, display_name:baseTargets.display_name, avatar_url:baseTargets.avatar_url, gender:baseTargets.gender, meal_id:saved.meal_id, image_url:saved.image_url, meal_name:saved.meal_name, calories:saved.calories, comment:saved.comment, created_at:saved.created_at, like_count: myMealPost?.like_count||0, liked_by_me: myMealPost?.liked_by_me||false }];
+        return [...withoutMine, { post_id:saved.id, user_id:userId, display_name:baseTargets.display_name, avatar_url:baseTargets.avatar_url, gender:baseTargets.gender, meal_id:saved.meal_id, image_url:saved.image_url, meal_name:saved.meal_name, calories:saved.calories, comment:saved.comment, created_at:saved.created_at, reactions: myMealPost?.reactions||{}, my_reaction: myMealPost?.my_reaction||null, comment_count: myMealPost?.comment_count||0 }];
       });
       setMealPostPickerOpen(false);
       setMealPostSelectedId(null);
@@ -3585,20 +3806,150 @@ function NutriLogPro({ session, onLogout }) {
     } finally {
       setMealPostSaving(false);
     }
-  }, [lastWeekPhotoMeals, mealPostSelectedId, mealPostComment, userId, prevWeekMondayKey, baseTargets, myMealPost]);
+  }, [myPhotoMeals, mealPostSelectedId, mealPostComment, userId, prevWeekMondayKey, baseTargets, myMealPost]);
 
-  const toggleMealPostLike = useCallback(async (post) => {
-    const wasLiked = post.liked_by_me;
+  const setPostReaction = useCallback(async (post, reaction) => {
+    const prevReaction = post.my_reaction || null;
+    const isRemoving = prevReaction === reaction;
+    const newReaction = isRemoving ? null : reaction;
     // Optimistic update — feels instant; reverted below if the request fails.
-    setMealPosts(prev => (prev||[]).map(p => p.post_id===post.post_id ? { ...p, liked_by_me: !wasLiked, like_count: p.like_count + (wasLiked ? -1 : 1) } : p));
+    setMealPosts(prev => (prev||[]).map(p => {
+      if (p.post_id !== post.post_id) return p;
+      const reactions = { ...(p.reactions||{}) };
+      if (prevReaction) reactions[prevReaction] = Math.max(0, (reactions[prevReaction]||0) - 1);
+      if (newReaction) reactions[newReaction] = (reactions[newReaction]||0) + 1;
+      return { ...p, reactions, my_reaction: newReaction };
+    }));
     try {
-      if (wasLiked) await DataAPI.unlikeMealPost(post.post_id, userId);
-      else await DataAPI.likeMealPost(post.post_id, userId);
+      if (isRemoving) await DataAPI.removeMealPostReaction(post.post_id, userId);
+      else {
+        await DataAPI.setMealPostReaction(post.post_id, userId, reaction);
+        // Only notify on a genuinely new/changed reaction, not on removal.
+        DataAPI.createNotification({ userId: post.user_id, actorUserId: userId, type: "post_reaction", postId: post.post_id, reaction }).catch(() => {});
+      }
     } catch (err) {
-      setMealPosts(prev => (prev||[]).map(p => p.post_id===post.post_id ? { ...p, liked_by_me: wasLiked, like_count: p.like_count + (wasLiked ? 1 : -1) } : p));
-      setError(L("Failed to save like: ","保存点赞失败：") + err.message);
+      setMealPosts(prev => (prev||[]).map(p => {
+        if (p.post_id !== post.post_id) return p;
+        const reactions = { ...(p.reactions||{}) };
+        if (newReaction) reactions[newReaction] = Math.max(0, (reactions[newReaction]||0) - 1);
+        if (prevReaction) reactions[prevReaction] = (reactions[prevReaction]||0) + 1;
+        return { ...p, reactions, my_reaction: prevReaction };
+      }));
+      setError(L("Failed to save reaction: ","保存反应失败：") + err.message);
     }
   }, [userId]);
+
+  // Comments — fetched lazily per post (only once that post's comment section is opened), and
+  // kept in their own map keyed by post_id so switching between several open posts doesn't
+  // re-fetch anything already loaded.
+  const [openCommentPosts, setOpenCommentPosts] = useState({}); // { [post_id]: true }
+  const [postComments, setPostComments] = useState({}); // { [post_id]: comment[] | "loading" }
+  const [commentDrafts, setCommentDrafts] = useState({}); // { [post_id]: string }
+  const toggleCommentSection = useCallback(async (postId) => {
+    setOpenCommentPosts(prev => ({ ...prev, [postId]: !prev[postId] }));
+    if (!postComments[postId]) {
+      setPostComments(prev => ({ ...prev, [postId]: "loading" }));
+      try {
+        const rows = await DataAPI.getPostComments(postId, userId);
+        setPostComments(prev => ({ ...prev, [postId]: rows }));
+      } catch (err) {
+        setPostComments(prev => ({ ...prev, [postId]: [] }));
+        setError(L("Failed to load comments: ","加载评论失败：") + err.message);
+      }
+    }
+  }, [postComments, userId]);
+  const submitComment = useCallback(async (postId) => {
+    const text = (commentDrafts[postId]||"").trim();
+    if (!text) return;
+    const post = (mealPosts||[]).find(p => p.post_id === postId);
+    try {
+      const row = await DataAPI.addPostComment(postId, userId, text);
+      setPostComments(prev => ({ ...prev, [postId]: [...(Array.isArray(prev[postId])?prev[postId]:[]), { comment_id: row.id, user_id: userId, display_name: baseTargets.display_name, avatar_url: baseTargets.avatar_url, comment: text, created_at: row.created_at, reactions:{}, my_reaction:null }] }));
+      setCommentDrafts(prev => ({ ...prev, [postId]: "" }));
+      setMealPosts(prev => (prev||[]).map(p => p.post_id===postId ? { ...p, comment_count: (p.comment_count||0)+1 } : p));
+      if (post) DataAPI.createNotification({ userId: post.user_id, actorUserId: userId, type: "post_comment", postId, commentId: row.id }).catch(() => {});
+    } catch (err) {
+      setError(L("Failed to post comment: ","发布评论失败：") + err.message);
+    }
+  }, [commentDrafts, userId, baseTargets.display_name, baseTargets.avatar_url, mealPosts]);
+  const removeComment = useCallback(async (postId, commentId) => {
+    try {
+      await DataAPI.deletePostComment(commentId);
+      setPostComments(prev => ({ ...prev, [postId]: (prev[postId]||[]).filter(c => c.comment_id !== commentId) }));
+      setMealPosts(prev => (prev||[]).map(p => p.post_id===postId ? { ...p, comment_count: Math.max(0, (p.comment_count||0)-1) } : p));
+    } catch (err) {
+      setError(L("Failed to delete comment: ","删除评论失败：") + err.message);
+    }
+  }, []);
+  const setCommentReactionHandler = useCallback(async (postId, comment, reaction) => {
+    const prevReaction = comment.my_reaction || null;
+    const isRemoving = prevReaction === reaction;
+    const newReaction = isRemoving ? null : reaction;
+    setPostComments(prev => ({
+      ...prev,
+      [postId]: (Array.isArray(prev[postId])?prev[postId]:[]).map(c => {
+        if (c.comment_id !== comment.comment_id) return c;
+        const reactions = { ...(c.reactions||{}) };
+        if (prevReaction) reactions[prevReaction] = Math.max(0, (reactions[prevReaction]||0) - 1);
+        if (newReaction) reactions[newReaction] = (reactions[newReaction]||0) + 1;
+        return { ...c, reactions, my_reaction: newReaction };
+      })
+    }));
+    try {
+      if (isRemoving) await DataAPI.removeCommentReaction(comment.comment_id, userId);
+      else {
+        await DataAPI.setCommentReaction(comment.comment_id, userId, reaction);
+        DataAPI.createNotification({ userId: comment.user_id, actorUserId: userId, type: "comment_reaction", postId, commentId: comment.comment_id, reaction }).catch(() => {});
+      }
+    } catch (err) {
+      setPostComments(prev => ({
+        ...prev,
+        [postId]: (Array.isArray(prev[postId])?prev[postId]:[]).map(c => {
+          if (c.comment_id !== comment.comment_id) return c;
+          const reactions = { ...(c.reactions||{}) };
+          if (newReaction) reactions[newReaction] = Math.max(0, (reactions[newReaction]||0) - 1);
+          if (prevReaction) reactions[prevReaction] = (reactions[prevReaction]||0) + 1;
+          return { ...c, reactions, my_reaction: prevReaction };
+        })
+      }));
+      setError(L("Failed to save reaction: ","保存反应失败：") + err.message);
+    }
+  }, [userId]);
+
+  // ── "Haven't logged yet" reminder — opt-in, uses the browser's own Notification API. This
+  // ONLY fires while the app is open in some tab (foreground or backgrounded, not fully closed);
+  // it is NOT a true background push that reaches you with the app/phone closed — that needs a
+  // Web Push subscription + a server-side scheduler, real infrastructure beyond a client-side
+  // check like this one. Reminds at most once per meal slot per day, tracked in localStorage.
+  const [remindersOptIn, setRemindersOptIn] = useState(() => localStorage.getItem("nutrilog_reminders_opt_in") === "true");
+  useEffect(() => { localStorage.setItem("nutrilog_reminders_opt_in", String(remindersOptIn)); }, [remindersOptIn]);
+  const systemNotifsEnabled = notifMasterOn && remindersOptIn;
+  useEffect(() => {
+    if (!systemNotifsEnabled || typeof Notification === "undefined") return;
+    if (Notification.permission === "default") Notification.requestPermission();
+    const CUTOFFS = { Breakfast: 10, Lunch: 14, Dinner: 20 }; // hour of day (24h) by which each slot is usually logged
+    const check = () => {
+      if (Notification.permission !== "granted") return;
+      const now = new Date();
+      const hour = now.getHours();
+      const dateKey = localDateKey(now);
+      Object.entries(CUTOFFS).forEach(([slot, cutoffHour]) => {
+        if (hour < cutoffHour) return;
+        const loggedThisSlot = (dayData.meals||[]).some(m => m.slot === slot);
+        if (loggedThisSlot) return;
+        const remindedKey = `nutrilog_reminded_${dateKey}_${slot}`;
+        if (localStorage.getItem(remindedKey)) return;
+        localStorage.setItem(remindedKey, "1");
+        new Notification(L("NutriLog Pro","营养日志"), {
+          body: L(`Haven't logged ${slot.toLowerCase()} yet — quick add before you forget!`, `还没有记录${slotLabel(slot,lang)} —— 趁还没忘记，快来记一下吧！`),
+          icon: "/icon-192.png"
+        });
+      });
+    };
+    check();
+    const interval = setInterval(check, 30*60*1000); // check every 30 minutes while the app is open
+    return () => clearInterval(interval);
+  }, [systemNotifsEnabled, dayData.meals, lang]);
 
   const deleteMyMealPost = useCallback(async () => {
     if (!myMealPost) return;
@@ -5082,6 +5433,35 @@ function NutriLogPro({ session, onLogout }) {
             <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:26, fontWeight:800, color:C.pink, letterSpacing:"-0.04em", lineHeight:1 }}>{T("app_name")}</span>
             <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontStyle:"italic", fontWeight:300, color:C.textMuted, letterSpacing:".04em" }}>{T("app_tagline")}</span>
             <div style={{ marginLeft:"auto", position:"relative" }}>
+              <div onClick={openNotifications} style={{ fontSize:16, cursor:"pointer", userSelect:"none", padding:"7px 11px", borderRadius:12, background:showNotifications?C.pinkGlow:C.pinkDeep, border:`1px solid ${showNotifications?C.pinkDim:C.border}`, color:C.pink, position:"relative" }}>
+                🔔
+                {unreadNotifCount > 0 && (
+                  <span style={{ position:"absolute", top:-4, right:-4, background:C.red, color:"#fff", borderRadius:"50%", minWidth:16, height:16, fontSize:9.5, fontWeight:"800", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px" }}>{unreadNotifCount > 9 ? "9+" : unreadNotifCount}</span>
+                )}
+              </div>
+              {showNotifications && (
+                <div className="fade" style={{ position:"absolute", top:"calc(100% + 6px)", right:0, width:280, maxHeight:340, overflowY:"auto", background:C.card, border:`1px solid ${C.border}`, borderRadius:14, boxShadow:"0 8px 24px rgba(0,0,0,0.25)", zIndex:60 }}>
+                  {!socialNotifsEnabled ? (
+                    <div style={{ padding:"20px 14px", textAlign:"center", color:C.textDim, fontStyle:"italic", fontSize:12, lineHeight:1.5 }}>{L("Social notifications are muted. Turn them back on in ⚙️ Settings.","社交通知已静音。可在 ⚙️ 设置中重新开启。")}</div>
+                  ) : notifications.length === 0 ? (
+                    <div style={{ padding:"20px 14px", textAlign:"center", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("No notifications yet.","还没有通知。")}</div>
+                  ) : notifications.map(n => (
+                    <div key={n.notification_id} style={{ padding:"10px 12px", borderBottom:`1px solid ${C.border}66`, display:"flex", gap:8, alignItems:"flex-start" }}>
+                      {n.actor_avatar_url ? (
+                        <img src={n.actor_avatar_url} alt="" style={{ width:22, height:22, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+                      ) : (
+                        <div style={{ width:22, height:22, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, flexShrink:0 }}>🙂</div>
+                      )}
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:11.5, color:C.text, lineHeight:1.4 }}>{notificationText(n)}</div>
+                        <div style={{ fontSize:9.5, color:C.textDim, marginTop:2 }}>{new Date(n.created_at).toLocaleDateString(lang==="zh"?"zh-CN":"en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ position:"relative" }}>
               <div onClick={() => setShowSettings(!showSettings)} style={{ fontSize:16, cursor:"pointer", userSelect:"none", padding:"7px 11px", borderRadius:12, background:showSettings?C.pinkGlow:C.pinkDeep, border:`1px solid ${showSettings?C.pinkDim:C.border}`, color:C.pink }}>
                 ⚙️
               </div>
@@ -5091,6 +5471,49 @@ function NutriLogPro({ session, onLogout }) {
                   <div onClick={() => setShowSettings(false)} style={{ position:"fixed", inset:0, zIndex:49 }} />
                   <div className="card fade" style={{ position:"absolute", top:"calc(100% + 8px)", right:0, zIndex:50, width:280, maxHeight:"70vh", overflowY:"auto", padding:14, background:C.card, borderColor:C.border, boxShadow:"0 8px 28px rgba(0,0,0,0.22)" }}>
                     <div style={{ fontSize:11, color:C.textMuted, marginBottom:12 }}>{T("logged_in_as")} <strong style={{color:C.text}}>{userEmail}</strong></div>
+
+                    <div style={{ padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+                      <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:8 }}>{L("NOTIFICATIONS","通知")}</div>
+
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10 }}>
+                        <div style={{ fontSize:12.5, fontWeight:"700", color:C.text }}>{L("All Notifications","所有通知")}</div>
+                        <div
+                          onClick={() => setNotifMasterOn(!notifMasterOn)}
+                          role="switch" aria-checked={notifMasterOn}
+                          style={{ position:"relative", width:42, height:24, flexShrink:0, background: notifMasterOn ? C.pink : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
+                        >
+                          <span style={{ position:"absolute", top:3, left: notifMasterOn ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                        </div>
+                      </div>
+
+                      <div style={{ paddingLeft:10, borderLeft:`2px solid ${C.border}`, opacity: notifMasterOn ? 1 : 0.45, transition:"opacity .2s" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:4 }}>
+                          <div style={{ fontSize:11.5, color:C.text }}>{L("Social — reactions & comments","社交 —— 反应与评论")}</div>
+                          <div
+                            onClick={() => notifMasterOn && setNotifSocialOn(!notifSocialOn)}
+                            role="switch" aria-checked={notifSocialOn}
+                            style={{ position:"relative", width:36, height:20, flexShrink:0, background: notifSocialOn ? C.pink : C.border, borderRadius:20, transition:"all .2s", cursor: notifMasterOn ? "pointer" : "default" }}
+                          >
+                            <span style={{ position:"absolute", top:2.5, left: notifSocialOn ? 18 : 2.5, width:15, height:15, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                          </div>
+                        </div>
+                        <div style={{ fontSize:9.5, color:C.textDim, marginBottom:10, lineHeight:1.4 }}>{L("The 🔔 bell for when someone reacts to or comments on your Best Meal posts.","顶部 🔔 图标 —— 有人对你的「最佳美食」帖子做出反应或评论时通知。")}</div>
+
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:4 }}>
+                          <div style={{ fontSize:11.5, color:C.text }}>{L("System — haven't logged reminders","系统 —— 未记录提醒")}</div>
+                          <div
+                            onClick={() => notifMasterOn && setRemindersOptIn(!remindersOptIn)}
+                            role="switch" aria-checked={remindersOptIn}
+                            style={{ position:"relative", width:36, height:20, flexShrink:0, background: remindersOptIn ? C.pink : C.border, borderRadius:20, transition:"all .2s", cursor: notifMasterOn ? "pointer" : "default" }}
+                          >
+                            <span style={{ position:"absolute", top:2.5, left: remindersOptIn ? 18 : 2.5, width:15, height:15, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                          </div>
+                        </div>
+                        <div style={{ fontSize:9.5, color:C.textDim, lineHeight:1.4 }}>
+                          {L("Off by default. Uses your browser's own notification permission — only fires while this app is open in a tab, not a true push when the app/phone is fully closed. At most once per meal slot per day.","默认关闭。使用浏览器自身的通知权限 —— 仅在此应用处于打开状态时触发，并非应用或手机完全关闭时也能收到的真正推送。每个用餐时段每天最多提醒一次。")}
+                        </div>
+                      </div>
+                    </div>
 
                     <div style={{ padding:"8px 0" }}>
                       <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:8 }}>{T("settings_theme").toUpperCase()}</div>
@@ -6795,7 +7218,9 @@ function NutriLogPro({ session, onLogout }) {
                             <img src={myMealPost.image_url} alt={myMealPost.meal_name} onClick={() => setLightboxImage(myMealPost.image_url)} style={{ width:44, height:44, borderRadius:10, objectFit:"cover", flexShrink:0, cursor:"zoom-in" }} />
                             <div style={{ flex:1, minWidth:0 }}>
                               <div style={{ fontSize:13, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{myMealPost.meal_name}</div>
-                              <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{myMealPost.liked_by_me ? "❤️" : "🤍"} {myMealPost.like_count} {L("likes","个赞")}</div>
+                              <div style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>
+                                {Object.entries(myMealPost.reactions||{}).filter(([,n])=>n>0).map(([e,n]) => `${e}${n}`).join(" ") || L("No reactions yet","还没有反应")} · 💬 {myMealPost.comment_count||0}
+                              </div>
                             </div>
                             <button className="ghost-btn" style={{ padding:"7px 12px", fontSize:11.5, flexShrink:0 }} onClick={() => { setMealPostPickerOpen(true); setMealPostSelectedId(myMealPost.meal_id||null); setMealPostComment(myMealPost.comment||""); }}>
                               {L("Edit","编辑")}
@@ -6806,18 +7231,55 @@ function NutriLogPro({ session, onLogout }) {
                           </div>
                         ) : mealPostPickerOpen ? (
                           <div>
-                            <div style={{ fontSize:12.5, fontWeight:"700", color:C.text, marginBottom:8 }}>{L("Pick your best meal from last week","选择上周你的最佳美食")}</div>
-                            {lastWeekPhotoMeals.length === 0 ? (
-                              <div style={{ fontSize:12, color:C.textDim, fontStyle:"italic", padding:"14px 0", textAlign:"center" }}>{L("No photos logged last week.","上周没有拍照记录的美食。")}</div>
+                            <div style={{ fontSize:12.5, fontWeight:"700", color:C.text, marginBottom:8 }}>{L("Pick your best meal photo","选择你的最佳美食照片")}</div>
+                            {myPhotoMeals.length === 0 ? (
+                              <div style={{ fontSize:12, color:C.textDim, fontStyle:"italic", padding:"14px 0", textAlign:"center" }}>{L("No photos in your gallery yet.","相册中还没有照片。")}</div>
                             ) : (
-                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
-                                {lastWeekPhotoMeals.map(m => (
-                                  <div key={m.id} onClick={() => setMealPostSelectedId(m.id)} style={{ position:"relative", borderRadius:10, overflow:"hidden", cursor:"pointer", border: mealPostSelectedId===m.id ? `2px solid ${C.pink}` : "2px solid transparent" }}>
-                                    <img src={m.image_url} alt={m.name} style={{ width:"100%", height:70, objectFit:"cover", display:"block" }} />
-                                    {mealPostSelectedId===m.id && <div style={{ position:"absolute", top:4, right:4, background:C.pink, color:"#fff", borderRadius:"50%", width:18, height:18, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>✓</div>}
-                                  </div>
-                                ))}
-                              </div>
+                              <React.Fragment>
+                                {myPhotoMeals.length > 9 && (
+                                  <input
+                                    className="inp" value={mealPostSearch||""} onChange={e=>setMealPostSearch(e.target.value)}
+                                    placeholder={L("Search your gallery by name…","按名称搜索相册…")}
+                                    style={{ width:"100%", boxSizing:"border-box", marginBottom:8, fontSize:12.5 }}
+                                  />
+                                )}
+                                <div style={{ maxHeight:320, overflowY:"auto", marginBottom:12 }}>
+                                  {(() => {
+                                    const filtered = myPhotoMeals.filter(m => !mealPostSearch || m.name.toLowerCase().includes(mealPostSearch.toLowerCase()));
+                                    const lastWeek = filtered.filter(m => m.log_date >= prevWeekMondayKey && m.log_date <= prevWeekSundayKey).slice(0, 30);
+                                    const older = filtered.filter(m => m.log_date < prevWeekMondayKey || m.log_date > prevWeekSundayKey).slice(0, 30);
+                                    const renderGrid = (list) => (
+                                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                                        {list.map(m => (
+                                          <div key={m.id} onClick={() => setMealPostSelectedId(m.id)} style={{ position:"relative", borderRadius:10, overflow:"hidden", cursor:"pointer", border: mealPostSelectedId===m.id ? `2px solid ${C.pink}` : "2px solid transparent" }}>
+                                            <img src={m.image_url} alt={m.name} style={{ width:"100%", height:70, objectFit:"cover", display:"block" }} />
+                                            {mealPostSelectedId===m.id && <div style={{ position:"absolute", top:4, right:4, background:C.pink, color:"#fff", borderRadius:"50%", width:18, height:18, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>✓</div>}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                    return (
+                                      <React.Fragment>
+                                        {lastWeek.length > 0 && (
+                                          <div style={{ marginBottom: older.length > 0 ? 14 : 0 }}>
+                                            <div style={{ fontSize:10.5, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:6 }}>{L("LAST WEEK","上周")}</div>
+                                            {renderGrid(lastWeek)}
+                                          </div>
+                                        )}
+                                        {older.length > 0 && (
+                                          <div>
+                                            <div style={{ fontSize:10.5, fontWeight:"700", color:C.textMuted, letterSpacing:"0.05em", marginBottom:6 }}>{L("OLDER MEALS","更早的美食")}</div>
+                                            {renderGrid(older)}
+                                          </div>
+                                        )}
+                                        {lastWeek.length === 0 && older.length === 0 && (
+                                          <div style={{ fontSize:12, color:C.textDim, fontStyle:"italic", padding:"14px 0", textAlign:"center" }}>{L("No matches.","没有符合的结果。")}</div>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })()}
+                                </div>
+                              </React.Fragment>
                             )}
                             <textarea
                               className="inp"
@@ -6853,31 +7315,21 @@ function NutriLogPro({ session, onLogout }) {
                       <div style={{ textAlign:"center", padding:"20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("No one has posted yet — be the first!","还没有人发布 —— 快来做第一个吧！")}</div>
                     ) : mealPosts && (
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                        {mealPosts.slice().sort((a,b) => b.like_count - a.like_count).map(post => (
-                          <div key={post.post_id} className="card" style={{ padding:0, overflow:"hidden" }}>
-                            <img src={post.image_url} alt={post.meal_name} onClick={() => setLightboxImage(post.image_url)} style={{ width:"100%", height:120, objectFit:"cover", display:"block", cursor:"zoom-in" }} />
-                            <div style={{ padding:"8px 10px" }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                                {post.avatar_url ? (
-                                  <img src={post.avatar_url} alt={post.display_name} style={{ width:18, height:18, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
-                                ) : (
-                                  <div style={{ width:18, height:18, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, flexShrink:0 }}>
-                                    {post.gender === "female" ? "👩" : post.gender === "male" ? "👨" : "🙂"}
-                                  </div>
-                                )}
-                                <div style={{ fontSize:10.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
-                              </div>
-                              <div style={{ fontSize:11.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.meal_name}</div>
-                              <div style={{ fontSize:10, color:C.textMuted, marginTop:2 }}>{Math.round(post.calories)} kcal</div>
-                              {post.comment && <div style={{ fontSize:10.5, color:C.textMuted, marginTop:4, fontStyle:"italic", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>"{post.comment}"</div>}
-                              <button
-                                onClick={() => toggleMealPostLike(post)}
-                                style={{ display:"flex", alignItems:"center", gap:5, background:"none", border:"none", cursor:"pointer", marginTop:6, padding:0, color: post.liked_by_me ? C.pink : C.textMuted, fontSize:11.5, fontWeight:"700" }}
-                              >
-                                <span style={{ fontSize:13 }}>{post.liked_by_me ? "❤️" : "🤍"}</span> {post.like_count}
-                              </button>
-                            </div>
-                          </div>
+                        {mealPosts.slice().sort((a,b) => (Object.values(b.reactions||{}).reduce((s,n)=>s+n,0)) - (Object.values(a.reactions||{}).reduce((s,n)=>s+n,0))).map(post => (
+                          <MealPostCard
+                            key={post.post_id} post={post} userId={userId}
+                            onReact={setPostReaction}
+                            commentsOpen={!!openCommentPosts[post.post_id]}
+                            onToggleComments={toggleCommentSection}
+                            comments={postComments[post.post_id]}
+                            commentDraft={commentDrafts[post.post_id]}
+                            onCommentDraftChange={(postId, val) => setCommentDrafts(prev => ({ ...prev, [postId]: val }))}
+                            onSubmitComment={submitComment}
+                            onRemoveComment={removeComment}
+                            onReactComment={setCommentReactionHandler}
+                            onImageClick={() => setLightboxImage(post.image_url)}
+                            C={C} lang={lang} L={L} T={T}
+                          />
                         ))}
                       </div>
                     )}
@@ -7499,7 +7951,7 @@ function NutriLogPro({ session, onLogout }) {
                 <div style={{ fontSize:11, fontWeight:"700", color:C.pink, letterSpacing:"0.05em", marginBottom:8 }}>{L("4. SOCIAL (OPT-IN)","4. 社交功能（可选加入）")}</div>
                 <ul style={{ fontSize:13, color:C.text, lineHeight:1.8, marginBottom:16, paddingLeft:18 }}>
                   <li>{L("Leaderboard: compare weekly consistency with other opted-in users — always last week's finished results, never live or partial","「排行榜」：与其他已加入的用户比较每周达标情况 —— 仅显示上周的最终结果，绝不显示当天未完成的数据")}</li>
-                  <li>{L("Best Meal of the Week: post one photo a week, others can view & like it","「本周最佳美食」：每周可发布一张照片，其他人可查看并点赞")}</li>
+                  <li>{L("Best Meal of the Week: post one photo a week, others can view, react, and comment","「本周最佳美食」：每周可发布一张照片，其他人可查看、做出反应并评论")}</li>
                   <li>{L("Achievements: your best-ever week and month","「成就」：您历史最佳的一周与一月表现")}</li>
                 </ul>
 
