@@ -1228,7 +1228,78 @@ function PhotoLightbox({ src, onClose }) {
 }
 
 const REACTION_EMOJIS = ["❤️", "🔥", "👏", "😋", "💪"];
+
+// Your own active reaction, once you've picked one — tap removes it, holding briefly reopens
+// the picker to switch to something else. Other people's reaction pills stay simple single-tap.
+function MyReactionPill({ emoji, count, onRemove, onSwitch, size, C, L }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const lp = useLongPress(() => setPickerOpen(true), onRemove);
+  const isPost = size === "post";
+  return (
+    <span style={{ position:"relative", display:"inline-flex" }}>
+      <span {...lp} style={{ display:"flex", alignItems:"center", gap:3, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, borderRadius:999, padding: isPost?"2px 7px":"1px 5px", cursor:"pointer", fontSize: isPost?11.5:9.5, userSelect:"none" }}>
+        <span>{emoji}</span><span style={{ color:C.textMuted, fontSize: isPost?10:9 }}>{count}</span>
+      </span>
+      {pickerOpen && (
+        <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:4, display:"flex", gap:4, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"4px 6px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:20 }}>
+          {REACTION_EMOJIS.map(e => (
+            <span key={e} onClick={() => { onSwitch(e); setPickerOpen(false); }} style={{ cursor:"pointer", fontSize: isPost?16:14, padding:"2px 3px" }}>{e}</span>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+// The entry point when you haven't reacted yet — an empty heart instead of a "+", since a plain
+// plus sign didn't read well here. Tap reacts with the default heart immediately (quick, one
+// motion); holding briefly opens the full picker to choose something else instead.
+function EmptyHeartTrigger({ onQuickReact, onPick, size, C, L }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const lp = useLongPress(() => setPickerOpen(true), onQuickReact);
+  const isPost = size === "post";
+  return (
+    <span style={{ position:"relative", display:"inline-flex" }}>
+      <span {...lp} title={L("Tap to react, hold to choose","轻触反应，长按选择")} style={{ display:"flex", alignItems:"center", justifyContent:"center", width: isPost?24:18, height: isPost?24:18, cursor:"pointer", color:C.textDim, fontSize: isPost?15:12, userSelect:"none" }}>
+        🤍
+      </span>
+      {pickerOpen && (
+        <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:4, display:"flex", gap:4, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"4px 6px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:20 }}>
+          {REACTION_EMOJIS.map(e => (
+            <span key={e} onClick={() => { onPick(e); setPickerOpen(false); }} style={{ cursor:"pointer", fontSize: isPost?16:14, padding:"2px 3px" }}>{e}</span>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
 const POST_PHOTO_ASPECT = "4 / 3"; // fixed rectangular frame every Best Meal photo displays at
+
+// Distinguishes a quick tap from a press-and-hold on the same element, so a reaction control can
+// do two different things depending on how long it's held — short tap = quick action (react with
+// the default heart, or remove an existing reaction), hold = reopen the full emoji picker.
+function useLongPress(onLongPress, onClick, ms = 450) {
+  const timerRef = useRef(null);
+  const longPressedRef = useRef(false);
+  const start = () => {
+    longPressedRef.current = false;
+    timerRef.current = setTimeout(() => { longPressedRef.current = true; onLongPress(); }, ms);
+  };
+  const clear = () => { if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; } };
+  const handleClick = (e) => {
+    e.stopPropagation();
+    clear();
+    if (!longPressedRef.current) onClick();
+    longPressedRef.current = false;
+  };
+  return {
+    onMouseDown: start, onMouseUp: clear, onMouseLeave: clear,
+    onTouchStart: start, onTouchEnd: clear,
+    onClick: handleClick,
+  };
+}
+
 
 // Drag-to-reposition focal point picker, Instagram-style — shows the photo at the EXACT aspect
 // ratio and crop behavior it'll actually display at in the feed, so there's no guessing between
@@ -1281,31 +1352,33 @@ function PhotoFocalPointPicker({ imageUrl, focalX, focalY, onChange, C, L }) {
 // One comment within a post's thread — its own tiny reaction bar, same mechanics as the post's
 // (tap a pill to add/switch yours, + for the full picker), just more compact.
 function CommentRow({ postId, comment, userId, onReact, onRemove, C, L }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
   const activeEmojis = Object.entries(comment.reactions || {}).filter(([,n]) => n > 0);
   return (
     <div style={{ fontSize:11, lineHeight:1.4 }}>
-      <span style={{ fontWeight:"700", color:C.text }}>{comment.display_name}</span>{" "}
+      <span style={{ fontWeight:"700", color:C.text }}>{comment.display_name}:</span>{" "}
       <span style={{ color:C.textMuted }}>{comment.comment}</span>
-      {comment.user_id === userId && (
-        <span onClick={() => onRemove(postId, comment.comment_id)} style={{ color:C.textDim, cursor:"pointer", marginLeft:6, fontSize:10.5 }}>{L("delete","删除")}</span>
-      )}
-      <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2, position:"relative" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:3 }}>
         {activeEmojis.map(([emoji, count]) => (
-          <span
-            key={emoji} onClick={() => onReact(postId, comment, emoji)}
-            style={{ display:"flex", alignItems:"center", gap:2, background: comment.my_reaction===emoji ? C.pinkGlow : "transparent", border:`1px solid ${comment.my_reaction===emoji ? C.pinkDim : C.border}`, borderRadius:999, padding:"1px 5px", cursor:"pointer", fontSize:9.5 }}
-          >
-            {emoji}<span style={{ color:C.textMuted }}>{count}</span>
-          </span>
+          comment.my_reaction === emoji ? (
+            <MyReactionPill key={emoji} emoji={emoji} count={count} size="comment" C={C} L={L}
+              onRemove={() => onReact(postId, comment, emoji)} onSwitch={(e) => onReact(postId, comment, e)} />
+          ) : (
+            <span
+              key={emoji} onClick={() => onReact(postId, comment, emoji)}
+              style={{ display:"flex", alignItems:"center", gap:2, background:"transparent", border:`1px solid ${C.border}`, borderRadius:999, padding:"1px 5px", cursor:"pointer", fontSize:9.5 }}
+            >
+              {emoji}<span style={{ color:C.textMuted }}>{count}</span>
+            </span>
+          )
         ))}
-        <span onClick={() => setPickerOpen(!pickerOpen)} style={{ color:C.textDim, cursor:"pointer", fontSize:9.5 }}>{L("react","反应")}</span>
-        {pickerOpen && (
-          <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:3, display:"flex", gap:3, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"3px 5px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:20 }}>
-            {REACTION_EMOJIS.map(emoji => (
-              <span key={emoji} onClick={() => { onReact(postId, comment, emoji); setPickerOpen(false); }} style={{ cursor:"pointer", fontSize:14 }}>{emoji}</span>
-            ))}
-          </div>
+        {!comment.my_reaction && (
+          <EmptyHeartTrigger size="comment" C={C} L={L}
+            onQuickReact={() => onReact(postId, comment, "❤️")}
+            onPick={(emoji) => onReact(postId, comment, emoji)}
+          />
+        )}
+        {comment.user_id === userId && (
+          <span onClick={() => onRemove(postId, comment.comment_id)} title={L("Delete","删除")} style={{ display:"flex", alignItems:"center", justifyContent:"center", width:16, height:16, marginLeft:"auto", cursor:"pointer", color:C.textDim, fontSize:12, lineHeight:1 }}>×</span>
         )}
       </div>
     </div>
@@ -1313,26 +1386,31 @@ function CommentRow({ postId, comment, userId, onReact, onRemove, C, L }) {
 }
 
 function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, comments, commentDraft, onCommentDraftChange, onSubmitComment, onRemoveComment, onReactComment, onImageClick, C, lang, L, T }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
   const activeEmojis = Object.entries(post.reactions || {}).filter(([,n]) => n > 0);
   const commentList = Array.isArray(comments) ? comments : [];
   const dateLabel = post.created_at ? new Date(post.created_at).toLocaleDateString(lang==="zh"?"zh-CN":"en-US", { month:"short", day:"numeric" }) : "";
 
   return (
     <div className="card" style={{ padding:0, overflow:"hidden" }}>
-      {/* Row 1 — avatar + name left, post date right */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", gap:8 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+      {/* Row 1 — enlarged avatar + name left, post date right */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", gap:8 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
           {post.avatar_url ? (
-            <img src={post.avatar_url} alt={post.display_name} style={{ width:28, height:28, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+            <img src={post.avatar_url} alt={post.display_name} style={{ width:38, height:38, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
           ) : (
-            <div style={{ width:28, height:28, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>
+            <div style={{ width:38, height:38, borderRadius:"50%", background:C.pinkGlow, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
               {post.gender === "female" ? "👩" : post.gender === "male" ? "👨" : "🙂"}
             </div>
           )}
-          <div style={{ fontSize:12.5, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
+          <div style={{ fontSize:15, fontWeight:"700", color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.display_name}{post.user_id===userId ? ` (${T("leaderboard_you")})` : ""}</div>
         </div>
-        <div style={{ fontSize:10.5, color:C.textDim, flexShrink:0 }}>{dateLabel}</div>
+        <div style={{ fontSize:12, color:C.textDim, flexShrink:0 }}>{dateLabel}</div>
+      </div>
+
+      {/* Meal name + kcal — moved here, between the header and the photo */}
+      <div style={{ padding:"0 14px 10px", fontSize:12.5 }}>
+        <span style={{ fontWeight:"700", color:C.text }}>{post.meal_name}</span>
+        <span style={{ color:C.textMuted }}> · {Math.round(post.calories)} kcal</span>
       </div>
 
       {/* Row 2 — photo, fixed rectangular frame, cropped to whatever focal point the poster chose
@@ -1344,34 +1422,32 @@ function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, c
       <div style={{ padding:"9px 12px 10px" }}>
         {/* Row 3 — reactions + comment count. Purely additive/subtractive changes to this row
             only — nothing here ever affects the photo block above. */}
-        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:5, position:"relative" }}>
+        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:6 }}>
           {activeEmojis.map(([emoji, count]) => (
-            <button
-              key={emoji} onClick={() => onReact(post, emoji)}
-              style={{ display:"flex", alignItems:"center", gap:3, background: post.my_reaction===emoji ? C.pinkGlow : "transparent", border:`1px solid ${post.my_reaction===emoji ? C.pinkDim : C.border}`, borderRadius:999, padding:"2px 7px", cursor:"pointer", fontSize:11.5 }}
-            >
-              <span>{emoji}</span><span style={{ color:C.textMuted, fontSize:10 }}>{count}</span>
-            </button>
+            post.my_reaction === emoji ? (
+              <MyReactionPill key={emoji} emoji={emoji} count={count} size="post" C={C} L={L}
+                onRemove={() => onReact(post, emoji)} onSwitch={(e) => onReact(post, e)} />
+            ) : (
+              <button
+                key={emoji} onClick={() => onReact(post, emoji)}
+                style={{ display:"flex", alignItems:"center", gap:3, background:"transparent", border:`1px solid ${C.border}`, borderRadius:999, padding:"2px 7px", cursor:"pointer", fontSize:11.5 }}
+              >
+                <span>{emoji}</span><span style={{ color:C.textMuted, fontSize:10 }}>{count}</span>
+              </button>
+            )
           ))}
-          <button onClick={() => setPickerOpen(!pickerOpen)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:999, width:22, height:22, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:C.textMuted, fontSize:13, lineHeight:1 }}>+</button>
-          {pickerOpen && (
-            <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:4, display:"flex", gap:4, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"4px 6px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:20 }}>
-              {REACTION_EMOJIS.map(emoji => (
-                <span key={emoji} onClick={() => { onReact(post, emoji); setPickerOpen(false); }} style={{ cursor:"pointer", fontSize:16, padding:"2px 3px" }}>{emoji}</span>
-              ))}
-            </div>
+          {!post.my_reaction && (
+            <EmptyHeartTrigger size="post" C={C} L={L}
+              onQuickReact={() => onReact(post, "❤️")}
+              onPick={(emoji) => onReact(post, emoji)}
+            />
           )}
           <button onClick={() => onToggleComments(post.post_id)} style={{ display:"flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", color:C.textMuted, fontSize:11.5, marginLeft:"auto", padding:0 }}>
             💬 {post.comment_count||0}
           </button>
         </div>
 
-        {/* Meal name / kcal / caption — Instagram-style, right under the action row */}
-        <div style={{ fontSize:11.5, marginTop:8 }}>
-          <span style={{ fontWeight:"700", color:C.text }}>{post.meal_name}</span>
-          <span style={{ color:C.textMuted }}> · {Math.round(post.calories)} kcal</span>
-        </div>
-        {post.comment && <div style={{ fontSize:10.5, color:C.textMuted, marginTop:3, fontStyle:"italic" }}>"{post.comment}"</div>}
+        {post.comment && <div style={{ fontSize:10.5, color:C.textMuted, marginTop:7, fontStyle:"italic" }}>"{post.comment}"</div>}
 
         {/* Row 4 — comments */}
         {commentsOpen && (
