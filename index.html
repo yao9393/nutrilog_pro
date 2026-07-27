@@ -3547,6 +3547,9 @@ function NutriLogPro({ session, onLogout }) {
   const [showSettings, setShowSettings] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [paletteSettingsOpen, setPaletteSettingsOpen] = useState(false);
+  const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
+  const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
+  const [languageSettingsOpen, setLanguageSettingsOpen] = useState(false);
   const [cutoffSettingsOpen, setCutoffSettingsOpen] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [drinkMenuOpen, setDrinkMenuOpen] = useState(null);
@@ -3744,6 +3747,13 @@ function NutriLogPro({ session, onLogout }) {
       }
     })();
   }, [activeTab, socialSubTab, prevWeekMondayKey, userId]);
+  // Manual refresh — the effect above only fetches ONCE per session (mealPosts !== null blocks
+  // it forever after that first load), so without this there's no way to see someone else's new
+  // post, reaction, or comment without a full page reload. Resetting to null lets the effect
+  // above run again on its own.
+  const refreshMealPosts = useCallback(() => {
+    setMealPosts(null);
+  }, []);
 
   // Lazily load past monthly report cards the first time Social > Achievements is opened —
   // these are the compressed summaries left behind once a month's raw logs age past the
@@ -5472,56 +5482,69 @@ function NutriLogPro({ session, onLogout }) {
                   <div className="card fade" style={{ position:"absolute", top:"calc(100% + 8px)", right:0, zIndex:50, width:280, maxHeight:"70vh", overflowY:"auto", padding:14, background:C.card, borderColor:C.border, boxShadow:"0 8px 28px rgba(0,0,0,0.22)" }}>
                     <div style={{ fontSize:11, color:C.textMuted, marginBottom:12 }}>{T("logged_in_as")} <strong style={{color:C.text}}>{userEmail}</strong></div>
 
-                    <div style={{ padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
-                      <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:8 }}>{L("NOTIFICATIONS","通知")}</div>
-
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10 }}>
-                        <div style={{ fontSize:12.5, fontWeight:"700", color:C.text }}>{L("All Notifications","所有通知")}</div>
-                        <div
-                          onClick={() => setNotifMasterOn(!notifMasterOn)}
-                          role="switch" aria-checked={notifMasterOn}
-                          style={{ position:"relative", width:42, height:24, flexShrink:0, background: notifMasterOn ? C.pink : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
-                        >
-                          <span style={{ position:"absolute", top:3, left: notifMasterOn ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
-                        </div>
-                      </div>
-
-                      <div style={{ paddingLeft:10, borderLeft:`2px solid ${C.border}`, opacity: notifMasterOn ? 1 : 0.45, transition:"opacity .2s" }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:4 }}>
-                          <div style={{ fontSize:11.5, color:C.text }}>{L("Social — reactions & comments","社交 —— 反应与评论")}</div>
-                          <div
-                            onClick={() => notifMasterOn && setNotifSocialOn(!notifSocialOn)}
-                            role="switch" aria-checked={notifSocialOn}
-                            style={{ position:"relative", width:36, height:20, flexShrink:0, background: notifSocialOn ? C.pink : C.border, borderRadius:20, transition:"all .2s", cursor: notifMasterOn ? "pointer" : "default" }}
-                          >
-                            <span style={{ position:"absolute", top:2.5, left: notifSocialOn ? 18 : 2.5, width:15, height:15, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
-                          </div>
-                        </div>
-                        <div style={{ fontSize:9.5, color:C.textDim, marginBottom:10, lineHeight:1.4 }}>{L("The 🔔 bell for when someone reacts to or comments on your Best Meal posts.","顶部 🔔 图标 —— 有人对你的「最佳美食」帖子做出反应或评论时通知。")}</div>
-
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:4 }}>
-                          <div style={{ fontSize:11.5, color:C.text }}>{L("System — haven't logged reminders","系统 —— 未记录提醒")}</div>
-                          <div
-                            onClick={() => notifMasterOn && setRemindersOptIn(!remindersOptIn)}
-                            role="switch" aria-checked={remindersOptIn}
-                            style={{ position:"relative", width:36, height:20, flexShrink:0, background: remindersOptIn ? C.pink : C.border, borderRadius:20, transition:"all .2s", cursor: notifMasterOn ? "pointer" : "default" }}
-                          >
-                            <span style={{ position:"absolute", top:2.5, left: remindersOptIn ? 18 : 2.5, width:15, height:15, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
-                          </div>
-                        </div>
-                        <div style={{ fontSize:9.5, color:C.textDim, lineHeight:1.4 }}>
-                          {L("Off by default. Uses your browser's own notification permission — only fires while this app is open in a tab, not a true push when the app/phone is fully closed. At most once per meal slot per day.","默认关闭。使用浏览器自身的通知权限 —— 仅在此应用处于打开状态时触发，并非应用或手机完全关闭时也能收到的真正推送。每个用餐时段每天最多提醒一次。")}
-                        </div>
-                      </div>
+                    <div onClick={() => setNotifSettingsOpen(!notifSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+                      <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{L("NOTIFICATIONS","通知")}</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:11, color:C.textMuted }}>{notifMasterOn ? L("On","开启") : L("Muted","已静音")}</span>
+                        <span style={{ fontSize:10, color:C.textMuted }}>{notifSettingsOpen ? "▲" : "▼"}</span>
+                      </span>
                     </div>
+                    {notifSettingsOpen && (
+                      <div className="fade" style={{ paddingBottom:8, borderBottom:`1px solid ${C.border}` }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginTop:10, marginBottom:10 }}>
+                          <div style={{ fontSize:12.5, fontWeight:"700", color:C.text }}>{L("All Notifications","所有通知")}</div>
+                          <div
+                            onClick={() => setNotifMasterOn(!notifMasterOn)}
+                            role="switch" aria-checked={notifMasterOn}
+                            style={{ position:"relative", width:42, height:24, flexShrink:0, background: notifMasterOn ? C.pink : C.border, borderRadius:24, transition:"all .2s", cursor:"pointer" }}
+                          >
+                            <span style={{ position:"absolute", top:3, left: notifMasterOn ? 21 : 3, width:18, height:18, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                          </div>
+                        </div>
 
-                    <div style={{ padding:"8px 0" }}>
-                      <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:8 }}>{T("settings_theme").toUpperCase()}</div>
-                      <div style={{ display:"flex", gap:8 }}>
+                        <div style={{ paddingLeft:10, borderLeft:`2px solid ${C.border}`, opacity: notifMasterOn ? 1 : 0.45, transition:"opacity .2s" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:4 }}>
+                            <div style={{ fontSize:11.5, color:C.text }}>{L("Social — reactions & comments","社交 —— 反应与评论")}</div>
+                            <div
+                              onClick={() => notifMasterOn && setNotifSocialOn(!notifSocialOn)}
+                              role="switch" aria-checked={notifSocialOn}
+                              style={{ position:"relative", width:36, height:20, flexShrink:0, background: notifSocialOn ? C.pink : C.border, borderRadius:20, transition:"all .2s", cursor: notifMasterOn ? "pointer" : "default" }}
+                            >
+                              <span style={{ position:"absolute", top:2.5, left: notifSocialOn ? 18 : 2.5, width:15, height:15, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                            </div>
+                          </div>
+                          <div style={{ fontSize:9.5, color:C.textDim, marginBottom:10, lineHeight:1.4 }}>{L("The 🔔 bell for when someone reacts to or comments on your Best Meal posts.","顶部 🔔 图标 —— 有人对你的「最佳美食」帖子做出反应或评论时通知。")}</div>
+
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:4 }}>
+                            <div style={{ fontSize:11.5, color:C.text }}>{L("System — haven't logged reminders","系统 —— 未记录提醒")}</div>
+                            <div
+                              onClick={() => notifMasterOn && setRemindersOptIn(!remindersOptIn)}
+                              role="switch" aria-checked={remindersOptIn}
+                              style={{ position:"relative", width:36, height:20, flexShrink:0, background: remindersOptIn ? C.pink : C.border, borderRadius:20, transition:"all .2s", cursor: notifMasterOn ? "pointer" : "default" }}
+                            >
+                              <span style={{ position:"absolute", top:2.5, left: remindersOptIn ? 18 : 2.5, width:15, height:15, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }} />
+                            </div>
+                          </div>
+                          <div style={{ fontSize:9.5, color:C.textDim, lineHeight:1.4 }}>
+                            {L("Off by default. Uses your browser's own notification permission — only fires while this app is open in a tab, not a true push when the app/phone is fully closed. At most once per meal slot per day.","默认关闭。使用浏览器自身的通知权限 —— 仅在此应用处于打开状态时触发，并非应用或手机完全关闭时也能收到的真正推送。每个用餐时段每天最多提醒一次。")}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div onClick={() => setThemeSettingsOpen(!themeSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0" }}>
+                      <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_theme").toUpperCase()}</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:11, color:C.textMuted }}>{theme==="dark" ? `🌙 ${T("settings_theme_dark")}` : `☀️ ${T("settings_theme_light")}`}</span>
+                        <span style={{ fontSize:10, color:C.textMuted }}>{themeSettingsOpen ? "▲" : "▼"}</span>
+                      </span>
+                    </div>
+                    {themeSettingsOpen && (
+                      <div className="fade" style={{ display:"flex", gap:8, marginTop:8, marginBottom:14 }}>
                         <button onClick={() => setTheme("dark")} className={theme==="dark"?"":"ghost-btn"} style={theme==="dark"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>🌙 {T("settings_theme_dark")}</button>
                         <button onClick={() => setTheme("light")} className={theme==="light"?"":"ghost-btn"} style={theme==="light"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>☀️ {T("settings_theme_light")}</button>
                       </div>
-                    </div>
+                    )}
 
                     <div onClick={() => setPaletteSettingsOpen(!paletteSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_color").toUpperCase()}</span>
@@ -5544,13 +5567,19 @@ function NutriLogPro({ session, onLogout }) {
                       </div>
                     )}
 
-                    <div style={{ padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
-                      <div style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em", marginBottom:8 }}>{T("settings_language").toUpperCase()}</div>
-                      <div style={{ display:"flex", gap:8 }}>
+                    <div onClick={() => setLanguageSettingsOpen(!languageSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
+                      <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_language").toUpperCase()}</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:11, color:C.textMuted }}>{lang==="en" ? "English" : "中文"}</span>
+                        <span style={{ fontSize:10, color:C.textMuted }}>{languageSettingsOpen ? "▲" : "▼"}</span>
+                      </span>
+                    </div>
+                    {languageSettingsOpen && (
+                      <div className="fade" style={{ display:"flex", gap:8, marginTop:8, marginBottom:14 }}>
                         <button onClick={() => setLang("en")} className={lang==="en"?"":"ghost-btn"} style={lang==="en"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>English</button>
                         <button onClick={() => setLang("zh")} className={lang==="zh"?"":"ghost-btn"} style={lang==="zh"?{ flex:1, background:C.pinkGlow, border:`1px solid ${C.pinkDim}`, color:C.pink, borderRadius:12, padding:"8px", fontSize:12.5, fontWeight:"700", cursor:"pointer" }:{ flex:1, fontSize:12.5, padding:"8px" }}>中文</button>
                       </div>
-                    </div>
+                    )}
 
                     <div onClick={() => setAiSettingsOpen(!aiSettingsOpen)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
                       <span style={{ fontSize:10, fontWeight:"700", color:C.textDim, letterSpacing:"0.07em" }}>{T("settings_ai_settings").toUpperCase()}</span>
@@ -7203,7 +7232,12 @@ function NutriLogPro({ session, onLogout }) {
                   )}
 
                   <div style={{ marginTop:20 }}>
-                    <div style={{ fontSize:13, fontWeight:"800", color:C.pink, marginBottom:10 }}>{L("🍽️ Best Meal of the Week","🍽️ 本周最佳美食")}</div>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                      <div style={{ fontSize:13, fontWeight:"800", color:C.pink }}>{L("🍽️ Best Meal of the Week","🍽️ 本周最佳美食")}</div>
+                      <button onClick={refreshMealPosts} disabled={mealPostsLoading} title={L("Refresh — see everyone's latest posts, reactions, and comments","刷新 —— 查看所有人最新的帖子、反应与评论")} style={{ background:"none", border:"none", cursor: mealPostsLoading ? "default" : "pointer", color:C.textMuted, fontSize:14, padding:"2px 4px", opacity: mealPostsLoading ? 0.5 : 1 }}>
+                        {mealPostsLoading ? <span className="spin" style={{ display:"inline-block", width:12, height:12, border:`2px solid ${C.border}`, borderTopColor:C.pink, borderRadius:"50%" }} /> : "🔄"}
+                      </button>
+                    </div>
 
                     {!baseTargets.leaderboard_opt_in && (
                       <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic", textAlign:"center", padding:"10px 0" }}>
