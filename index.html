@@ -1254,7 +1254,7 @@ function CommentRow({ postId, comment, userId, onReact, onRemove, C, L }) {
         ))}
         <span onClick={() => setPickerOpen(!pickerOpen)} style={{ color:C.textDim, cursor:"pointer", fontSize:9.5 }}>{L("react","反应")}</span>
         {pickerOpen && (
-          <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:3, display:"flex", gap:3, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"3px 5px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:5 }}>
+          <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:3, display:"flex", gap:3, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"3px 5px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:20 }}>
             {REACTION_EMOJIS.map(emoji => (
               <span key={emoji} onClick={() => { onReact(postId, comment, emoji); setPickerOpen(false); }} style={{ cursor:"pointer", fontSize:14 }}>{emoji}</span>
             ))}
@@ -1272,7 +1272,7 @@ function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, c
 
   return (
     <div className="card" style={{ padding:0, overflow:"hidden" }}>
-      <img src={post.image_url} alt={post.meal_name} onClick={onImageClick} style={{ width:"100%", height:120, objectFit:"cover", display:"block", cursor:"zoom-in" }} />
+      <img src={post.image_url} alt={post.meal_name} onClick={onImageClick} style={{ width:"100%", height:200, objectFit:"cover", display:"block", cursor:"zoom-in" }} />
       <div style={{ padding:"8px 10px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
           {post.avatar_url ? (
@@ -1299,7 +1299,7 @@ function MealPostCard({ post, userId, onReact, commentsOpen, onToggleComments, c
           ))}
           <button onClick={() => setPickerOpen(!pickerOpen)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:999, width:22, height:22, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:C.textMuted, fontSize:13, lineHeight:1 }}>+</button>
           {pickerOpen && (
-            <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:4, display:"flex", gap:4, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"4px 6px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:5 }}>
+            <div style={{ position:"absolute", bottom:"100%", left:0, marginBottom:4, display:"flex", gap:4, background:C.surface, border:`1px solid ${C.border}`, borderRadius:999, padding:"4px 6px", boxShadow:"0 4px 12px rgba(0,0,0,0.2)", zIndex:20 }}>
               {REACTION_EMOJIS.map(emoji => (
                 <span key={emoji} onClick={() => { onReact(post, emoji); setPickerOpen(false); }} style={{ cursor:"pointer", fontSize:16, padding:"2px 3px" }}>{emoji}</span>
               ))}
@@ -7348,7 +7348,7 @@ function NutriLogPro({ session, onLogout }) {
                     ) : mealPosts && mealPosts.length === 0 ? (
                       <div style={{ textAlign:"center", padding:"20px", color:C.textDim, fontStyle:"italic", fontSize:12 }}>{L("No one has posted yet — be the first!","还没有人发布 —— 快来做第一个吧！")}</div>
                     ) : mealPosts && (
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                         {mealPosts.slice().sort((a,b) => (Object.values(b.reactions||{}).reduce((s,n)=>s+n,0)) - (Object.values(a.reactions||{}).reduce((s,n)=>s+n,0))).map(post => (
                           <MealPostCard
                             key={post.post_id} post={post} userId={userId}
