@@ -3746,7 +3746,7 @@ function NutriLogPro({ session, onLogout }) {
         setMealPostsLoading(false);
       }
     })();
-  }, [activeTab, socialSubTab, prevWeekMondayKey, userId]);
+  }, [activeTab, socialSubTab, prevWeekMondayKey, userId, mealPosts]);
   // Manual refresh — the effect above only fetches ONCE per session (mealPosts !== null blocks
   // it forever after that first load), so without this there's no way to see someone else's new
   // post, reaction, or comment without a full page reload. Resetting to null lets the effect
